@@ -19,15 +19,20 @@ const BM = {
 function gStatus(k,v){ const b=BM[k]; if(!b||v===""||isNaN(v)) return null; const n=parseFloat(v); if(b.rev) return n>=b.p?"poor":n>=b.o?"ok":"good"; return n<=b.p?"poor":n<=b.o?"ok":"good"; }
 function gOverall(ss){ const vs=Object.values(ss).filter(Boolean); if(!vs.length) return null; const sc={poor:0,ok:1,good:2}; const avg=vs.reduce((a,s)=>a+sc[s],0)/vs.length; return avg<0.6?"poor":avg<1.4?"ok":"good"; }
 
+// ── RESPONSIVE HOOK ──────────────────────────────────────────────────────────
+function useIsMobile(){ const [m,setM]=useState(window.innerWidth<520); useState(()=>{ const h=()=>setM(window.innerWidth<520); window.addEventListener("resize",h); return()=>window.removeEventListener("resize",h); }); return m; }
+
 // ── UI ATOMS ────────────────────────────────────────────────────────────────
 const Lbl=({c})=><div style={{color:C.mut,fontSize:11,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8}}>{c}</div>;
-const TIn=({v,ch,ph})=><input value={v} onChange={e=>ch(e.target.value)} placeholder={ph} style={{width:"100%",padding:"11px 14px",background:"rgba(255,255,255,0.06)",border:`1px solid ${C.brd}`,borderRadius:10,color:C.txt,fontSize:14,outline:"none",boxSizing:"border-box"}} onFocus={e=>e.target.style.borderColor="rgba(99,102,241,0.5)"} onBlur={e=>e.target.style.borderColor=C.brd}/>;
-const NIn=({v,ch,ph,sx})=><div style={{display:"flex",alignItems:"center",gap:8}}><input type="number" value={v} onChange={e=>ch(e.target.value)} placeholder={ph} style={{flex:1,padding:"11px 14px",background:"rgba(255,255,255,0.06)",border:`1px solid ${C.brd}`,borderRadius:10,color:C.txt,fontSize:14,outline:"none",boxSizing:"border-box"}} onFocus={e=>e.target.style.borderColor="rgba(99,102,241,0.5)"} onBlur={e=>e.target.style.borderColor=C.brd}/>{sx&&<span style={{color:C.mut,fontSize:13,fontWeight:600,minWidth:20}}>{sx}</span>}</div>;
-const DIn=({v,ch})=><input type="date" value={v} onChange={e=>ch(e.target.value)} style={{width:"100%",padding:"10px 12px",background:"rgba(255,255,255,0.06)",border:`1px solid ${C.brd}`,borderRadius:10,color:C.txt,fontSize:13,outline:"none",boxSizing:"border-box"}}/>;
+const TIn=({v,ch,ph})=><input value={v} onChange={e=>ch(e.target.value)} placeholder={ph} style={{width:"100%",padding:"13px 14px",background:"rgba(255,255,255,0.06)",border:`1px solid ${C.brd}`,borderRadius:10,color:C.txt,fontSize:16,outline:"none",boxSizing:"border-box"}} onFocus={e=>e.target.style.borderColor="rgba(99,102,241,0.5)"} onBlur={e=>e.target.style.borderColor=C.brd}/>;
+const NIn=({v,ch,ph,sx})=><div style={{display:"flex",alignItems:"center",gap:8}}><input type="number" inputMode="decimal" value={v} onChange={e=>ch(e.target.value)} placeholder={ph} style={{flex:1,padding:"13px 14px",background:"rgba(255,255,255,0.06)",border:`1px solid ${C.brd}`,borderRadius:10,color:C.txt,fontSize:16,outline:"none",boxSizing:"border-box"}} onFocus={e=>e.target.style.borderColor="rgba(99,102,241,0.5)"} onBlur={e=>e.target.style.borderColor=C.brd}/>{sx&&<span style={{color:C.mut,fontSize:13,fontWeight:600,minWidth:20}}>{sx}</span>}</div>;
+const DIn=({v,ch})=><input type="date" value={v} onChange={e=>ch(e.target.value)} style={{width:"100%",padding:"13px 12px",background:"rgba(255,255,255,0.06)",border:`1px solid ${C.brd}`,borderRadius:10,color:C.txt,fontSize:14,outline:"none",boxSizing:"border-box"}}/>;
 const Div=({l})=><div style={{display:"flex",alignItems:"center",gap:10,margin:"22px 0 12px"}}><div style={{height:1,flex:1,background:C.brd}}/>{l&&<span style={{color:C.dim,fontSize:10,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",whiteSpace:"nowrap"}}>{l}</span>}<div style={{height:1,flex:1,background:C.brd}}/></div>;
 const ST=({c})=><div style={{color:C.dim,fontSize:10,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"20px 0 10px"}}>{c}</div>;
-const Btn=({onClick,disabled,children,sec})=><button onClick={onClick} disabled={disabled} style={{padding:"13px 20px",borderRadius:11,fontSize:14,fontWeight:700,cursor:disabled?"not-allowed":"pointer",border:sec?`1px solid ${C.brd}`:"none",background:disabled?"rgba(255,255,255,0.06)":sec?"rgba(255,255,255,0.05)":"linear-gradient(135deg,#6366F1,#8B5CF6)",color:disabled?"rgba(255,255,255,0.3)":C.txt,width:"100%"}}>{children}</button>;
+const Btn=({onClick,disabled,children,sec})=><button onClick={onClick} disabled={disabled} style={{padding:"15px 20px",borderRadius:11,fontSize:15,fontWeight:700,cursor:disabled?"not-allowed":"pointer",border:sec?`1px solid ${C.brd}`:"none",background:disabled?"rgba(255,255,255,0.06)":sec?"rgba(255,255,255,0.05)":"linear-gradient(135deg,#6366F1,#8B5CF6)",color:disabled?"rgba(255,255,255,0.3)":C.txt,width:"100%"}}>{children}</button>;
 const SBdg=({l,v,s})=>{ const cfg=SC[s]||{}; return <div style={{background:s?`${cfg.b}80`:C.sur,border:`1px solid ${s?cfg.r:C.brd}`,borderLeft:`3px solid ${s?cfg.c:"rgba(255,255,255,0.1)"}`,borderRadius:10,padding:"12px 14px"}}><div style={{color:C.mut,fontSize:11,marginBottom:4}}>{l}</div><div style={{color:s?cfg.c:C.txt,fontWeight:800,fontSize:18}}>{v}</div></div>; };
+const Grid2=({children,mob})=><div style={{display:"grid",gridTemplateColumns:mob?"1fr":"1fr 1fr",gap:12,marginBottom:16}}>{children}</div>;
+const Grid3=({children,mob})=><div style={{display:"grid",gridTemplateColumns:mob?"1fr 1fr":"1fr 1fr 1fr",gap:12,marginBottom:16}}>{children}</div>;
 
 function Pills({opts,val,ch,multi=false}){
   const arr=multi?(Array.isArray(val)?val:[]):null;
@@ -377,6 +382,7 @@ function clData(lang){
 
 // ── MODULE 1: HEALTH ─────────────────────────────────────────────────────────
 function HealthMod({t,lang}){
+  const mob=useIsMobile();
   const [step,setSt]=useState(0);
   const [f,setF]=useState({name:"",goal:"",per:"",bud:"",sp:"",ROAS:"",CTR:"",CPC:"",CPA:"",ConversionRate:"",Revenue:"",audT:"",audS:"",freq:"",crFs:[],crA:"",cpF:""});
   const [done,setDone]=useState(false);
@@ -454,11 +460,11 @@ function BudgetMod({t,lang}){
     <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>{t.bTitle}</h2>
     <p style={{color:C.mut,fontSize:13,margin:"0 0 22px"}}>{t.bSub}</p>
     {!done&&<>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+      <div className="g2" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
         <div><Lbl c={t.bTot}/><NIn v={tot} ch={setTot} ph={t.bTotPh} sx="€"/></div>
         <div><Lbl c={t.bSp}/><NIn v={sp} ch={setSp} ph={t.bSpPh} sx="€"/></div>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:16}}>
+      <div className="g3" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:16}}>
         <div><Lbl c={t.bSt}/><DIn v={st} ch={setSt}/></div>
         <div><Lbl c={t.bEn}/><DIn v={en} ch={setEn}/></div>
         <div><Lbl c={t.bTd}/><DIn v={now} ch={setNow}/></div>
@@ -467,7 +473,7 @@ function BudgetMod({t,lang}){
       <p style={{color:C.mut,fontSize:12,margin:"0 0 14px"}}>{t.bPhS}</p>
       {phases.map((ph,i)=><div key={i} style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:11,padding:"13px 15px",marginBottom:10}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}><span style={{color:C.txt,fontWeight:700,fontSize:13}}>{t.bPh} {i+1}</span>{phases.length>1&&<button onClick={()=>remPh(i)} style={{background:"none",border:"none",color:C.red,fontSize:12,cursor:"pointer",fontWeight:600}}>{t.bRem}</button>}</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+        <div className="g3" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
           <div><Lbl c={t.bFr}/><NIn v={ph.fr} ch={v=>setPhi(i,"fr",v)} ph="1"/></div>
           <div><Lbl c={t.bTo}/><NIn v={ph.to} ch={v=>setPhi(i,"to",v)} ph="15"/></div>
           <div><Lbl c={t.bPct}/><NIn v={ph.pct} ch={v=>setPhi(i,"pct",v)} ph="40" sx="%"/></div>
@@ -477,7 +483,7 @@ function BudgetMod({t,lang}){
       <Btn onClick={()=>setDone(true)} disabled={!tot||!st||!en}>{t.calc}</Btn>
     </>}
     {done&&r&&<>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+      <div className="g2" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
         <SBdg l={t.bDE} v={`${r.el} ${sr?"dana":"days"}`}/>
         <SBdg l={t.bDL} v={`${r.dl} ${sr?"dana":"days"}`}/>
         <SBdg l={t.bRem2} v={`€${Math.round(r.rem).toLocaleString()}`}/>
@@ -561,14 +567,14 @@ function RoasMod({t,lang}){
   return <div>
     <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>{t.rTitle}</h2>
     <p style={{color:C.mut,fontSize:13,margin:"0 0 22px"}}>{t.rSub}</p>
-    {!done&&<><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
+    {!done&&<><div className="g2" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
       <div><Lbl c={t.rPP}/><NIn v={f.pp} ch={v=>set("pp",v)} ph={t.rPPPh} sx="€"/></div>
       <div><Lbl c={t.rCOGS}/><NIn v={f.cogs} ch={v=>set("cogs",v)} ph={t.rCOGSPh} sx="€"/></div>
       <div><Lbl c={t.rAS}/><NIn v={f.as} ch={v=>set("as",v)} ph={t.rASPh} sx="€"/></div>
       <div><Lbl c={t.rOC}/><NIn v={f.oc} ch={v=>set("oc",v)} ph={t.rOCPh} sx="€"/></div>
     </div><Lbl c={t.rEC}/><div style={{marginBottom:22}}><NIn v={f.ec} ch={v=>set("ec",v)} ph={t.rECPh}/></div><Btn onClick={()=>setDone(true)} disabled={!f.pp||!f.as}>{t.calc}</Btn></>}
     {done&&r&&<>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+      <div className="g2" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
         <SBdg l={t.rMar} v={`${Math.round(r.mgP)}%`} s={r.mgP>40?"good":r.mgP>20?"ok":"poor"}/>
         <SBdg l={t.rBER} v={`${r.beROAS.toFixed(2)}x`}/>
         <SBdg l={t.rBEC} v={`€${Math.round(r.mg)}`}/>
@@ -668,7 +674,7 @@ export default function App(){
           <h1 style={{fontSize:24,fontWeight:900,margin:"0 0 8px",letterSpacing:"-0.5px"}}>{t.sel}</h1>
           <p style={{color:C.mut,fontSize:13,margin:0}}>{t.selSub}</p>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        <div className="mod-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
           {MODS.map(m=><button key={m.id} onClick={()=>setMod(m.id)} style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:14,padding:"18px 16px",textAlign:"left",cursor:"pointer",display:"block",transition:"all 0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor=m.col+"60";e.currentTarget.style.background="rgba(255,255,255,0.07)";}} onMouseLeave={e=>{e.currentTarget.style.borderColor=C.brd;e.currentTarget.style.background=C.sur;}}>
             <div style={{fontSize:24,marginBottom:10}}>{m.icon}</div>
             <div style={{color:C.txt,fontWeight:700,fontSize:13,marginBottom:4}}>{t[m.tk]}</div>
