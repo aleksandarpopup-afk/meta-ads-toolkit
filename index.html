@@ -11,6 +11,16 @@
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
       body { background: #08080f; color: #fff; -webkit-font-smoothing: antialiased; }
+      input, button, select, textarea { -webkit-tap-highlight-color: transparent; }
+      input[type="number"] { -moz-appearance: textfield; }
+      input[type="number"]::-webkit-outer-spin-button,
+      input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+      @media (max-width: 520px) {
+        .g2 { grid-template-columns: 1fr !important; }
+        .g3 { grid-template-columns: 1fr 1fr !important; }
+        .g4 { grid-template-columns: 1fr 1fr !important; }
+        .mod-grid { grid-template-columns: 1fr !important; }
+      }
     </style>
   </head>
   <body>
