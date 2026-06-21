@@ -417,7 +417,7 @@ function HealthMod({t,lang}){
 
   return <div>
     <div style={{display:"flex",gap:6,marginBottom:24}}>{STEPS.map((s,i)=><div key={i} style={{flex:1}}><div style={{height:3,borderRadius:2,background:i<step?"#6366F1":i===step?"linear-gradient(90deg,#6366F1,#8B5CF6)":"rgba(255,255,255,0.08)",marginBottom:5}}/><div style={{fontSize:10,color:i<=step?C.mut:C.dim,fontWeight:600}}>{s}</div></div>)}</div>
-    {step===0&&<><h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>{t.hTitle}</h2><p style={{color:C.mut,fontSize:13,margin:"0 0 22px",lineHeight:1.6}}>{t.hSub}</p><Lbl c={t.hName}/><div style={{marginBottom:16}}><TIn v={f.name} ch={v=>set("name",v)} ph={t.hNamePh}/></div><Div l={t.hGoal}/><Pills opts={t.hGoals} val={f.goal} ch={v=>set("goal",v)}/><Div l={t.hPer}/><Pills opts={t.hPers} val={f.per} ch={v=>set("per",v)}/><Div l={t.hBudH}/><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:4}}><div><Lbl c={t.hBud}/><NIn v={f.bud} ch={v=>set("bud",v)} ph={t.hBudPh} sx="€"/></div><div><Lbl c={t.hSp}/><NIn v={f.sp} ch={v=>set("sp",v)} ph={t.hSpPh} sx="€"/></div></div><BudBar/><div style={{marginTop:22}}><Btn onClick={()=>setSt(1)}>{t.nxt}</Btn></div></>}
+    {step===0&&<><h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>{t.hTitle}</h2><p style={{color:C.mut,fontSize:13,margin:"0 0 22px",lineHeight:1.6}}>{t.hSub}</p><Lbl c={t.hName}/><div style={{marginBottom:16}}><TIn v={f.name} ch={v=>set("name",v)} ph={t.hNamePh}/></div><Div l={t.hGoal}/><Pills opts={t.hGoals} val={f.goal} ch={v=>set("goal",v)}/><Div l={t.hPer}/><Pills opts={t.hPers} val={f.per} ch={v=>set("per",v)}/><Div l={t.hBudH}/><div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:4}}><div><Lbl c={t.hBud}/><NIn v={f.bud} ch={v=>set("bud",v)} ph={t.hBudPh} sx="€"/></div><div><Lbl c={t.hSp}/><NIn v={f.sp} ch={v=>set("sp",v)} ph={t.hSpPh} sx="€"/></div></div><BudBar/><div style={{marginTop:22}}><Btn onClick={()=>setSt(1)}>{t.nxt}</Btn></div></>}
     {step===1&&<><h2 style={{fontSize:20,fontWeight:800,margin:"0 0 18px"}}>{t.hMet}</h2><div style={{display:"flex",flexDirection:"column",gap:10}}>{MD.map(({k,l,h,ph,sx})=><div key={k} style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:11,padding:"13px 15px"}}><div style={{marginBottom:9}}><span style={{color:C.txt,fontWeight:700,fontSize:13}}>{l}</span><span style={{color:C.dim,fontSize:11,marginLeft:8}}>{h}</span></div><NIn v={f[k]} ch={v=>set(k,v)} ph={ph} sx={sx}/></div>)}</div><div style={{display:"flex",gap:10,marginTop:22}}><div style={{flex:1}}><Btn onClick={()=>setSt(0)} sec>{t.prv}</Btn></div><div style={{flex:4}}><Btn onClick={()=>setSt(2)} disabled={fl<3}>{fl<3?t.hFill:`${t.s3} →`}</Btn></div></div></>}
     {step===2&&<><h2 style={{fontSize:20,fontWeight:800,margin:"0 0 18px"}}>{t.hTarg} & {t.hCr}</h2><Lbl c={t.hAudT}/><Pills opts={t.hAudTs} val={f.audT} ch={v=>set("audT",v)}/><Div l={t.hAudS}/><Pills opts={t.hAudSs} val={f.audS} ch={v=>set("audS",v)}/><Div l={t.hFreq}/><NIn v={f.freq} ch={v=>set("freq",v)} ph={t.hFreqPh} sx="x"/><Div l={t.hCrF}/><Pills opts={t.hCrFs} val={f.crFs} ch={v=>set("crFs",v)} multi={true}/><Div l={t.hCrA}/><Pills opts={t.hCrAs} val={f.crA} ch={v=>set("crA",v)}/><Div l={t.hCopy}/><Pills opts={t.hCopys} val={f.cpF} ch={v=>set("cpF",v)}/><div style={{display:"flex",gap:10,marginTop:24}}><div style={{flex:1}}><Btn onClick={()=>setSt(1)} sec>{t.prv}</Btn></div><div style={{flex:4}}><Btn onClick={()=>setDone(true)}>{t.analyze}</Btn></div></div></>}
   </div>;
@@ -460,11 +460,11 @@ function BudgetMod({t,lang}){
     <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>{t.bTitle}</h2>
     <p style={{color:C.mut,fontSize:13,margin:"0 0 22px"}}>{t.bSub}</p>
     {!done&&<>
-      <div className="g2" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+      <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:16}}>
         <div><Lbl c={t.bTot}/><NIn v={tot} ch={setTot} ph={t.bTotPh} sx="€"/></div>
         <div><Lbl c={t.bSp}/><NIn v={sp} ch={setSp} ph={t.bSpPh} sx="€"/></div>
       </div>
-      <div className="g3" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:16}}>
+      <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:16}}>
         <div><Lbl c={t.bSt}/><DIn v={st} ch={setSt}/></div>
         <div><Lbl c={t.bEn}/><DIn v={en} ch={setEn}/></div>
         <div><Lbl c={t.bTd}/><DIn v={now} ch={setNow}/></div>
@@ -473,7 +473,7 @@ function BudgetMod({t,lang}){
       <p style={{color:C.mut,fontSize:12,margin:"0 0 14px"}}>{t.bPhS}</p>
       {phases.map((ph,i)=><div key={i} style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:11,padding:"13px 15px",marginBottom:10}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}><span style={{color:C.txt,fontWeight:700,fontSize:13}}>{t.bPh} {i+1}</span>{phases.length>1&&<button onClick={()=>remPh(i)} style={{background:"none",border:"none",color:C.red,fontSize:12,cursor:"pointer",fontWeight:600}}>{t.bRem}</button>}</div>
-        <div className="g3" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
           <div><Lbl c={t.bFr}/><NIn v={ph.fr} ch={v=>setPhi(i,"fr",v)} ph="1"/></div>
           <div><Lbl c={t.bTo}/><NIn v={ph.to} ch={v=>setPhi(i,"to",v)} ph="15"/></div>
           <div><Lbl c={t.bPct}/><NIn v={ph.pct} ch={v=>setPhi(i,"pct",v)} ph="40" sx="%"/></div>
@@ -567,7 +567,7 @@ function RoasMod({t,lang}){
   return <div>
     <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>{t.rTitle}</h2>
     <p style={{color:C.mut,fontSize:13,margin:"0 0 22px"}}>{t.rSub}</p>
-    {!done&&<><div className="g2" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
+    {!done&&<><div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:14}}>
       <div><Lbl c={t.rPP}/><NIn v={f.pp} ch={v=>set("pp",v)} ph={t.rPPPh} sx="€"/></div>
       <div><Lbl c={t.rCOGS}/><NIn v={f.cogs} ch={v=>set("cogs",v)} ph={t.rCOGSPh} sx="€"/></div>
       <div><Lbl c={t.rAS}/><NIn v={f.as} ch={v=>set("as",v)} ph={t.rASPh} sx="€"/></div>
