@@ -46,6 +46,7 @@ const T={
     sel:"Odaberi alat", selSub:"Svaki alat možeš koristiti nezavisno", back:"← Nazad",
     m1t:"Campaign Health Check", m1s:"Dijagnoza performansi kampanje",
     m2t:"Budget Pace Kalkulator", m2s:"Prati tempo potrošnje budžeta",
+    m7t:"Budget Scaling Calculator", m7s:"Bezbedno skaliraj budžet kampanje",
     m3t:"Ad Copy Generator", m3s:"Generiši ad tekstove za Meta",
     m4t:"Audience Planner", m4s:"Struktura targetiranja i budžet split",
     m5t:"ROAS & Break-Even", m5s:"Koliki ROAS ti treba za profitabilnost",
@@ -118,12 +119,28 @@ const T={
     lTitle:"Campaign Launch Checklist", lSub:"Sve što treba proveriti pre lansiranja Meta kampanje",
     lProg:"Završeno", lWhy:"Zašto je ovo bitno?", lHow:"Kako instalirati / proveriti?",
     lDone:"Checklist završen! 🎉 Kampanja je spremna za lansiranje.",
+    scTitle:"Budget Scaling Calculator", scSub:"Izračunaj bezbedni plan skaliranja budžeta",
+    scCurBud:"Trenutni dnevni budžet (€)", scCurBudPh:"npr. 50",
+    scTarBud:"Ciljni dnevni budžet (€)", scTarBudPh:"npr. 150",
+    scCurROAS:"Trenutni ROAS", scCurROASPh:"npr. 3.2",
+    scCurCPA:"Trenutni CPA (€)", scCurCPAPh:"npr. 25",
+    scCTR:"Trenutni CTR (%)", scCTRPh:"npr. 1.8",
+    scFreq:"Prosečna frekvencija", scFreqPh:"npr. 2.4",
+    scPeriod:"Period skaliranja", scPers:["7 dana","14 dana","30 dana"],
+    scCalc:"Izračunaj plan →", scNew:"← Novi plan",
+    scPlan:"Plan skaliranja po koracima",
+    scDay:"Dan", scBud:"Budžet", scInc:"Povećanje",
+    scRisk:"Procena rizika", scReady:"Spremnost za skaliranje",
+    scExpCPA:"Očekivani CPA tokom skaliranja",
+    scExpROAS:"Očekivani ROAS tokom skaliranja",
+    scWarn:"Upozorenja pre skaliranja", scTips:"Preporuke",
   },
   en:{
     appTitle:"Meta Ads Toolkit", appSub:"Professional tools for performance marketing",
     sel:"Select a tool", selSub:"Each tool can be used independently", back:"← Back",
     m1t:"Campaign Health Check", m1s:"Diagnose your campaign performance",
     m2t:"Budget Pace Calculator", m2s:"Track your budget spending pace",
+    m7t:"Budget Scaling Calculator", m7s:"Scale your budget safely without hurting performance",
     m3t:"Ad Copy Generator", m3s:"Generate Meta ad texts",
     m4t:"Audience Planner", m4s:"Targeting structure and budget split",
     m5t:"ROAS & Break-Even", m5s:"Calculate the ROAS you need to be profitable",
@@ -196,6 +213,21 @@ const T={
     lTitle:"Campaign Launch Checklist", lSub:"Everything to check before launching a Meta campaign",
     lProg:"Completed", lWhy:"Why is this important?", lHow:"How to install / verify?",
     lDone:"Checklist complete! 🎉 Your campaign is ready to launch.",
+    scTitle:"Budget Scaling Calculator", scSub:"Calculate a safe budget scaling plan",
+    scCurBud:"Current Daily Budget (€)", scCurBudPh:"e.g. 50",
+    scTarBud:"Target Daily Budget (€)", scTarBudPh:"e.g. 150",
+    scCurROAS:"Current ROAS", scCurROASPh:"e.g. 3.2",
+    scCurCPA:"Current CPA (€)", scCurCPAPh:"e.g. 25",
+    scCTR:"Current CTR (%)", scCTRPh:"e.g. 1.8",
+    scFreq:"Average Frequency", scFreqPh:"e.g. 2.4",
+    scPeriod:"Scaling Period", scPers:["7 days","14 days","30 days"],
+    scCalc:"Calculate Plan →", scNew:"← New Plan",
+    scPlan:"Step-by-step scaling plan",
+    scDay:"Day", scBud:"Budget", scInc:"Increase",
+    scRisk:"Risk Assessment", scReady:"Scaling Readiness",
+    scExpCPA:"Expected CPA during scaling",
+    scExpROAS:"Expected ROAS during scaling",
+    scWarn:"Warnings before scaling", scTips:"Recommendations",
   }
 };
 
@@ -642,10 +674,181 @@ function CheckMod({t,lang}){
   </div>;
 }
 
+// ── MODULE 7: BUDGET SCALING CALCULATOR ─────────────────────────────────────
+function ScalingMod({t,lang}){
+  const sr=lang==="sr";
+  const [f,setF]=useState({curBud:"",tarBud:"",curROAS:"",curCPA:"",ctr:"",freq:"",period:"7 dana"});
+  const [done,setDone]=useState(false);
+  const set=(k,v)=>setF(x=>({...x,[k]:v}));
+
+  const calc=()=>{
+    const cb=parseFloat(f.curBud)||0;
+    const tb=parseFloat(f.tarBud)||0;
+    const cROAS=parseFloat(f.curROAS)||0;
+    const cCPA=parseFloat(f.curCPA)||0;
+    const ctr=parseFloat(f.ctr)||0;
+    const freq=parseFloat(f.freq)||0;
+    const days=f.period.includes("7")?7:f.period.includes("14")?14:30;
+    if(!cb||!tb) return null;
+
+    const totalInc=(tb-cb)/cb*100;
+    const maxIncPerStep=25;
+    const stepDays=3;
+    const steps=[];
+    let cur=cb;
+    let day=1;
+    while(cur<tb&&day<=days){
+      const inc=Math.min(cur*maxIncPerStep/100, tb-cur);
+      const next=Math.min(cur+inc,tb);
+      steps.push({day,from:Math.round(cur),to:Math.round(next),pct:Math.round((next-cur)/cur*100)});
+      cur=next;
+      day+=stepDays;
+    }
+
+    // Risk assessment
+    const warnings=[];
+    const tips=[];
+
+    // Frequency warnings
+    if(freq>=4){
+      warnings.push(sr?"🔴 Frekvencija "+freq+"x je kritično visoka. Skaliranje budžeta će ubrzati zasićenje publike i povećati CPA. Pre skaliranja obavezno osvoji publiku – dodaj novi LAL ili Broad audience.":"🔴 Frequency "+freq+"x is critically high. Scaling budget will accelerate audience saturation and increase CPA. Before scaling, refresh audience – add new LAL or Broad audience.");
+    } else if(freq>=3){
+      warnings.push(sr?"⚠️ Frekvencija "+freq+"x je na granici. Prati je tokom skaliranja i reaguj ako pređe 3.5x.":"⚠️ Frequency "+freq+"x is borderline. Monitor it during scaling and react if it exceeds 3.5x.");
+    } else if(freq>0){
+      tips.push(sr?"✅ Frekvencija "+freq+"x je OK – publika ima prostora za veći budžet.":"✅ Frequency "+freq+"x is fine – audience has room for more budget.");
+    }
+
+    // CTR warnings
+    if(ctr<0.5){
+      warnings.push(sr?"🔴 CTR od "+ctr+"% je prenizak za skaliranje. Povećanje budžeta uz lošu kreativu = veći troškovi, isti loši rezultati. Prvo testiraj novu kreativu, pa skaliraj.":"🔴 CTR of "+ctr+"% is too low for scaling. Increasing budget with poor creative = higher costs, same bad results. First test new creative, then scale.");
+    } else if(ctr<1){
+      warnings.push(sr?"⚠️ CTR od "+ctr+"% je ispod proseka. Razmotri A/B test nove kreative paralelno sa skaliranjem.":"⚠️ CTR of "+ctr+"% is below average. Consider A/B testing new creative alongside scaling.");
+    } else {
+      tips.push(sr?"✅ CTR od "+ctr+"% je dobar – kreativa može da podrži veći budžet.":"✅ CTR of "+ctr+"% is good – creative can support higher budget.");
+    }
+
+    // ROAS warnings
+    if(cROAS<2){
+      warnings.push(sr?"🔴 ROAS od "+cROAS+"x je nizak za agresivno skaliranje. Popravi profitabilnost pre nego što povećaš budžet.":"🔴 ROAS of "+cROAS+"x is low for aggressive scaling. Fix profitability before increasing budget.");
+    } else if(cROAS>=3){
+      tips.push(sr?"✅ ROAS od "+cROAS+"x je solidan – dobra osnova za skaliranje.":"✅ ROAS of "+cROAS+"x is solid – good foundation for scaling.");
+    }
+
+    // Scaling aggressiveness
+    const daysNeeded=steps.length>0?steps[steps.length-1].day:0;
+    if(totalInc>200&&days<=7){
+      warnings.push(sr?"🔴 Plan je preagresivan – "+Math.round(totalInc)+"% povećanja za "+days+" dana može resetovati learning phase i destabilizovati kampanju.":"🔴 Plan is too aggressive – "+Math.round(totalInc)+"% increase in "+days+" days can reset the learning phase and destabilize the campaign.");
+    } else if(totalInc>100&&days<=7){
+      warnings.push(sr?"⚠️ Udvostručavanje budžeta za 7 dana je rizično. Preporučujemo 14-dnevni period za ovaj nivo povećanja.":"⚠️ Doubling budget in 7 days is risky. We recommend a 14-day period for this level of increase.");
+    }
+
+    // Expected metrics during scaling
+    const cpaIncreasePct=totalInc>100?25:totalInc>50?15:10;
+    const roasDropPct=totalInc>100?20:totalInc>50?12:8;
+    const expCPALow=Math.round(cCPA*(1+cpaIncreasePct/200)*10)/10;
+    const expCPAHigh=Math.round(cCPA*(1+cpaIncreasePct/100)*10)/10;
+    const expROASLow=Math.round(cROAS*(1-roasDropPct/100)*10)/10;
+    const expROASHigh=Math.round(cROAS*(1-roasDropPct/200)*10)/10;
+
+    // Overall risk
+    const risk=warnings.filter(w=>w.includes("🔴")).length>=2?"high":warnings.length>=2?"medium":warnings.length===1?"low":"safe";
+
+    return{steps,warnings,tips,totalInc,days,expCPALow,expCPAHigh,expROASLow,expROASHigh,risk,daysNeeded};
+  };
+
+  const r=done?calc():null;
+  const riskCfg={
+    safe:{c:C.grn,bg:C.gBg,br:C.gBr,l:sr?"Spreman za skaliranje ✅":"Ready to scale ✅",i:"🚀"},
+    low:{c:"#60C8FF",bg:"#001a2c",br:"#003a5c",l:sr?"Nizak rizik – pažljivo skaliraj":"Low risk – scale carefully",i:"✅"},
+    medium:{c:C.yel,bg:C.yBg,br:C.yBr,l:sr?"Srednji rizik – prati metrike":"Medium risk – monitor metrics",i:"⚠️"},
+    high:{c:C.red,bg:C.rBg,br:C.rBr,l:sr?"Visok rizik – nije preporučeno":"High risk – not recommended",i:"🔴"},
+  };
+
+  return <div>
+    <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>{t.scTitle}</h2>
+    <p style={{color:C.mut,fontSize:13,margin:"0 0 22px"}}>{t.scSub}</p>
+    {!done&&<>
+      <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:4}}>
+        <div><Lbl c={t.scCurBud}/><NIn v={f.curBud} ch={v=>set("curBud",v)} ph={t.scCurBudPh} sx="€"/></div>
+        <div><Lbl c={t.scTarBud}/><NIn v={f.tarBud} ch={v=>set("tarBud",v)} ph={t.scTarBudPh} sx="€"/></div>
+        <div><Lbl c={t.scCurROAS}/><NIn v={f.curROAS} ch={v=>set("curROAS",v)} ph={t.scCurROASPh} sx="x"/></div>
+        <div><Lbl c={t.scCurCPA}/><NIn v={f.curCPA} ch={v=>set("curCPA",v)} ph={t.scCurCPAPh} sx="€"/></div>
+        <div><Lbl c={t.scCTR}/><NIn v={f.ctr} ch={v=>set("ctr",v)} ph={t.scCTRPh} sx="%"/></div>
+        <div><Lbl c={t.scFreq}/><NIn v={f.freq} ch={v=>set("freq",v)} ph={t.scFreqPh} sx="x"/></div>
+      </div>
+      <Div l={t.scPeriod}/>
+      <Pills opts={t.scPers} val={f.period} ch={v=>set("period",v)}/>
+      <div style={{marginTop:22}}><Btn onClick={()=>setDone(true)} disabled={!f.curBud||!f.tarBud}>{t.scCalc}</Btn></div>
+    </>}
+    {done&&r&&<>
+      {/* Risk badge */}
+      <div style={{background:riskCfg[r.risk].bg,border:`1px solid ${riskCfg[r.risk].br}`,borderRadius:14,padding:"18px",marginBottom:16,textAlign:"center"}}>
+        <div style={{fontSize:30,marginBottom:6}}>{riskCfg[r.risk].i}</div>
+        <div style={{color:riskCfg[r.risk].c,fontWeight:800,fontSize:16,marginBottom:4}}>{t.scReady}: {riskCfg[r.risk].l}</div>
+        <div style={{color:C.mut,fontSize:13}}>{sr?`€${Math.round(parseFloat(f.curBud))} → €${Math.round(parseFloat(f.tarBud))} · +${Math.round(r.totalInc)}% · ${r.steps.length} koraka`:`€${Math.round(parseFloat(f.curBud))} → €${Math.round(parseFloat(f.tarBud))} · +${Math.round(r.totalInc)}% · ${r.steps.length} steps`}</div>
+      </div>
+
+      {/* Warnings */}
+      {r.warnings.length>0&&<>
+        <ST c={t.scWarn}/>
+        <div style={{background:"rgba(239,68,68,0.07)",border:"1px solid rgba(239,68,68,0.2)",borderRadius:12,padding:"14px",marginBottom:16}}>
+          {r.warnings.map((w,i)=><div key={i} style={{color:"rgba(255,255,255,0.8)",fontSize:12,lineHeight:1.7,padding:"6px 0",borderBottom:i<r.warnings.length-1?`1px solid ${C.brd}`:"none"}}>{w}</div>)}
+        </div>
+      </>}
+
+      {/* Tips */}
+      {r.tips.length>0&&<>
+        <ST c={t.scTips}/>
+        <div style={{background:"rgba(52,211,153,0.06)",border:"1px solid rgba(52,211,153,0.2)",borderRadius:12,padding:"14px",marginBottom:16}}>
+          {r.tips.map((tip,i)=><div key={i} style={{color:"rgba(255,255,255,0.75)",fontSize:12,lineHeight:1.7,padding:"5px 0",borderBottom:i<r.tips.length-1?`1px solid ${C.brd}`:"none"}}>{tip}</div>)}
+        </div>
+      </>}
+
+      {/* Expected metrics */}
+      {(parseFloat(f.curCPA)>0||parseFloat(f.curROAS)>0)&&<>
+        <ST c={sr?"Očekivane metrike tokom skaliranja":"Expected metrics during scaling"}/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+          {parseFloat(f.curCPA)>0&&<div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:11,padding:"13px"}}>
+            <div style={{color:C.mut,fontSize:11,marginBottom:6}}>{t.scExpCPA}</div>
+            <div style={{color:C.yel,fontWeight:800,fontSize:16}}>€{r.expCPALow}–{r.expCPAHigh}</div>
+            <div style={{color:C.mut,fontSize:11,marginTop:4}}>{sr?"vs trenutnih €"+f.curCPA:"vs current €"+f.curCPA}</div>
+          </div>}
+          {parseFloat(f.curROAS)>0&&<div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:11,padding:"13px"}}>
+            <div style={{color:C.mut,fontSize:11,marginBottom:6}}>{t.scExpROAS}</div>
+            <div style={{color:C.yel,fontWeight:800,fontSize:16}}>{r.expROASLow}x–{r.expROASHigh}x</div>
+            <div style={{color:C.mut,fontSize:11,marginTop:4}}>{sr?"vs trenutnih "+f.curROAS+"x":"vs current "+f.curROAS+"x"}</div>
+          </div>}
+        </div>
+      </>}
+
+      {/* Step plan */}
+      <ST c={t.scPlan}/>
+      <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,overflow:"hidden",marginBottom:20}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",padding:"10px 14px",borderBottom:`1px solid ${C.brd}`}}>
+          {[t.scDay,t.scBud,t.scInc].map((h,i)=><div key={i} style={{color:C.mut,fontSize:10,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase"}}>{h}</div>)}
+        </div>
+        {r.steps.map((s,i)=><div key={i} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",padding:"11px 14px",borderBottom:i<r.steps.length-1?`1px solid ${C.brd}`:"none",background:i===0?"rgba(99,102,241,0.06)":"none"}}>
+          <div style={{color:C.txt,fontWeight:700,fontSize:13}}>{s.day}</div>
+          <div style={{color:C.acl,fontWeight:700,fontSize:13}}>€{s.to}</div>
+          <div style={{color:s.pct>30?C.red:s.pct>20?C.yel:C.grn,fontSize:12,fontWeight:600}}>+{s.pct}%</div>
+        </div>)}
+        <div style={{padding:"11px 14px",background:"rgba(99,102,241,0.08)",display:"grid",gridTemplateColumns:"1fr 1fr 1fr"}}>
+          <div style={{color:C.acl,fontWeight:700,fontSize:12}}>{sr?"Cilj":"Target"}</div>
+          <div style={{color:C.grn,fontWeight:800,fontSize:13}}>€{Math.round(parseFloat(f.tarBud))}</div>
+          <div style={{color:C.grn,fontSize:12,fontWeight:600}}>✓</div>
+        </div>
+      </div>
+
+      <Btn onClick={()=>setDone(false)} sec>{t.scNew}</Btn>
+    </>}
+  </div>;
+}
+
 // ── APP ──────────────────────────────────────────────────────────────────────
 const MODS=[
   {id:1,icon:"📊",col:"#6366F1",tk:"m1t",sk:"m1s"},
   {id:2,icon:"💰",col:"#10B981",tk:"m2t",sk:"m2s"},
+  {id:7,icon:"🚀",col:"#06B6D4",tk:"m7t",sk:"m7s"},
   {id:3,icon:"✍️",col:"#F59E0B",tk:"m3t",sk:"m3s"},
   {id:4,icon:"🎯",col:"#EC4899",tk:"m4t",sk:"m4s"},
   {id:5,icon:"📈",col:"#8B5CF6",tk:"m5t",sk:"m5s"},
@@ -656,8 +859,8 @@ export default function App(){
   const [lang,setLang]=useState("sr");
   const [mod,setMod]=useState(null);
   const t=T[lang];
-  const Comp=mod===1?HealthMod:mod===2?BudgetMod:mod===3?CopyMod:mod===4?AudMod:mod===5?RoasMod:mod===6?CheckMod:null;
-  const MOD_COLORS=["#6366F1","#10B981","#F59E0B","#EC4899","#8B5CF6","#34D399"];
+  const Comp=mod===1?HealthMod:mod===2?BudgetMod:mod===7?ScalingMod:mod===3?CopyMod:mod===4?AudMod:mod===5?RoasMod:mod===6?CheckMod:null;
+  const MOD_COLORS=["#6366F1","#10B981","#06B6D4","#F59E0B","#EC4899","#8B5CF6","#34D399"];
 
   return <div style={{minHeight:"100vh",background:C.bg,fontFamily:"'Inter',-apple-system,sans-serif",color:C.txt}}>
     {/* TOP BAR */}
