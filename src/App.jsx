@@ -682,17 +682,25 @@ export default function App(){
         </div>
 
         {/* MODULE GRID – 2 kolone */}
-        <div style={{padding:"0 12px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <div style={{padding:"0 12px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
           {MODS.map((m,i)=>(
             <button key={m.id} onClick={()=>setMod(m.id)} style={{
-              background:`linear-gradient(135deg,${MOD_COLORS[i]}18,${MOD_COLORS[i]}08)`,
-              border:`1px solid ${MOD_COLORS[i]}35`,
-              borderRadius:16,padding:"16px 14px",textAlign:"left",
-              cursor:"pointer",display:"block",transition:"all 0.15s",
+              background:`linear-gradient(145deg,${MOD_COLORS[i]}22,${MOD_COLORS[i]}08 60%,#0d0d1a)`,
+              border:`1px solid ${MOD_COLORS[i]}45`,
+              borderTop:`1px solid ${MOD_COLORS[i]}70`,
+              borderRadius:18,padding:"18px 15px",textAlign:"left",
+              cursor:"pointer",display:"block",transition:"all 0.2s",
               WebkitTapHighlightColor:"transparent",
+              boxShadow:`0 4px 24px ${MOD_COLORS[i]}25, 0 1px 0 rgba(255,255,255,0.06) inset`,
             }}
-            onMouseEnter={e=>{e.currentTarget.style.background=`linear-gradient(135deg,${MOD_COLORS[i]}30,${MOD_COLORS[i]}15)`;}}
-            onMouseLeave={e=>{e.currentTarget.style.background=`linear-gradient(135deg,${MOD_COLORS[i]}18,${MOD_COLORS[i]}08)`;}}
+            onMouseEnter={e=>{
+              e.currentTarget.style.transform="translateY(-2px)";
+              e.currentTarget.style.boxShadow=`0 8px 32px ${MOD_COLORS[i]}40, 0 1px 0 rgba(255,255,255,0.08) inset`;
+            }}
+            onMouseLeave={e=>{
+              e.currentTarget.style.transform="translateY(0)";
+              e.currentTarget.style.boxShadow=`0 4px 24px ${MOD_COLORS[i]}25, 0 1px 0 rgba(255,255,255,0.06) inset`;
+            }}
             >
               <div style={{
                 width:40,height:40,borderRadius:12,
