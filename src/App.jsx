@@ -577,7 +577,7 @@ function HealthMod({t,lang}){
           messages:[{role:"user",content:[
             {type:"image",source:{type:"base64",media_type:"image/jpeg",data:screenshot}},
             {type:"text",text:sr
-              ?`Ti si senior Meta Ads ekspert. Analiziraj ovaj screenshot iz marketing alata.
+              ?`Ti si senior Meta Ads ekspert. Analiziraj ovaj screenshot iz marketing alata. Piši isključivo na srpskom jeziku, ekavski (ne koristiti reči kao "prosječan", "označen", "prikazati" – već "prosečan", "obeležen", "prikazati").
 
 Pročitaj sve metrike i napiši analizu. NE koristi Markdown (##, **, ---, tabele). Koristi samo običan tekst:
 
@@ -641,7 +641,7 @@ Be specific and professional.`}
     try {
       const metrics = MK.filter(k=>f[k]!=="").map(k=>`${k}: ${f[k]}`).join(", ");
       const prompt = sr
-        ? `Ti si senior Meta Ads ekspert sa 10+ godina iskustva. Analiziraj ovu Meta kampanju i daj detaljnu, personalizovanu analizu.
+        ? `Ti si senior Meta Ads ekspert sa 10+ godina iskustva. Analiziraj ovu Meta kampanju i daj detaljnu, personalizovanu analizu. Piši isključivo na srpskom jeziku, ekavski (npr. "prosečan" ne "prosječan", "označen" ne "obilježen", "prikazati" ne "prikazivati").
 
 Naziv kampanje: ${f.name||"Nije navedeno"}
 Cilj kampanje: ${f.goal||"Nije navedeno"}
@@ -1370,7 +1370,7 @@ function ReportMod({t,lang}){
       if(type==="single"){
         content.push({type:"image",source:{type:"base64",media_type:"image/jpeg",data:imgA}});
         content.push({type:"text",text:sr
-          ?`Ti si senior marketing konsultant. Klijent: "${client||"Nije navedeno"}". Period: "${period||"Nije navedeno"}".
+          ?`Ti si senior marketing konsultant. Klijent: "${client||"Nije navedeno"}". Period: "${period||"Nije navedeno"}". Piši isključivo na srpskom jeziku, ekavski (npr. "prosečan" ne "prosječan").
 
 Analiziraj ovaj screenshot i napiši profesionalni izveštaj u JSON formatu:
 {
@@ -1399,7 +1399,7 @@ Return ONLY JSON, no text before or after.`});
         content.push({type:"text",text:sr?`Ovo je screenshot za Period A: ${periodA||"Period A"}`:`This is the screenshot for Period A: ${periodA||"Period A"}`});
         content.push({type:"image",source:{type:"base64",media_type:"image/jpeg",data:imgB}});
         content.push({type:"text",text:sr
-          ?`Ovo je screenshot za Period B: ${periodB||"Period B"}. Klijent: "${client||"Nije navedeno"}".
+          ?`Ovo je screenshot za Period B: ${periodB||"Period B"}. Klijent: "${client||"Nije navedeno"}". Piši isključivo na srpskom jeziku, ekavski (npr. "prosečan" ne "prosječan").
 
 Uporedi ova dva perioda i vrati JSON:
 {
@@ -1409,7 +1409,7 @@ Uporedi ova dva perioda i vrati JSON:
   "good": ["poboljšanje 1","poboljšanje 2"],
   "actions": ["akcija 1","akcija 2","akcija 3"],
   "strategic": ["preporuka 1","preporuka 2"],
-  "aiComment": "3-4 rečenice AI komentara na poređenje – šta se promenilo i zašto"
+  "aiComment": "3-4 rečenice komentara na poređenje – šta se promenilo i zašto"
 }
 Za "better": true znači da je Period B bolji za tu metriku, false znači lošiji. Vrati SAMO JSON.`
           :`This is the screenshot for Period B: ${periodB||"Period B"}. Client: "${client||"Not specified"}".
