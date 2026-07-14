@@ -301,7 +301,55 @@ const T={
   }
 };
 
-// ── ADVICE ──────────────────────────────────────────────────────────────────
+// ── MARKDOWN RENDERER ────────────────────────────────────────────────────────
+function MD2({text}){
+  if(!text) return null;
+  const lines=text.split("\n");
+  const els=[];
+  let i=0;
+  while(i<lines.length){
+    const l=lines[i];
+    // Skip separators
+    if(/^---+$/.test(l.trim())){i++;continue;}
+    // H2
+    if(l.startsWith("## ")){
+      const txt=l.replace(/^## /,"").replace(/[#]/g,"").replace(/\*\*/g,"").trim();
+      els.push(<div key={i} style={{color:C.acl,fontSize:11,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"18px 0 8px",paddingTop:i>0?12:0,borderTop:i>0?`1px solid ${C.brd}`:"none"}}>{txt}</div>);
+      i++;continue;
+    }
+    // H3
+    if(l.startsWith("### ")){
+      const txt=l.replace(/^### /,"").replace(/\*\*/g,"").trim();
+      els.push(<div key={i} style={{color:C.txt,fontSize:13,fontWeight:700,margin:"12px 0 6px"}}>{txt}</div>);
+      i++;continue;
+    }
+    // Table rows
+    if(l.trim().startsWith("|")&&!l.trim().match(/^\|[-| ]+\|$/)){
+      const cells=l.trim().split("|").filter((_,idx,arr)=>idx>0&&idx<arr.length-1).map(c=>c.trim());
+      const isHeader=lines[i+1]&&lines[i+1].trim().match(/^\|[-| ]+\|$/);
+      els.push(<div key={i} style={{display:"grid",gridTemplateColumns:`repeat(${cells.length},1fr)`,gap:4,padding:"6px 0",borderBottom:`1px solid ${C.brd}`}}>
+        {cells.map((c,j)=><div key={j} style={{color:isHeader?C.mut:C.txt,fontSize:12,fontWeight:isHeader?700:400}}>{c.replace(/\*\*/g,"")}</div>)}
+      </div>);
+      if(isHeader) i+=2; else i++;
+      continue;
+    }
+    // Skip table separator
+    if(l.trim().match(/^\|[-| ]+\|$/)){i++;continue;}
+    // Empty line
+    if(!l.trim()){els.push(<div key={i} style={{height:4}}/>);i++;continue;}
+    // Normal line – render bold
+    const parts=l.split(/\*\*([^*]+)\*\*/g);
+    const rendered=parts.map((p,j)=>j%2===1?<strong key={j} style={{color:C.txt,fontWeight:700}}>{p}</strong>:<span key={j}>{p}</span>);
+    // Bullet/dash
+    const isBullet=l.match(/^[\-\*•]\s/);
+    els.push(<div key={i} style={{color:"rgba(255,255,255,0.75)",fontSize:13,lineHeight:1.7,paddingLeft:isBullet?12:0,position:"relative"}}>
+      {isBullet&&<span style={{position:"absolute",left:0,color:C.acl}}>•</span>}
+      {rendered}
+    </div>);
+    i++;
+  }
+  return <div style={{display:"flex",flexDirection:"column",gap:2}}>{els}</div>;
+}
 function advice(lang, data, ss) {
   const sr=lang==="sr";
   const {goal,audT,freq:fq,crFs=[],crA,cpF,bud,sp}=data;
@@ -529,52 +577,52 @@ function HealthMod({t,lang}){
           messages:[{role:"user",content:[
             {type:"image",source:{type:"base64",media_type:"image/jpeg",data:screenshot}},
             {type:"text",text:sr
-              ?`Ti si senior Meta Ads ekspert. Analiziraj ovaj screenshot iz marketing alata (Meta Ads Manager, Looker Studio, Google Ads ili bilo koji drugi).
+              ?`Ti si senior Meta Ads ekspert. Analiziraj ovaj screenshot iz marketing alata.
 
-Pročitaj sve metrike i podatke koji su vidljivi na screenshotu i napiši detaljnu analizu:
+Pročitaj sve metrike i napiši analizu. NE koristi Markdown (##, **, ---, tabele). Koristi samo običan tekst:
 
-🎯 EXECUTIVE SUMMARY
-(2-3 rečenice – opšta ocena onoga što vidiš)
+EXECUTIVE SUMMARY
+(2-3 rečenice – opšta ocena)
 
-📊 METRIKE KOJE SAM UOČIO
-(Navedi sve metrike koje vidiš sa vrednostima)
+METRIKE KOJE SAM UOČIO
+(Navedi sve metrike koje vidiš)
 
-📊 KLJUČNI PROBLEMI
-(Navedi 2-4 konkretna problema sa objašnjenjem)
+KLJUČNI PROBLEMI
+(2-4 problema sa crticom)
 
-✅ ŠTA RADI DOBRO
-(Navedi 1-3 stvari koje funkcionišu)
+ŠTA RADI DOBRO
+(1-3 pozitivne stvari)
 
-🚀 PRIORITETNE AKCIJE – URADI ODMAH
-(3-5 konkretnih akcija)
+PRIORITETNE AKCIJE
+(3-5 konkretnih akcija, numerisano)
 
-💡 STRATEŠKE PREPORUKE
-(2-3 dugoročne preporuke)
+STRATEŠKE PREPORUKE
+(2-3 preporuke)
 
-Budi konkretan i profesionalan. Ako ne možeš da pročitaš neku metriku jasno, navedi to.`
-              :`You are a senior Meta Ads expert. Analyze this screenshot from a marketing tool (Meta Ads Manager, Looker Studio, Google Ads or any other).
+Budi konkretan i profesionalan.`
+              :`You are a senior Meta Ads expert. Analyze this screenshot from a marketing tool.
 
-Read all metrics and data visible in the screenshot and write a detailed analysis:
+Read all visible metrics and write an analysis. Do NOT use Markdown (##, **, ---, tables). Use plain text only:
 
-🎯 EXECUTIVE SUMMARY
-(2-3 sentences – overall assessment of what you see)
+EXECUTIVE SUMMARY
+(2-3 sentences – overall assessment)
 
-📊 METRICS I IDENTIFIED
-(List all metrics you can see with their values)
+METRICS I IDENTIFIED
+(List all metrics you can see)
 
-📊 KEY ISSUES
-(List 2-4 specific problems with explanation)
+KEY ISSUES
+(2-4 issues with dashes)
 
-✅ WHAT'S WORKING
-(List 1-3 things that are working well)
+WHAT'S WORKING
+(1-3 positive things)
 
-🚀 PRIORITY ACTIONS – DO NOW
-(3-5 concrete actions)
+PRIORITY ACTIONS
+(3-5 concrete actions, numbered)
 
-💡 STRATEGIC RECOMMENDATIONS
-(2-3 long-term recommendations)
+STRATEGIC RECOMMENDATIONS
+(2-3 recommendations)
 
-Be specific and professional. If you can't clearly read a metric, mention that.`}
+Be specific and professional.`}
           ]}]
         })
       });
@@ -607,24 +655,24 @@ Format kreative: ${f.crFs?.join(", ")||"Nije navedeno"}
 Starost kreative: ${f.crA||"Nije navedeno"}
 Ad copy fokus: ${f.cpF||"Nije navedeno"}
 
-Napiši analizu u sledećem formatu:
+Napiši analizu u sledećem formatu. NE koristi Markdown oznake (##, **, ---, |tabele|). Koristi samo običan tekst sa sekcijama:
 
-🎯 EXECUTIVE SUMMARY
+EXECUTIVE SUMMARY
 (2-3 rečenice – opšta ocena kampanje)
 
-📊 KLJUČNI PROBLEMI
-(Navedi 2-4 konkretna problema sa objašnjenjem zašto su problemi)
+KLJUČNI PROBLEMI
+(Navedi 2-4 konkretna problema, svaki u novom redu sa crticom)
 
-✅ ŠTA RADI DOBRO
+ŠTA RADI DOBRO
 (Navedi 1-3 stvari koje funkcionišu)
 
-🚀 PRIORITETNE AKCIJE – URADI ODMAH
-(3-5 konkretnih akcija sa jasnim uputstvima)
+PRIORITETNE AKCIJE
+(3-5 konkretnih akcija, numerisano)
 
-💡 STRATEŠKE PREPORUKE
+STRATEŠKE PREPORUKE
 (2-3 dugoročne preporuke)
 
-Budi konkretan, direktan i profesionalan. Koristi stvarne benchmark vrednosti za Meta Ads.`
+Budi konkretan, direktan i profesionalan.`
         : `You are a senior Meta Ads expert with 10+ years of experience. Analyze this Meta campaign and provide a detailed, personalized analysis.
 
 Campaign name: ${f.name||"Not specified"}
@@ -690,7 +738,7 @@ Be specific, direct and professional. Use real Meta Ads benchmark values.`;
       {aiLoading&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
         {[1,2,3,4].map(i=><div key={i} style={{height:12,background:"rgba(255,255,255,0.06)",borderRadius:6,width:i===4?"60%":"100%"}}/>)}
       </div>}
-      {aiAnalysis&&!aiLoading&&<div style={{color:"rgba(255,255,255,0.8)",fontSize:13,lineHeight:1.8,whiteSpace:"pre-wrap"}}>{aiAnalysis}</div>}
+      {aiAnalysis&&!aiLoading&&<MD2 text={aiAnalysis}/>}
     </div>
 
     {mode==="manual"&&<>
@@ -1468,7 +1516,7 @@ For "better": true means Period B is better for that metric, false means worse. 
 
       {/* Executive Summary */}
       {report.execSummary&&<div className="report-section" style={{background:"rgba(99,102,241,0.06)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:12,padding:"16px",marginBottom:14}}>
-        <div className="section-label" style={{color:C.acl,fontSize:10,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",marginBottom:8}}>🎯 {t.rg_execSum}</div>
+        <div className="section-label" style={{color:C.acl,fontSize:10,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",marginBottom:8}}>{t.rg_execSum}</div>
         <div style={{color:"rgba(255,255,255,0.85)",fontSize:13,lineHeight:1.8}}>{report.execSummary}</div>
       </div>}
 
@@ -1512,7 +1560,7 @@ For "better": true means Period B is better for that metric, false means worse. 
 
       {/* Metrics (single) */}
       {report.metrics&&report.metrics.length>0&&<div className="report-section" style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"16px",marginBottom:14}}>
-        <div className="section-label" style={{color:C.mut,fontSize:10,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",marginBottom:10}}>📊 {t.rg_metricsFound}</div>
+        <div className="section-label" style={{color:C.mut,fontSize:10,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",marginBottom:10}}>{t.rg_metricsFound}</div>
         {report.metrics.map((m,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:i<report.metrics.length-1?`1px solid ${C.brd}`:"none"}}>
           <span style={{color:C.mut,fontSize:13}}>{m.name}</span>
           <span style={{color:C.txt,fontWeight:700,fontSize:13}}>{m.value}</span>
@@ -1521,25 +1569,25 @@ For "better": true means Period B is better for that metric, false means worse. 
 
       {/* Issues */}
       {report.issues&&report.issues.length>0&&<div className="report-section" style={{background:"rgba(239,68,68,0.06)",border:"1px solid rgba(239,68,68,0.2)",borderRadius:12,padding:"16px",marginBottom:14}}>
-        <div className="section-label" style={{color:C.red,fontSize:10,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",marginBottom:10}}>⚠️ {t.rg_issues}</div>
+        <div className="section-label" style={{color:C.red,fontSize:10,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",marginBottom:10}}>{t.rg_issues}</div>
         {report.issues.map((item,i)=><div key={i} style={{color:"rgba(255,255,255,0.75)",fontSize:12,lineHeight:1.7,padding:"5px 0",borderBottom:i<report.issues.length-1?`1px solid rgba(239,68,68,0.1)`:"none"}}>• {item}</div>)}
       </div>}
 
       {/* Good */}
       {report.good&&report.good.length>0&&<div className="report-section" style={{background:"rgba(52,211,153,0.06)",border:"1px solid rgba(52,211,153,0.2)",borderRadius:12,padding:"16px",marginBottom:14}}>
-        <div className="section-label" style={{color:C.grn,fontSize:10,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",marginBottom:10}}>✅ {t.rg_good}</div>
+        <div className="section-label" style={{color:C.grn,fontSize:10,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",marginBottom:10}}>{t.rg_good}</div>
         {report.good.map((item,i)=><div key={i} style={{color:"rgba(255,255,255,0.75)",fontSize:12,lineHeight:1.7,padding:"5px 0",borderBottom:i<report.good.length-1?`1px solid rgba(52,211,153,0.1)`:"none"}}>• {item}</div>)}
       </div>}
 
       {/* Actions */}
       {report.actions&&report.actions.length>0&&<div className="report-section" style={{background:"rgba(251,191,36,0.06)",border:"1px solid rgba(251,191,36,0.2)",borderRadius:12,padding:"16px",marginBottom:14}}>
-        <div className="section-label" style={{color:C.yel,fontSize:10,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",marginBottom:10}}>🚀 {t.rg_actions}</div>
+        <div className="section-label" style={{color:C.yel,fontSize:10,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",marginBottom:10}}>{t.rg_actions}</div>
         {report.actions.map((item,i)=><div key={i} style={{color:"rgba(255,255,255,0.75)",fontSize:12,lineHeight:1.7,padding:"6px 0",borderBottom:i<report.actions.length-1?`1px solid rgba(251,191,36,0.1)`:"none"}}><span style={{color:C.yel,fontWeight:700,marginRight:8}}>{i+1}.</span>{item}</div>)}
       </div>}
 
       {/* Strategic */}
       {report.strategic&&report.strategic.length>0&&<div className="report-section" style={{background:"rgba(99,102,241,0.06)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:12,padding:"16px",marginBottom:20}}>
-        <div className="section-label" style={{color:C.acl,fontSize:10,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",marginBottom:10}}>💡 {t.rg_strategic}</div>
+        <div className="section-label" style={{color:C.acl,fontSize:10,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",marginBottom:10}}>{t.rg_strategic}</div>
         {report.strategic.map((item,i)=><div key={i} style={{color:"rgba(255,255,255,0.75)",fontSize:12,lineHeight:1.7,padding:"5px 0",borderBottom:i<report.strategic.length-1?`1px solid rgba(99,102,241,0.1)`:"none"}}>• {item}</div>)}
       </div>}
 
