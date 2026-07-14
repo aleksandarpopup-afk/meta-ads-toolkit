@@ -415,9 +415,12 @@ function clData(lang){
 // ── MODULE 1: HEALTH ─────────────────────────────────────────────────────────
 function HealthMod({t,lang}){
   const mob=useIsMobile();
+  const sr=lang==="sr";
   const [step,setSt]=useState(0);
   const [f,setF]=useState({name:"",goal:"",per:"",bud:"",sp:"",ROAS:"",CTR:"",CPC:"",CPA:"",ConversionRate:"",Revenue:"",audT:"",audS:"",freq:"",crFs:[],crA:"",cpF:""});
   const [done,setDone]=useState(false);
+  const [aiAnalysis,setAiAnalysis]=useState("");
+  const [aiLoading,setAiLoading]=useState(false);
   const set=(k,v)=>setF(x=>({...x,[k]:v}));
   const MK=["ROAS","CTR","CPC","CPA","ConversionRate","Revenue"];
   const ss={}; MK.forEach(k=>{ss[k]=gStatus(k,f[k]);});
@@ -425,7 +428,88 @@ function HealthMod({t,lang}){
   const br=parseFloat(f.bud)>0?(parseFloat(f.sp)||0)/parseFloat(f.bud):null;
   const adv=advice(lang,{goal:f.goal,audT:f.audT,freq:f.freq,crFs:f.crFs,crA:f.crA,cpF:f.cpF,bud:f.bud,sp:f.sp},ss);
   const MD=[{k:"ROAS",l:t.hROAS,h:t.hROASh,sx:"x",ph:"3.2"},{k:"CTR",l:t.hCTR,h:t.hCTRh,sx:"%",ph:"1.8"},{k:"CPC",l:t.hCPC,h:t.hCPCh,sx:"€",ph:"0.85"},{k:"CPA",l:t.hCPA,h:t.hCPAh,sx:"€",ph:"25"},{k:"ConversionRate",l:t.hCR,h:t.hCRh,sx:"%",ph:"2.4"},{k:"Revenue",l:t.hRev,h:t.hRevh,sx:"€",ph:"1500"}];
-  const reset=()=>{setSt(0);setDone(false);setF({name:"",goal:"",per:"",bud:"",sp:"",ROAS:"",CTR:"",CPC:"",CPA:"",ConversionRate:"",Revenue:"",audT:"",audS:"",freq:"",crFs:[],crA:"",cpF:""});};
+
+  const handleAnalyze = async () => {
+    setDone(true);
+    setAiLoading(true);
+    setAiAnalysis("");
+    try {
+      const metrics = MK.filter(k=>f[k]!=="").map(k=>`${k}: ${f[k]}`).join(", ");
+      const prompt = sr
+        ? `Ti si senior Meta Ads ekspert sa 10+ godina iskustva. Analiziraj ovu Meta kampanju i daj detaljnu, personalizovanu analizu.
+
+Naziv kampanje: ${f.name||"Nije navedeno"}
+Cilj kampanje: ${f.goal||"Nije navedeno"}
+Period: ${f.per||"Nije navedeno"}
+Budžet: ${f.bud?"€"+f.bud:""} | Potrošeno: ${f.sp?"€"+f.sp:""}
+Metrike: ${metrics}
+Tip publike: ${f.audT||"Nije navedeno"}
+Veličina publike: ${f.audS||"Nije navedeno"}
+Frekvencija: ${f.freq||"Nije navedeno"}
+Format kreative: ${f.crFs?.join(", ")||"Nije navedeno"}
+Starost kreative: ${f.crA||"Nije navedeno"}
+Ad copy fokus: ${f.cpF||"Nije navedeno"}
+
+Napiši analizu u sledećem formatu:
+
+🎯 EXECUTIVE SUMMARY
+(2-3 rečenice – opšta ocena kampanje)
+
+📊 KLJUČNI PROBLEMI
+(Navedi 2-4 konkretna problema sa objašnjenjem zašto su problemi)
+
+✅ ŠTA RADI DOBRO
+(Navedi 1-3 stvari koje funkcionišu)
+
+🚀 PRIORITETNE AKCIJE – URADI ODMAH
+(3-5 konkretnih akcija sa jasnim uputstvima)
+
+💡 STRATEŠKE PREPORUKE
+(2-3 dugoročne preporuke)
+
+Budi konkretan, direktan i profesionalan. Koristi stvarne benchmark vrednosti za Meta Ads.`
+        : `You are a senior Meta Ads expert with 10+ years of experience. Analyze this Meta campaign and provide a detailed, personalized analysis.
+
+Campaign name: ${f.name||"Not specified"}
+Campaign objective: ${f.goal||"Not specified"}
+Period: ${f.per||"Not specified"}
+Budget: ${f.bud?"€"+f.bud:""} | Spent: ${f.sp?"€"+f.sp:""}
+Metrics: ${metrics}
+Audience type: ${f.audT||"Not specified"}
+Audience size: ${f.audS||"Not specified"}
+Frequency: ${f.freq||"Not specified"}
+Creative format: ${f.crFs?.join(", ")||"Not specified"}
+Creative age: ${f.crA||"Not specified"}
+Ad copy focus: ${f.cpF||"Not specified"}
+
+Write analysis in this format:
+
+🎯 EXECUTIVE SUMMARY
+(2-3 sentences – overall campaign assessment)
+
+📊 KEY ISSUES
+(List 2-4 specific problems with explanation of why they're issues)
+
+✅ WHAT'S WORKING
+(List 1-3 things that are working well)
+
+🚀 PRIORITY ACTIONS – DO NOW
+(3-5 concrete actions with clear instructions)
+
+💡 STRATEGIC RECOMMENDATIONS
+(2-3 long-term recommendations)
+
+Be specific, direct and professional. Use real Meta Ads benchmark values.`;
+
+      const result = await callClaude(prompt, lang);
+      setAiAnalysis(result);
+    } catch(e) {
+      setAiAnalysis(sr?"Greška pri AI analizi. Statička analiza je prikazana ispod.":"Error with AI analysis. Static analysis is shown below.");
+    }
+    setAiLoading(false);
+  };
+
+  const reset=()=>{setSt(0);setDone(false);setAiAnalysis("");setF({name:"",goal:"",per:"",bud:"",sp:"",ROAS:"",CTR:"",CPC:"",CPA:"",ConversionRate:"",Revenue:"",audT:"",audS:"",freq:"",crFs:[],crA:"",cpF:""});};
   const ovc=ov?SC[ov]:null;
   const STEPS=[t.s1,t.s2,t.s3];
   const BudBar=()=>br!==null?<div style={{background:C.sur,borderRadius:10,padding:"12px 14px",marginTop:10}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><span style={{fontSize:12,color:C.mut}}>{t.hBudUse}</span><span style={{fontSize:12,fontWeight:700,color:br>0.9?C.grn:br>0.6?C.yel:C.red}}>{Math.round(br*100)}%</span></div><div style={{height:5,background:"rgba(255,255,255,0.08)",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:`${Math.min(br*100,100)}%`,background:"linear-gradient(90deg,#6366F1,#8B5CF6)",borderRadius:3}}/></div></div>:null;
@@ -436,6 +520,20 @@ function HealthMod({t,lang}){
     <p style={{color:C.mut,fontSize:12,margin:"0 0 20px"}}>{fl} {t.hMsub} · Meta Ads</p>
     {ovc&&<div style={{background:ovc.b,border:`1px solid ${ovc.r}`,borderRadius:14,padding:"20px",marginBottom:20,textAlign:"center"}}><div style={{fontSize:32,marginBottom:8}}>{ov==="poor"?"🚨":ov==="ok"?"⚡":"🏆"}</div><div style={{color:ovc.c,fontSize:17,fontWeight:800,marginBottom:4}}>{t.hOvr}: {t[ov]}</div>{f.goal&&<div style={{color:C.mut,fontSize:12}}>{t.hGl}: {f.goal}</div>}</div>}
     {br!==null&&<div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px",marginBottom:14}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><span style={{fontSize:12,fontWeight:700,color:C.mut}}>{t.hBudH}</span><span style={{fontSize:12,fontWeight:800,color:br>0.85?C.grn:C.yel}}>€{parseFloat(f.sp).toLocaleString()} / €{parseFloat(f.bud).toLocaleString()} ({Math.round(br*100)}%)</span></div><div style={{height:5,background:"rgba(255,255,255,0.08)",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:`${Math.min(br*100,100)}%`,background:"linear-gradient(90deg,#6366F1,#34D399)",borderRadius:3}}/></div></div>}
+
+    {/* AI ANALIZA */}
+    <div style={{background:"rgba(99,102,241,0.08)",border:"1px solid rgba(99,102,241,0.25)",borderRadius:14,padding:"16px",marginBottom:20}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+        <span style={{fontSize:16}}>🤖</span>
+        <span style={{color:C.acl,fontWeight:700,fontSize:13}}>{sr?"AI Analiza – Claude":"AI Analysis – Claude"}</span>
+        {aiLoading&&<span style={{color:C.mut,fontSize:12,marginLeft:"auto"}}>{sr?"Analizira...":"Analyzing..."}</span>}
+      </div>
+      {aiLoading&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {[1,2,3].map(i=><div key={i} style={{height:12,background:"rgba(255,255,255,0.06)",borderRadius:6,width:i===3?"60%":"100%",animation:"pulse 1.5s infinite"}}/>)}
+      </div>}
+      {aiAnalysis&&!aiLoading&&<div style={{color:"rgba(255,255,255,0.8)",fontSize:13,lineHeight:1.8,whiteSpace:"pre-wrap"}}>{aiAnalysis}</div>}
+    </div>
+
     {adv.pr.length>0&&<><ST c={t.hPRI}/><div style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.2)",borderRadius:12,padding:"14px",marginBottom:16}}>{adv.pr.map((p,i)=><div key={i} style={{color:"rgba(255,255,255,0.75)",fontSize:12,lineHeight:1.7,padding:"5px 0",borderBottom:i<adv.pr.length-1?`1px solid ${C.brd}`:"none"}}>{p}</div>)}</div></>}
     <ST c={t.hMAN}/>
     <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
@@ -451,7 +549,7 @@ function HealthMod({t,lang}){
     <div style={{display:"flex",gap:6,marginBottom:24}}>{STEPS.map((s,i)=><div key={i} style={{flex:1}}><div style={{height:3,borderRadius:2,background:i<step?"#6366F1":i===step?"linear-gradient(90deg,#6366F1,#8B5CF6)":"rgba(255,255,255,0.08)",marginBottom:5}}/><div style={{fontSize:10,color:i<=step?C.mut:C.dim,fontWeight:600}}>{s}</div></div>)}</div>
     {step===0&&<><h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>{t.hTitle}</h2><p style={{color:C.mut,fontSize:13,margin:"0 0 22px",lineHeight:1.6}}>{t.hSub}</p><Lbl c={t.hName}/><div style={{marginBottom:16}}><TIn v={f.name} ch={v=>set("name",v)} ph={t.hNamePh}/></div><Div l={t.hGoal}/><Pills opts={t.hGoals} val={f.goal} ch={v=>set("goal",v)}/><Div l={t.hPer}/><Pills opts={t.hPers} val={f.per} ch={v=>set("per",v)}/><Div l={t.hBudH}/><div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:4}}><div><Lbl c={t.hBud}/><NIn v={f.bud} ch={v=>set("bud",v)} ph={t.hBudPh} sx="€"/></div><div><Lbl c={t.hSp}/><NIn v={f.sp} ch={v=>set("sp",v)} ph={t.hSpPh} sx="€"/></div></div><BudBar/><div style={{marginTop:22}}><Btn onClick={()=>setSt(1)}>{t.nxt}</Btn></div></>}
     {step===1&&<><h2 style={{fontSize:20,fontWeight:800,margin:"0 0 18px"}}>{t.hMet}</h2><div style={{display:"flex",flexDirection:"column",gap:10}}>{MD.map(({k,l,h,ph,sx})=><div key={k} style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:11,padding:"13px 15px"}}><div style={{marginBottom:9}}><span style={{color:C.txt,fontWeight:700,fontSize:13}}>{l}</span><span style={{color:C.dim,fontSize:11,marginLeft:8}}>{h}</span></div><NIn v={f[k]} ch={v=>set(k,v)} ph={ph} sx={sx}/></div>)}</div><div style={{display:"flex",gap:10,marginTop:22}}><div style={{flex:1}}><Btn onClick={()=>setSt(0)} sec>{t.prv}</Btn></div><div style={{flex:4}}><Btn onClick={()=>setSt(2)} disabled={fl<3}>{fl<3?t.hFill:`${t.s3} →`}</Btn></div></div></>}
-    {step===2&&<><h2 style={{fontSize:20,fontWeight:800,margin:"0 0 18px"}}>{t.hTarg} & {t.hCr}</h2><Lbl c={t.hAudT}/><Pills opts={t.hAudTs} val={f.audT} ch={v=>set("audT",v)}/><Div l={t.hAudS}/><Pills opts={t.hAudSs} val={f.audS} ch={v=>set("audS",v)}/><Div l={t.hFreq}/><NIn v={f.freq} ch={v=>set("freq",v)} ph={t.hFreqPh} sx="x"/><Div l={t.hCrF}/><Pills opts={t.hCrFs} val={f.crFs} ch={v=>set("crFs",v)} multi={true}/><Div l={t.hCrA}/><Pills opts={t.hCrAs} val={f.crA} ch={v=>set("crA",v)}/><Div l={t.hCopy}/><Pills opts={t.hCopys} val={f.cpF} ch={v=>set("cpF",v)}/><div style={{display:"flex",gap:10,marginTop:24}}><div style={{flex:1}}><Btn onClick={()=>setSt(1)} sec>{t.prv}</Btn></div><div style={{flex:4}}><Btn onClick={()=>setDone(true)}>{t.analyze}</Btn></div></div></>}
+    {step===2&&<><h2 style={{fontSize:20,fontWeight:800,margin:"0 0 18px"}}>{t.hTarg} & {t.hCr}</h2><Lbl c={t.hAudT}/><Pills opts={t.hAudTs} val={f.audT} ch={v=>set("audT",v)}/><Div l={t.hAudS}/><Pills opts={t.hAudSs} val={f.audS} ch={v=>set("audS",v)}/><Div l={t.hFreq}/><NIn v={f.freq} ch={v=>set("freq",v)} ph={t.hFreqPh} sx="x"/><Div l={t.hCrF}/><Pills opts={t.hCrFs} val={f.crFs} ch={v=>set("crFs",v)} multi={true}/><Div l={t.hCrA}/><Pills opts={t.hCrAs} val={f.crA} ch={v=>set("crA",v)}/><Div l={t.hCopy}/><Pills opts={t.hCopys} val={f.cpF} ch={v=>set("cpF",v)}/><div style={{display:"flex",gap:10,marginTop:24}}><div style={{flex:1}}><Btn onClick={()=>setSt(1)} sec>{t.prv}</Btn></div><div style={{flex:4}}><Btn onClick={handleAnalyze}>{t.analyze}</Btn></div></div></>}
   </div>;
 }
 
@@ -541,18 +639,135 @@ function BudgetMod({t,lang}){
   </div>;
 }
 
-// ── MODULE 3: AD COPY ────────────────────────────────────────────────────────
+// ── AI HELPER ────────────────────────────────────────────────────────────────
+const API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY;
+
+async function callClaude(prompt, lang) {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": API_KEY,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-6",
+      max_tokens: 2000,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+  const data = await res.json();
+  return data.content?.[0]?.text || "";
+}
+
+// ── MODULE 3: AD COPY (AI) ───────────────────────────────────────────────────
 function CopyMod({t,lang}){
+  const sr=lang==="sr";
   const [f,setF]=useState({prod:"",aud:"",goal:"",tone:"",usp:"",off:""});
-  const [cops,setCops]=useState([]); const [done,setDone]=useState(false); const [cpd,setCpd]=useState(null);
+  const [cops,setCops]=useState([]);
+  const [done,setDone]=useState(false);
+  const [loading,setLoading]=useState(false);
+  const [error,setError]=useState("");
+  const [cpd,setCpd]=useState(null);
   const set=(k,v)=>setF(x=>({...x,[k]:v}));
-  const gen=()=>{setCops(genCopies(lang,f));setDone(true);};
+
+  const gen=async()=>{
+    setLoading(true); setError(""); setCops([]);
+    try {
+      const prompt = sr
+        ? `Ti si ekspert za Meta Ads marketing na srpskom tržištu. Napiši 5 različitih varijanti ad copy-ja za Meta oglase.
+
+Proizvod/Usluga: ${f.prod}
+Ciljna publika: ${f.aud||"opšta publika"}
+Glavna prednost (USP): ${f.usp||f.prod}
+Ponuda/CTA: ${f.off||"Saznaj više"}
+Cilj oglasa: ${f.goal||"Prodaja"}
+Ton komunikacije: ${f.tone||"Profesionalan"}
+
+Vrati SAMO JSON u ovom formatu, bez ikakvog teksta pre ili posle:
+[
+  {"l":"Varijanta 1 – Problem/Rešenje","p":"primary text ovde","h":"headline ovde","c":"CTA ovde"},
+  {"l":"Varijanta 2 – Social Proof","p":"primary text ovde","h":"headline ovde","c":"CTA ovde"},
+  {"l":"Varijanta 3 – Direktna ponuda","p":"primary text ovde","h":"headline ovde","c":"CTA ovde"},
+  {"l":"Varijanta 4 – Benefit-driven","p":"primary text ovde","h":"headline ovde","c":"CTA ovde"},
+  {"l":"Varijanta 5 – Urgency/FOMO","p":"primary text ovde","h":"headline ovde","c":"CTA ovde"}
+]
+
+Svaka varijanta mora biti jedinstvena i kreativna. Primary text 3-5 rečenica. Headline max 10 reči.`
+        : `You are a Meta Ads expert. Write 5 different ad copy variants for Meta ads.
+
+Product/Service: ${f.prod}
+Target audience: ${f.aud||"general audience"}
+Main advantage (USP): ${f.usp||f.prod}
+Offer/CTA: ${f.off||"Learn more"}
+Ad objective: ${f.goal||"Sales"}
+Communication tone: ${f.tone||"Professional"}
+
+Return ONLY JSON in this format, no text before or after:
+[
+  {"l":"Variant 1 – Problem/Solution","p":"primary text here","h":"headline here","c":"CTA here"},
+  {"l":"Variant 2 – Social Proof","p":"primary text here","h":"headline here","c":"CTA here"},
+  {"l":"Variant 3 – Direct Offer","p":"primary text here","h":"headline here","c":"CTA here"},
+  {"l":"Variant 4 – Benefit-driven","p":"primary text here","h":"headline here","c":"CTA here"},
+  {"l":"Variant 5 – Urgency/FOMO","p":"primary text here","h":"headline here","c":"CTA here"}
+]
+
+Each variant must be unique and creative. Primary text 3-5 sentences. Headline max 10 words.`;
+
+      const raw = await callClaude(prompt, lang);
+      const clean = raw.replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(clean);
+      setCops(parsed);
+      setDone(true);
+    } catch(e) {
+      setError(sr?"Greška pri generisanju. Proveri internet konekciju i pokušaj ponovo.":"Error generating copy. Check your internet connection and try again.");
+    }
+    setLoading(false);
+  };
+
   const cp=(txt,i)=>{ navigator.clipboard?.writeText(txt).then(()=>{setCpd(i);setTimeout(()=>setCpd(null),2000);}); };
+
   return <div>
     <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>{t.cTitle}</h2>
-    <p style={{color:C.mut,fontSize:13,margin:"0 0 22px"}}>{t.cSub}</p>
-    {!done&&<><Lbl c={t.cProd}/><div style={{marginBottom:14}}><TIn v={f.prod} ch={v=>set("prod",v)} ph={t.cProdPh}/></div><Lbl c={t.cAud}/><div style={{marginBottom:14}}><TIn v={f.aud} ch={v=>set("aud",v)} ph={t.cAudPh}/></div><Lbl c={t.cUSP}/><div style={{marginBottom:14}}><TIn v={f.usp} ch={v=>set("usp",v)} ph={t.cUSPPh}/></div><Lbl c={t.cOff}/><div style={{marginBottom:16}}><TIn v={f.off} ch={v=>set("off",v)} ph={t.cOffPh}/></div><Lbl c={t.cGoal}/><div style={{marginBottom:14}}><Pills opts={t.cGoals} val={f.goal} ch={v=>set("goal",v)}/></div><Lbl c={t.cTone}/><div style={{marginBottom:22}}><Pills opts={t.cTones} val={f.tone} ch={v=>set("tone",v)}/></div><Btn onClick={gen} disabled={!f.prod}>{t.gen}</Btn></>}
-    {done&&<><ST c={t.cCops}/>{cops.map((c,i)=><div key={i} style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"15px",marginBottom:12}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}><span style={{color:C.acl,fontWeight:700,fontSize:12}}>{c.l}</span><button onClick={()=>cp(`${c.p}\n\n${c.h}`,i)} style={{background:"rgba(99,102,241,0.2)",border:"none",color:C.acl,fontSize:11,fontWeight:700,padding:"5px 12px",borderRadius:20,cursor:"pointer"}}>{cpd===i?t.cCopd:t.cCopy}</button></div><div style={{marginBottom:10}}><div style={{color:C.dim,fontSize:10,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:4}}>{t.cPrim}</div><div style={{color:"rgba(255,255,255,0.75)",fontSize:12,lineHeight:1.7,whiteSpace:"pre-line"}}>{c.p}</div></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><div><div style={{color:C.dim,fontSize:10,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:4}}>{t.cHead}</div><div style={{color:C.txt,fontSize:13,fontWeight:600}}>{c.h}</div></div><div><div style={{color:C.dim,fontSize:10,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:4}}>{t.cCTA}</div><div style={{color:C.acl,fontSize:13,fontWeight:600}}>{c.c}</div></div></div></div>)}<Btn onClick={()=>setDone(false)} sec>{t.newA}</Btn></>}
+    <p style={{color:C.mut,fontSize:13,margin:"0 0 6px"}}>{t.cSub}</p>
+    <div style={{background:"rgba(99,102,241,0.1)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:10,padding:"10px 14px",marginBottom:20,display:"flex",alignItems:"center",gap:8}}>
+      <span style={{fontSize:14}}>🤖</span>
+      <span style={{color:C.acl,fontSize:12,fontWeight:600}}>{sr?"Powered by Claude AI – svaki put novi, jedinstveni copy":"Powered by Claude AI – unique copy every time"}</span>
+    </div>
+    {!done&&<>
+      <Lbl c={t.cProd}/><div style={{marginBottom:14}}><TIn v={f.prod} ch={v=>set("prod",v)} ph={t.cProdPh}/></div>
+      <Lbl c={t.cAud}/><div style={{marginBottom:14}}><TIn v={f.aud} ch={v=>set("aud",v)} ph={t.cAudPh}/></div>
+      <Lbl c={t.cUSP}/><div style={{marginBottom:14}}><TIn v={f.usp} ch={v=>set("usp",v)} ph={t.cUSPPh}/></div>
+      <Lbl c={t.cOff}/><div style={{marginBottom:16}}><TIn v={f.off} ch={v=>set("off",v)} ph={t.cOffPh}/></div>
+      <Lbl c={t.cGoal}/><div style={{marginBottom:14}}><Pills opts={t.cGoals} val={f.goal} ch={v=>set("goal",v)}/></div>
+      <Lbl c={t.cTone}/><div style={{marginBottom:22}}><Pills opts={t.cTones} val={f.tone} ch={v=>set("tone",v)}/></div>
+      {error&&<div style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:10,padding:"12px",marginBottom:16,color:C.red,fontSize:13}}>{error}</div>}
+      <Btn onClick={gen} disabled={!f.prod||loading}>
+        {loading?(sr?"⏳ AI generiše copy...":"⏳ AI generating copy..."):t.gen}
+      </Btn>
+    </>}
+    {done&&<>
+      <ST c={t.cCops}/>
+      {cops.map((c,i)=><div key={i} style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"15px",marginBottom:12}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          <span style={{color:C.acl,fontWeight:700,fontSize:12}}>{c.l}</span>
+          <button onClick={()=>cp(`${c.p}\n\n${c.h}`,i)} style={{background:"rgba(99,102,241,0.2)",border:"none",color:C.acl,fontSize:11,fontWeight:700,padding:"5px 12px",borderRadius:20,cursor:"pointer"}}>{cpd===i?t.cCopd:t.cCopy}</button>
+        </div>
+        <div style={{marginBottom:10}}>
+          <div style={{color:C.dim,fontSize:10,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:4}}>{t.cPrim}</div>
+          <div style={{color:"rgba(255,255,255,0.75)",fontSize:12,lineHeight:1.7,whiteSpace:"pre-line"}}>{c.p}</div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div><div style={{color:C.dim,fontSize:10,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:4}}>{t.cHead}</div><div style={{color:C.txt,fontSize:13,fontWeight:600}}>{c.h}</div></div>
+          <div><div style={{color:C.dim,fontSize:10,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:4}}>{t.cCTA}</div><div style={{color:C.acl,fontSize:13,fontWeight:600}}>{c.c}</div></div>
+        </div>
+      </div>)}
+      <div style={{display:"flex",gap:10,marginTop:4}}>
+        <Btn onClick={()=>{setDone(false);setCops([]);}} sec>{t.newA}</Btn>
+        <Btn onClick={()=>{setDone(false);setTimeout(gen,100);}}>{sr?"🔄 Generiši ponovo":"🔄 Regenerate"}</Btn>
+      </div>
+    </>}
   </div>;
 }
 
