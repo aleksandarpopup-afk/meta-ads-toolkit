@@ -1392,31 +1392,60 @@ For "better": true means Period B is better for that metric, false means worse. 
   };
 
   const exportPDF=()=>{
-    const el=document.getElementById("report-content");
-    if(!el) return;
     const style=document.createElement("style");
     style.textContent=`
       @media print {
-        body { background: white !important; color: black !important; }
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        body { background: #ffffff !important; color: #1a1a2e !important; font-family: Arial, sans-serif; margin: 0; padding: 0; }
         .no-print { display: none !important; }
-        #report-content { padding: 20px; font-family: Arial, sans-serif; }
-        .report-section { margin-bottom: 20px; border: 1px solid #ddd; border-radius: 8px; padding: 14px; }
-        .report-title { font-size: 22px; font-weight: bold; color: #1a1a2e; }
-        .section-label { font-size: 11px; font-weight: bold; text-transform: uppercase; color: #666; margin-bottom: 8px; }
-        .exec-summary { background: #f0f4ff; padding: 14px; border-radius: 8px; font-size: 14px; line-height: 1.7; }
-        .metric-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; font-size: 13px; }
-        .green { color: #16a34a; font-weight: bold; }
-        .red { color: #dc2626; font-weight: bold; }
-        .list-item { padding: 6px 0; font-size: 13px; line-height: 1.6; border-bottom: 1px solid #f0f0f0; }
-        .footer { margin-top: 30px; text-align: center; color: #999; font-size: 11px; }
-        .comparison-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-        .comparison-table th { background: #f5f5f5; padding: 8px; text-align: left; font-size: 11px; text-transform: uppercase; }
-        .comparison-table td { padding: 8px; border-bottom: 1px solid #eee; font-size: 13px; }
+        #report-content { padding: 24px; background: white; }
+        .report-section { margin-bottom: 16px; padding: 14px; border-radius: 8px; page-break-inside: avoid; }
+        /* Header */
+        #report-content > div:first-child { background: #eef2ff !important; border: 1px solid #c7d2fe !important; }
+        .report-title { color: #1e1b4b !important; font-size: 20px !important; font-weight: 900 !important; }
+        /* Executive summary */
+        #report-content [style*="rgba(99,102,241,0.06)"] { background: #f0f4ff !important; border: 1px solid #c7d2fe !important; }
+        /* Section labels */
+        [class*="section-label"] { color: #4338ca !important; }
+        /* All text */
+        [style*="rgba(255,255,255,0.85)"] { color: #1a1a2e !important; }
+        [style*="rgba(255,255,255,0.75)"] { color: #374151 !important; }
+        [style*="rgba(255,255,255,0.65)"] { color: #4b5563 !important; }
+        [style*="color: rgb(255, 255, 255)"] { color: #1a1a2e !important; }
+        /* Metric rows */
+        [style*="rgba(255,255,255,0.4)"] { color: #6b7280 !important; }
+        [style*="rgba(255,255,255,0.2)"] { color: #9ca3af !important; }
+        /* Borders */
+        [style*="rgba(255,255,255,0.08)"] { border-color: #e5e7eb !important; }
+        /* Green sections */
+        [style*="rgba(52,211,153,0.06)"] { background: #f0fdf4 !important; border: 1px solid #bbf7d0 !important; }
+        [style*="color: rgb(52, 211, 153)"] { color: #15803d !important; }
+        /* Red sections */
+        [style*="rgba(239,68,68,0.06)"] { background: #fef2f2 !important; border: 1px solid #fecaca !important; }
+        [style*="color: rgb(248, 113, 113)"] { color: #dc2626 !important; }
+        /* Yellow sections */
+        [style*="rgba(251,191,36,0.06)"] { background: #fffbeb !important; border: 1px solid #fde68a !important; }
+        [style*="color: rgb(251, 191, 36)"] { color: #d97706 !important; }
+        /* Purple/AI sections */
+        [style*="rgba(99,102,241,0.08)"] { background: #eef2ff !important; border: 1px solid #c7d2fe !important; }
+        [style*="color: rgb(165, 180, 252)"] { color: #4338ca !important; }
+        /* Comparison cards */
+        [style*="rgba(52,211,153,0.05)"] { background: #f0fdf4 !important; border: 1px solid #bbf7d0 !important; }
+        [style*="rgba(248,113,113,0.05)"] { background: #fef2f2 !important; border: 1px solid #fecaca !important; }
+        /* Surface */
+        [style*="rgba(255,255,255,0.04)"] { background: #f9fafb !important; border: 1px solid #e5e7eb !important; }
+        [style*="rgba(255,255,255,0.08)"] { background: #f3f4f6 !important; }
+        /* Footer */
+        [style*="rgba(255,255,255,0.2)"] { color: #9ca3af !important; }
+        /* Metric values */
+        [style*="fontWeight:700"] { color: #1a1a2e !important; }
+        [style*="fontWeight:800"] { color: #1a1a2e !important; }
+        [style*="fontWeight:900"] { color: #1a1a2e !important; }
       }
     `;
     document.head.appendChild(style);
     window.print();
-    document.head.removeChild(style);
+    setTimeout(()=>document.head.removeChild(style), 1000);
   };
 
   const reset=()=>{ setType(null);setClient("");setPeriod("");setPeriodA("");setPeriodB(""); setImgA(null);setPrevA(null);setImgB(null);setPrevB(null);setReport(null); };
@@ -1443,25 +1472,38 @@ For "better": true means Period B is better for that metric, false means worse. 
         <div style={{color:"rgba(255,255,255,0.85)",fontSize:13,lineHeight:1.8}}>{report.execSummary}</div>
       </div>}
 
-      {/* Comparison table */}
+      {/* Comparison table – kartice za mobilni */}
       {report.comparison&&<div className="report-section" style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"16px",marginBottom:14}}>
         <div className="section-label" style={{color:C.mut,fontSize:10,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",marginBottom:12}}>📊 {t.rg_comparison}</div>
-        <div style={{overflowX:"auto"}}>
-          <table style={{width:"100%",borderCollapse:"collapse"}}>
-            <thead><tr style={{borderBottom:`1px solid ${C.brd}`}}>
-              {[t.rg_metric,report.periodA||"Period A",report.periodB||"Period B",t.rg_change].map((h,i)=><th key={i} style={{color:C.mut,fontSize:10,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase",padding:"8px 10px",textAlign:"left"}}>{h}</th>)}
-            </tr></thead>
-            <tbody>
-              {report.comparison.map((row,i)=><tr key={i} style={{borderBottom:`1px solid ${C.brd}`}}>
-                <td style={{color:C.txt,fontSize:13,fontWeight:600,padding:"10px 10px"}}>{row.metric}</td>
-                <td style={{color:C.mut,fontSize:13,padding:"10px 10px"}}>{row.valueA}</td>
-                <td style={{color:C.txt,fontSize:13,fontWeight:600,padding:"10px 10px"}}>{row.valueB}</td>
-                <td style={{padding:"10px 10px"}}>
-                  <span style={{color:row.better?C.grn:C.red,fontWeight:700,fontSize:13}}>{row.better?"▲":"▼"} {row.change}</span>
-                </td>
-              </tr>)}
-            </tbody>
-          </table>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {/* Header */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 80px",gap:8,padding:"8px 10px",borderBottom:`1px solid ${C.brd}`}}>
+            {[t.rg_metric,report.periodA||"Period A",report.periodB||"Period B",t.rg_change].map((h,i)=>(
+              <div key={i} style={{color:C.mut,fontSize:10,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase"}}>{h}</div>
+            ))}
+          </div>
+          {/* Rows kao kartice */}
+          {report.comparison.map((row,i)=>(
+            <div key={i} style={{background:row.better?"rgba(52,211,153,0.05)":"rgba(248,113,113,0.05)",border:`1px solid ${row.better?"rgba(52,211,153,0.2)":"rgba(248,113,113,0.2)"}`,borderRadius:10,padding:"12px 10px"}}>
+              {/* Naziv metrike */}
+              <div style={{color:C.txt,fontWeight:700,fontSize:13,marginBottom:10}}>{row.metric}</div>
+              {/* Vrednosti */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 80px",gap:8,alignItems:"center"}}>
+                <div>
+                  <div style={{color:C.dim,fontSize:10,fontWeight:600,marginBottom:3}}>{report.periodA||"Period A"}</div>
+                  <div style={{color:C.mut,fontSize:13,fontWeight:600}}>{row.valueA}</div>
+                </div>
+                <div>
+                  <div style={{color:C.dim,fontSize:10,fontWeight:600,marginBottom:3}}>{report.periodB||"Period B"}</div>
+                  <div style={{color:C.txt,fontSize:13,fontWeight:700}}>{row.valueB}</div>
+                </div>
+                <div style={{textAlign:"center"}}>
+                  <div style={{color:row.better?C.grn:C.red,fontWeight:800,fontSize:14}}>{row.better?"▲":"▼"}</div>
+                  <div style={{color:row.better?C.grn:C.red,fontWeight:700,fontSize:12}}>{row.change}</div>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
         {report.aiComment&&<div style={{marginTop:14,padding:"12px 14px",background:"rgba(99,102,241,0.08)",borderRadius:10,color:"rgba(255,255,255,0.75)",fontSize:12,lineHeight:1.7}}>
           <span style={{color:C.acl,fontWeight:700}}>🤖 {t.rg_aiComment}: </span>{report.aiComment}
