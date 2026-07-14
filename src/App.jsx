@@ -1572,13 +1572,13 @@ For "better": true means Period B is better for that metric, false means worse. 
         <div style={{fontSize:28,marginBottom:10}}>📸</div>
         <div style={{color:C.txt,fontWeight:700,fontSize:15,marginBottom:6}}>{t.rg_single}</div>
         <div style={{color:C.mut,fontSize:13,lineHeight:1.5}}>{t.rg_single_s}</div>
-        <div style={{marginTop:12,color:C.acl,fontSize:12,fontWeight:700}}>✦ + 📥 PDF →</div>
+        <div style={{marginTop:12,color:C.acl,fontSize:12,fontWeight:700}}>📥 PDF →</div>
       </button>
       <button onClick={()=>setType("compare")} style={{background:"linear-gradient(135deg,rgba(16,185,129,0.15),rgba(16,185,129,0.05))",border:"1px solid rgba(16,185,129,0.3)",borderRadius:16,padding:"20px",textAlign:"left",cursor:"pointer",WebkitTapHighlightColor:"transparent"}}>
         <div style={{fontSize:28,marginBottom:10}}>📊</div>
         <div style={{color:C.txt,fontWeight:700,fontSize:15,marginBottom:6}}>{t.rg_compare}</div>
         <div style={{color:C.mut,fontSize:13,lineHeight:1.5}}>{t.rg_compare_s}</div>
-        <div style={{marginTop:12,color:C.grn,fontSize:12,fontWeight:700}}>🟢 Zeleno / 🔴 Crveno poređenje + 📥 PDF →</div>
+        <div style={{marginTop:12,color:C.grn,fontSize:12,fontWeight:700}}>📥 PDF →</div>
       </button>
     </div>
   </div>;
