@@ -1673,7 +1673,7 @@ export default function App(){
   const Comp=mod===1?HealthMod:mod===8?ReportMod:mod===2?BudgetMod:mod===7?ScalingMod:mod===3?CopyMod:mod===4?AudMod:mod===5?RoasMod:mod===6?CheckMod:null;
   const MOD_COLORS=["#6366F1","#F97316","#10B981","#06B6D4","#F59E0B","#EC4899","#8B5CF6","#34D399"];
 
-  return <div style={{minHeight:"100vh",background:C.bg,fontFamily:"'Syne',sans-serif",color:C.txt}}>
+  return <div style={{minHeight:"100vh",background:C.bg,fontFamily:"'Plus Jakarta Sans',sans-serif",color:C.txt}}>
     {/* TOP BAR */}
     <div style={{background:"rgba(255,255,255,0.02)",borderBottom:`1px solid ${C.brd}`,padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:100,backdropFilter:"blur(10px)"}}>
       <div style={{display:"flex",alignItems:"center",gap:9,cursor:mod?"pointer":"default"}} onClick={()=>setMod(null)}>
