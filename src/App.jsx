@@ -416,11 +416,16 @@ function clData(lang){
 function HealthMod({t,lang}){
   const mob=useIsMobile();
   const sr=lang==="sr";
+  const [mode,setMode]=useState(null); // null=izbor, "manual"=rucno, "screenshot"=upload
   const [step,setSt]=useState(0);
   const [f,setF]=useState({name:"",goal:"",per:"",bud:"",sp:"",ROAS:"",CTR:"",CPC:"",CPA:"",ConversionRate:"",Revenue:"",audT:"",audS:"",freq:"",crFs:[],crA:"",cpF:""});
   const [done,setDone]=useState(false);
   const [aiAnalysis,setAiAnalysis]=useState("");
   const [aiLoading,setAiLoading]=useState(false);
+  const [screenshot,setScreenshot]=useState(null);
+  const [screenshotPreview,setScreenshotPreview]=useState(null);
+  const [screenshotName,setScreenshotName]=useState("");
+  const [dragOver,setDragOver]=useState(false);
   const set=(k,v)=>setF(x=>({...x,[k]:v}));
   const MK=["ROAS","CTR","CPC","CPA","ConversionRate","Revenue"];
   const ss={}; MK.forEach(k=>{ss[k]=gStatus(k,f[k]);});
@@ -428,6 +433,88 @@ function HealthMod({t,lang}){
   const br=parseFloat(f.bud)>0?(parseFloat(f.sp)||0)/parseFloat(f.bud):null;
   const adv=advice(lang,{goal:f.goal,audT:f.audT,freq:f.freq,crFs:f.crFs,crA:f.crA,cpF:f.cpF,bud:f.bud,sp:f.sp},ss);
   const MD=[{k:"ROAS",l:t.hROAS,h:t.hROASh,sx:"x",ph:"3.2"},{k:"CTR",l:t.hCTR,h:t.hCTRh,sx:"%",ph:"1.8"},{k:"CPC",l:t.hCPC,h:t.hCPCh,sx:"€",ph:"0.85"},{k:"CPA",l:t.hCPA,h:t.hCPAh,sx:"€",ph:"25"},{k:"ConversionRate",l:t.hCR,h:t.hCRh,sx:"%",ph:"2.4"},{k:"Revenue",l:t.hRev,h:t.hRevh,sx:"€",ph:"1500"}];
+
+  const handleFile=(file)=>{
+    if(!file||!file.type.startsWith("image/")) return;
+    setScreenshotName(file.name);
+    const reader=new FileReader();
+    reader.onload=(e)=>{
+      const base64=e.target.result.split(",")[1];
+      setScreenshot(base64);
+      setScreenshotPreview(e.target.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleScreenshotAnalyze=async()=>{
+    if(!screenshot) return;
+    setDone(true); setAiLoading(true); setAiAnalysis("");
+    try {
+      const res=await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",
+        headers:{"Content-Type":"application/json","x-api-key":API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        body:JSON.stringify({
+          model:"claude-sonnet-4-6",
+          max_tokens:2000,
+          messages:[{role:"user",content:[
+            {type:"image",source:{type:"base64",media_type:"image/jpeg",data:screenshot}},
+            {type:"text",text:sr
+              ?`Ti si senior Meta Ads ekspert. Analiziraj ovaj screenshot iz marketing alata (Meta Ads Manager, Looker Studio, Google Ads ili bilo koji drugi).
+
+Pročitaj sve metrike i podatke koji su vidljivi na screenshotu i napiši detaljnu analizu:
+
+🎯 EXECUTIVE SUMMARY
+(2-3 rečenice – opšta ocena onoga što vidiš)
+
+📊 METRIKE KOJE SAM UOČIO
+(Navedi sve metrike koje vidiš sa vrednostima)
+
+📊 KLJUČNI PROBLEMI
+(Navedi 2-4 konkretna problema sa objašnjenjem)
+
+✅ ŠTA RADI DOBRO
+(Navedi 1-3 stvari koje funkcionišu)
+
+🚀 PRIORITETNE AKCIJE – URADI ODMAH
+(3-5 konkretnih akcija)
+
+💡 STRATEŠKE PREPORUKE
+(2-3 dugoročne preporuke)
+
+Budi konkretan i profesionalan. Ako ne možeš da pročitaš neku metriku jasno, navedi to.`
+              :`You are a senior Meta Ads expert. Analyze this screenshot from a marketing tool (Meta Ads Manager, Looker Studio, Google Ads or any other).
+
+Read all metrics and data visible in the screenshot and write a detailed analysis:
+
+🎯 EXECUTIVE SUMMARY
+(2-3 sentences – overall assessment of what you see)
+
+📊 METRICS I IDENTIFIED
+(List all metrics you can see with their values)
+
+📊 KEY ISSUES
+(List 2-4 specific problems with explanation)
+
+✅ WHAT'S WORKING
+(List 1-3 things that are working well)
+
+🚀 PRIORITY ACTIONS – DO NOW
+(3-5 concrete actions)
+
+💡 STRATEGIC RECOMMENDATIONS
+(2-3 long-term recommendations)
+
+Be specific and professional. If you can't clearly read a metric, mention that.`}
+          ]}]
+        })
+      });
+      const data=await res.json();
+      setAiAnalysis(data.content?.[0]?.text||"");
+    } catch(e) {
+      setAiAnalysis(sr?"Greška pri analizi screenshota. Pokušaj ponovo.":"Error analyzing screenshot. Please try again.");
+    }
+    setAiLoading(false);
+  };
 
   const handleAnalyze = async () => {
     setDone(true);
@@ -509,17 +596,19 @@ Be specific, direct and professional. Use real Meta Ads benchmark values.`;
     setAiLoading(false);
   };
 
-  const reset=()=>{setSt(0);setDone(false);setAiAnalysis("");setF({name:"",goal:"",per:"",bud:"",sp:"",ROAS:"",CTR:"",CPC:"",CPA:"",ConversionRate:"",Revenue:"",audT:"",audS:"",freq:"",crFs:[],crA:"",cpF:""});};
+  const reset=()=>{setSt(0);setDone(false);setAiAnalysis("");setMode(null);setScreenshot(null);setScreenshotPreview(null);setScreenshotName("");setF({name:"",goal:"",per:"",bud:"",sp:"",ROAS:"",CTR:"",CPC:"",CPA:"",ConversionRate:"",Revenue:"",audT:"",audS:"",freq:"",crFs:[],crA:"",cpF:""});};
   const ovc=ov?SC[ov]:null;
   const STEPS=[t.s1,t.s2,t.s3];
   const BudBar=()=>br!==null?<div style={{background:C.sur,borderRadius:10,padding:"12px 14px",marginTop:10}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><span style={{fontSize:12,color:C.mut}}>{t.hBudUse}</span><span style={{fontSize:12,fontWeight:700,color:br>0.9?C.grn:br>0.6?C.yel:C.red}}>{Math.round(br*100)}%</span></div><div style={{height:5,background:"rgba(255,255,255,0.08)",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:`${Math.min(br*100,100)}%`,background:"linear-gradient(90deg,#6366F1,#8B5CF6)",borderRadius:3}}/></div></div>:null;
 
+  // ── REZULTATI (zajednički za oba moda) ──
   if(done) return <div>
-    {f.name&&<div style={{color:C.mut,fontSize:11,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",marginBottom:6}}>{f.name}</div>}
     <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 4px"}}>{t.res}</h2>
-    <p style={{color:C.mut,fontSize:12,margin:"0 0 20px"}}>{fl} {t.hMsub} · Meta Ads</p>
-    {ovc&&<div style={{background:ovc.b,border:`1px solid ${ovc.r}`,borderRadius:14,padding:"20px",marginBottom:20,textAlign:"center"}}><div style={{fontSize:32,marginBottom:8}}>{ov==="poor"?"🚨":ov==="ok"?"⚡":"🏆"}</div><div style={{color:ovc.c,fontSize:17,fontWeight:800,marginBottom:4}}>{t.hOvr}: {t[ov]}</div>{f.goal&&<div style={{color:C.mut,fontSize:12}}>{t.hGl}: {f.goal}</div>}</div>}
-    {br!==null&&<div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px",marginBottom:14}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><span style={{fontSize:12,fontWeight:700,color:C.mut}}>{t.hBudH}</span><span style={{fontSize:12,fontWeight:800,color:br>0.85?C.grn:C.yel}}>€{parseFloat(f.sp).toLocaleString()} / €{parseFloat(f.bud).toLocaleString()} ({Math.round(br*100)}%)</span></div><div style={{height:5,background:"rgba(255,255,255,0.08)",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:`${Math.min(br*100,100)}%`,background:"linear-gradient(90deg,#6366F1,#34D399)",borderRadius:3}}/></div></div>}
+    {mode==="screenshot"&&screenshotName&&<p style={{color:C.mut,fontSize:12,margin:"0 0 20px"}}>📸 {screenshotName}</p>}
+    {mode==="manual"&&<p style={{color:C.mut,fontSize:12,margin:"0 0 20px"}}>{fl} {t.hMsub} · Meta Ads</p>}
+
+    {mode==="manual"&&ovc&&<div style={{background:ovc.b,border:`1px solid ${ovc.r}`,borderRadius:14,padding:"20px",marginBottom:20,textAlign:"center"}}><div style={{fontSize:32,marginBottom:8}}>{ov==="poor"?"🚨":ov==="ok"?"⚡":"🏆"}</div><div style={{color:ovc.c,fontSize:17,fontWeight:800,marginBottom:4}}>{t.hOvr}: {t[ov]}</div>{f.goal&&<div style={{color:C.mut,fontSize:12}}>{t.hGl}: {f.goal}</div>}</div>}
+    {mode==="manual"&&br!==null&&<div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px",marginBottom:14}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><span style={{fontSize:12,fontWeight:700,color:C.mut}}>{t.hBudH}</span><span style={{fontSize:12,fontWeight:800,color:br>0.85?C.grn:C.yel}}>€{parseFloat(f.sp).toLocaleString()} / €{parseFloat(f.bud).toLocaleString()} ({Math.round(br*100)}%)</span></div><div style={{height:5,background:"rgba(255,255,255,0.08)",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:`${Math.min(br*100,100)}%`,background:"linear-gradient(90deg,#6366F1,#34D399)",borderRadius:3}}/></div></div>}
 
     {/* AI ANALIZA */}
     <div style={{background:"rgba(99,102,241,0.08)",border:"1px solid rgba(99,102,241,0.25)",borderRadius:14,padding:"16px",marginBottom:20}}>
@@ -529,20 +618,73 @@ Be specific, direct and professional. Use real Meta Ads benchmark values.`;
         {aiLoading&&<span style={{color:C.mut,fontSize:12,marginLeft:"auto"}}>{sr?"Analizira...":"Analyzing..."}</span>}
       </div>
       {aiLoading&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
-        {[1,2,3].map(i=><div key={i} style={{height:12,background:"rgba(255,255,255,0.06)",borderRadius:6,width:i===3?"60%":"100%",animation:"pulse 1.5s infinite"}}/>)}
+        {[1,2,3,4].map(i=><div key={i} style={{height:12,background:"rgba(255,255,255,0.06)",borderRadius:6,width:i===4?"60%":"100%"}}/>)}
       </div>}
       {aiAnalysis&&!aiLoading&&<div style={{color:"rgba(255,255,255,0.8)",fontSize:13,lineHeight:1.8,whiteSpace:"pre-wrap"}}>{aiAnalysis}</div>}
     </div>
 
-    {adv.pr.length>0&&<><ST c={t.hPRI}/><div style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.2)",borderRadius:12,padding:"14px",marginBottom:16}}>{adv.pr.map((p,i)=><div key={i} style={{color:"rgba(255,255,255,0.75)",fontSize:12,lineHeight:1.7,padding:"5px 0",borderBottom:i<adv.pr.length-1?`1px solid ${C.brd}`:"none"}}>{p}</div>)}</div></>}
-    <ST c={t.hMAN}/>
-    <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
-      {MD.map(({k,l,sx})=>{ if(!f[k]||!ss[k]) return null; const cfg=SC[ss[k]]; return <div key={k} style={{background:`${cfg.b}80`,border:`1px solid ${cfg.r}`,borderLeft:`3px solid ${cfg.c}`,borderRadius:12,padding:"13px 15px"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}><span style={{color:C.txt,fontWeight:700,fontSize:13}}>{l}</span><div style={{display:"flex",alignItems:"center",gap:8}}><span style={{color:cfg.c,fontWeight:800,fontSize:15}}>{f[k]}{sx}</span><div style={{width:7,height:7,borderRadius:"50%",background:cfg.c}}/></div></div>{adv.m[k]&&<p style={{color:"rgba(255,255,255,0.6)",fontSize:12,margin:0,lineHeight:1.7}}>{adv.m[k]}</p>}</div>; })}
-    </div>
-    {adv.tg.length>0&&<><ST c={t.hTAN}/><div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px",marginBottom:16}}>{adv.tg.map((a,i)=><div key={i} style={{color:"rgba(255,255,255,0.65)",fontSize:12,lineHeight:1.7,padding:"6px 0",borderBottom:i<adv.tg.length-1?`1px solid ${C.brd}`:"none"}}>{a}</div>)}</div></>}
-    {adv.cr.length>0&&<><ST c={t.hCAN}/><div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px",marginBottom:16}}>{adv.cr.map((a,i)=><div key={i} style={{color:"rgba(255,255,255,0.65)",fontSize:12,lineHeight:1.7,padding:"6px 0",borderBottom:i<adv.cr.length-1?`1px solid ${C.brd}`:"none"}}>{a}</div>)}</div></>}
-    {adv.st.length>0&&<><ST c={t.hSTR}/><div style={{background:"rgba(99,102,241,0.08)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:12,padding:"14px",marginBottom:20}}>{adv.st.map((a,i)=><div key={i} style={{color:"rgba(255,255,255,0.65)",fontSize:12,lineHeight:1.7,padding:"6px 0",borderBottom:i<adv.st.length-1?`1px solid ${C.brd}`:"none"}}>{a}</div>)}</div></>}
+    {mode==="manual"&&<>
+      {adv.pr.length>0&&<><ST c={t.hPRI}/><div style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.2)",borderRadius:12,padding:"14px",marginBottom:16}}>{adv.pr.map((p,i)=><div key={i} style={{color:"rgba(255,255,255,0.75)",fontSize:12,lineHeight:1.7,padding:"5px 0",borderBottom:i<adv.pr.length-1?`1px solid ${C.brd}`:"none"}}>{p}</div>)}</div></>}
+      <ST c={t.hMAN}/>
+      <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
+        {MD.map(({k,l,sx})=>{ if(!f[k]||!ss[k]) return null; const cfg=SC[ss[k]]; return <div key={k} style={{background:`${cfg.b}80`,border:`1px solid ${cfg.r}`,borderLeft:`3px solid ${cfg.c}`,borderRadius:12,padding:"13px 15px"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}><span style={{color:C.txt,fontWeight:700,fontSize:13}}>{l}</span><div style={{display:"flex",alignItems:"center",gap:8}}><span style={{color:cfg.c,fontWeight:800,fontSize:15}}>{f[k]}{sx}</span><div style={{width:7,height:7,borderRadius:"50%",background:cfg.c}}/></div></div>{adv.m[k]&&<p style={{color:"rgba(255,255,255,0.6)",fontSize:12,margin:0,lineHeight:1.7}}>{adv.m[k]}</p>}</div>; })}
+      </div>
+      {adv.tg.length>0&&<><ST c={t.hTAN}/><div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px",marginBottom:16}}>{adv.tg.map((a,i)=><div key={i} style={{color:"rgba(255,255,255,0.65)",fontSize:12,lineHeight:1.7,padding:"6px 0",borderBottom:i<adv.tg.length-1?`1px solid ${C.brd}`:"none"}}>{a}</div>)}</div></>}
+      {adv.cr.length>0&&<><ST c={t.hCAN}/><div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px",marginBottom:16}}>{adv.cr.map((a,i)=><div key={i} style={{color:"rgba(255,255,255,0.65)",fontSize:12,lineHeight:1.7,padding:"6px 0",borderBottom:i<adv.cr.length-1?`1px solid ${C.brd}`:"none"}}>{a}</div>)}</div></>}
+      {adv.st.length>0&&<><ST c={t.hSTR}/><div style={{background:"rgba(99,102,241,0.08)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:12,padding:"14px",marginBottom:20}}>{adv.st.map((a,i)=><div key={i} style={{color:"rgba(255,255,255,0.65)",fontSize:12,lineHeight:1.7,padding:"6px 0",borderBottom:i<adv.st.length-1?`1px solid ${C.brd}`:"none"}}>{a}</div>)}</div></>}
+    </>}
     <Btn onClick={reset} sec>{t.newA}</Btn>
+  </div>;
+
+  // ── IZBOR MODA ──
+  if(!mode) return <div>
+    <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>{t.hTitle}</h2>
+    <p style={{color:C.mut,fontSize:13,margin:"0 0 28px",lineHeight:1.6}}>{sr?"Kako želiš da analiziraš kampanju?":"How would you like to analyze the campaign?"}</p>
+    <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      <button onClick={()=>setMode("screenshot")} style={{background:"linear-gradient(135deg,rgba(99,102,241,0.2),rgba(99,102,241,0.08))",border:"1px solid rgba(99,102,241,0.4)",borderRadius:16,padding:"20px",textAlign:"left",cursor:"pointer",WebkitTapHighlightColor:"transparent"}}>
+        <div style={{fontSize:28,marginBottom:10}}>📸</div>
+        <div style={{color:C.txt,fontWeight:700,fontSize:15,marginBottom:6}}>{sr?"Upload Screenshot":"Upload Screenshot"}</div>
+        <div style={{color:C.mut,fontSize:13,lineHeight:1.5}}>{sr?"Uploaduj screenshot iz Meta Ads Managera, Looker Studia ili bilo kog alata. AI sam čita i analizira sve što vidi na slici.":"Upload a screenshot from Meta Ads Manager, Looker Studio or any tool. AI reads and analyzes everything it sees in the image."}</div>
+        <div style={{marginTop:12,color:C.acl,fontSize:12,fontWeight:700}}>🤖 {sr?"AI analizira automatski":"AI analyzes automatically"} →</div>
+      </button>
+      <button onClick={()=>setMode("manual")} style={{background:"linear-gradient(135deg,rgba(16,185,129,0.15),rgba(16,185,129,0.05))",border:"1px solid rgba(16,185,129,0.3)",borderRadius:16,padding:"20px",textAlign:"left",cursor:"pointer",WebkitTapHighlightColor:"transparent"}}>
+        <div style={{fontSize:28,marginBottom:10}}>✏️</div>
+        <div style={{color:C.txt,fontWeight:700,fontSize:15,marginBottom:6}}>{sr?"Ručni unos metrika":"Manual Metrics Entry"}</div>
+        <div style={{color:C.mut,fontSize:13,lineHeight:1.5}}>{sr?"Unesi metrike ručno (ROAS, CTR, CPC, CPA...) i dobij detaljnu analizu sa benchmarkom za svaku metriku.":"Enter metrics manually (ROAS, CTR, CPC, CPA...) and get detailed analysis with benchmarks for each metric."}</div>
+        <div style={{marginTop:12,color:"#34D399",fontSize:12,fontWeight:700}}>📊 {sr?"Analiza sa benchmarkom":"Analysis with benchmarks"} →</div>
+      </button>
+    </div>
+  </div>;
+
+  // ── SCREENSHOT MOD ──
+  if(mode==="screenshot"&&!done) return <div>
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
+      <button onClick={()=>setMode(null)} style={{background:"none",border:"none",color:C.mut,cursor:"pointer",fontSize:13,fontWeight:600,padding:0}}>{t.prv}</button>
+      <h2 style={{fontSize:20,fontWeight:800,margin:0}}>📸 {sr?"Upload Screenshot":"Upload Screenshot"}</h2>
+    </div>
+    <p style={{color:C.mut,fontSize:13,margin:"0 0 20px",lineHeight:1.5}}>{sr?"Uploaduj screenshot iz bilo kog alata – Meta Ads Manager, Looker Studio, Google Ads, Excel, Whatagraph... AI će sam pročitati sve metrike.":"Upload a screenshot from any tool – Meta Ads Manager, Looker Studio, Google Ads, Excel, Whatagraph... AI will read all metrics automatically."}</p>
+
+    {!screenshotPreview&&<div
+      onDragOver={e=>{e.preventDefault();setDragOver(true);}}
+      onDragLeave={()=>setDragOver(false)}
+      onDrop={e=>{e.preventDefault();setDragOver(false);handleFile(e.dataTransfer.files[0]);}}
+      onClick={()=>document.getElementById("scUpload").click()}
+      style={{border:`2px dashed ${dragOver?"#6366F1":"rgba(255,255,255,0.15)"}`,borderRadius:16,padding:"40px 20px",textAlign:"center",cursor:"pointer",background:dragOver?"rgba(99,102,241,0.08)":"rgba(255,255,255,0.02)",transition:"all 0.2s",marginBottom:20}}>
+      <div style={{fontSize:40,marginBottom:12}}>📂</div>
+      <div style={{color:C.txt,fontWeight:700,fontSize:15,marginBottom:6}}>{sr?"Prevuci screenshot ovde":"Drag screenshot here"}</div>
+      <div style={{color:C.mut,fontSize:13}}>{sr?"ili klikni da odabereš fajl":"or click to select file"}</div>
+      <div style={{color:C.dim,fontSize:11,marginTop:8}}>PNG, JPG, JPEG</div>
+    </div>}
+    <input id="scUpload" type="file" accept="image/*" style={{display:"none"}} onChange={e=>handleFile(e.target.files[0])}/>
+
+    {screenshotPreview&&<div style={{marginBottom:20}}>
+      <img src={screenshotPreview} alt="screenshot" style={{width:"100%",borderRadius:12,border:`1px solid ${C.brd}`,marginBottom:10}}/>
+      <div style={{display:"flex",gap:10}}>
+        <button onClick={()=>{setScreenshot(null);setScreenshotPreview(null);setScreenshotName("");}} style={{flex:1,background:"rgba(255,255,255,0.06)",border:`1px solid ${C.brd}`,borderRadius:10,color:C.mut,fontSize:13,fontWeight:600,padding:"10px",cursor:"pointer"}}>{sr?"Promeni sliku":"Change image"}</button>
+      </div>
+    </div>}
+
+    <Btn onClick={handleScreenshotAnalyze} disabled={!screenshot}>{sr?"🤖 Analiziraj screenshot":"🤖 Analyze screenshot"}</Btn>
   </div>;
 
   return <div>
