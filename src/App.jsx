@@ -1832,6 +1832,7 @@ const BOOKMARKLET_CODE="javascript:(function(){"+
 function BookmarkMod({t,lang}){
   const sr=lang==="sr";
   const [importedData,setImportedData]=useState(null);
+  const [clientName,setClientName]=useState("");
   const [analysis,setAnalysis]=useState("");
   const [loading,setLoading]=useState(false);
   const [fetchingData,setFetchingData]=useState(false);
@@ -1879,7 +1880,7 @@ function BookmarkMod({t,lang}){
       if(importedData.screenshot){
         const prompt=sr
           ?`Ti si senior Meta Ads ekspert. Analiziraj ovaj screenshot iz ${importedData.title||"marketing alata"}. Piši isključivo na srpskom jeziku, ekavski.
-
+${clientName?`\nKlijent: ${clientName}`:""}
 Izvor: ${importedData.source}
 Period: ${importedData.dateRange||"Nije detektovan"}
 
@@ -1997,6 +1998,10 @@ Be specific. Use actual numbers from the screenshot.`;
         {importedData.screenshot&&<div style={{marginBottom:16}}>
           <img src={`data:image/jpeg;base64,${importedData.screenshot}`} alt="screenshot" style={{width:"100%",borderRadius:10,border:`1px solid ${C.brd}`}}/>
         </div>}
+        <div style={{marginBottom:14}}>
+          <Lbl c={sr?"Naziv klijenta (opciono)":"Client name (optional)"}/>
+          <TIn v={clientName} ch={setClientName} ph={sr?"npr. Sport Reality MNE":"e.g. Sport Reality MNE"}/>
+        </div>
         <div style={{display:"flex",gap:10}}>
           <Btn onClick={analyze}>{t.bm_analyze}</Btn>
           <button onClick={clear} style={{background:"none",border:`1px solid ${C.brd}`,borderRadius:11,color:C.mut,fontSize:13,fontWeight:600,padding:"13px 16px",cursor:"pointer"}}>{t.bm_clear}</button>
@@ -2052,11 +2057,32 @@ export default function App(){
   const w=useWindowSize();
   const isDesktop=w>=1024;
 
+  // Sync mod to URL
+  const goMod=(id)=>{
+    setMod(id);
+    if(id) window.history.pushState({},"",`?mod=${id}`);
+    else window.history.pushState({},"",window.location.pathname);
+  };
+
+  // Handle browser back/forward
+  useEffect(()=>{
+    const handler=()=>{
+      const params=new URLSearchParams(window.location.search);
+      const m=params.get("mod");
+      setMod(m?parseInt(m):null);
+    };
+    window.addEventListener("popstate",handler);
+    return()=>window.removeEventListener("popstate",handler);
+  },[]);
+
+  // Save lang preference
+  useEffect(()=>{ localStorage.setItem("mat_lang",lang); },[lang]);
+
   const MOD_COLORS=["#6366F1","#F97316","#00D4FF","#10B981","#06B6D4","#F59E0B","#EC4899","#8B5CF6","#34D399"];
   const Comp=mod===1?HealthMod:mod===8?ReportMod:mod===9?BookmarkMod:mod===2?BudgetMod:mod===7?ScalingMod:mod===3?CopyMod:mod===4?AudMod:mod===5?RoasMod:mod===6?CheckMod:null;
 
   const ModCard=({m,i,large})=>(
-    <button onClick={()=>setMod(m.id)} style={{
+    <button onClick={()=>goMod(m.id)} style={{
       background:`linear-gradient(145deg,${MOD_COLORS[i]}22,${MOD_COLORS[i]}08 60%,#0d0d1a)`,
       border:`1px solid ${MOD_COLORS[i]}45`,borderTop:`1px solid ${MOD_COLORS[i]}70`,
       borderRadius:16,padding:large?"22px 18px":"18px 15px",textAlign:"left",
@@ -2076,12 +2102,12 @@ export default function App(){
   // ── MOBILE ─────────────────────────────────────────────────────────────────
   if(!isDesktop) return <div style={{minHeight:"100vh",background:C.bg,fontFamily:"'Plus Jakarta Sans',sans-serif",color:C.txt}}>
     <div style={{background:"rgba(255,255,255,0.02)",borderBottom:`1px solid ${C.brd}`,padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:100,backdropFilter:"blur(10px)"}}>
-      <div style={{display:"flex",alignItems:"center",gap:9,cursor:mod?"pointer":"default"}} onClick={()=>setMod(null)}>
+      <div style={{display:"flex",alignItems:"center",gap:9,cursor:mod?"pointer":"default"}} onClick={()=>goMod(null)}>
         <div style={{width:32,height:32,borderRadius:9,background:"linear-gradient(135deg,#6366F1,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>📊</div>
         <div style={{fontWeight:800,fontSize:15}}>{t.appTitle}</div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:6}}>
-        {mod&&<button onClick={()=>setMod(null)} style={{background:"rgba(255,255,255,0.08)",border:"none",borderRadius:20,color:"#fff",fontSize:12,fontWeight:600,padding:"7px 14px",cursor:"pointer"}}>{t.back}</button>}
+        {mod&&<button onClick={()=>goMod(null)} style={{background:"rgba(255,255,255,0.08)",border:"none",borderRadius:20,color:"#fff",fontSize:12,fontWeight:600,padding:"7px 14px",cursor:"pointer"}}>{t.back}</button>}
         {["sr","en"].map(l=><button key={l} onClick={()=>setLang(l)} style={{padding:"6px 12px",borderRadius:20,fontSize:12,fontWeight:700,cursor:"pointer",border:"none",background:lang===l?"rgba(99,102,241,0.3)":"rgba(255,255,255,0.07)",color:lang===l?"#A5B4FC":"rgba(255,255,255,0.4)"}}>{l.toUpperCase()}</button>)}
       </div>
     </div>
@@ -2106,7 +2132,7 @@ export default function App(){
 
     {/* TOP NAV */}
     <div style={{background:"rgba(255,255,255,0.02)",borderBottom:`1px solid ${C.brd}`,padding:"0 32px",display:"flex",justifyContent:"space-between",alignItems:"center",height:64,flexShrink:0,zIndex:100}}>
-      <div style={{display:"flex",alignItems:"center",gap:12,cursor:"pointer"}} onClick={()=>setMod(null)}>
+      <div style={{display:"flex",alignItems:"center",gap:12,cursor:"pointer"}} onClick={()=>goMod(null)}>
         <div style={{width:38,height:38,borderRadius:10,background:"linear-gradient(135deg,#6366F1,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:19}}>📊</div>
         <div>
           <div style={{fontWeight:800,fontSize:17,letterSpacing:"-0.3px"}}>{t.appTitle}</div>
@@ -2114,10 +2140,13 @@ export default function App(){
         </div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:20}}>
-        {mod&&<div style={{color:"rgba(255,255,255,0.4)",fontSize:13}}>
-          <span style={{cursor:"pointer",color:"#A5B4FC"}} onClick={()=>setMod(null)}>{t.sel}</span>
-          <span style={{margin:"0 8px",color:"rgba(255,255,255,0.2)"}}>›</span>
-          <span style={{color:"#fff",fontWeight:600}}>{t[MODS.find(m=>m.id===mod)?.tk]}</span>
+        {mod&&<div style={{display:"flex",alignItems:"center",gap:12}}>
+          <button onClick={()=>goMod(null)} style={{background:"rgba(255,255,255,0.08)",border:`1px solid ${C.brd}`,borderRadius:10,color:"rgba(255,255,255,0.7)",fontSize:13,fontWeight:600,padding:"7px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>← {t.back}</button>
+          <div style={{color:"rgba(255,255,255,0.4)",fontSize:13}}>
+            <span style={{cursor:"pointer",color:"#A5B4FC"}} onClick={()=>goMod(null)}>{t.sel}</span>
+            <span style={{margin:"0 8px",color:"rgba(255,255,255,0.2)"}}>›</span>
+            <span style={{color:"#fff",fontWeight:600}}>{t[MODS.find(m=>m.id===mod)?.tk]}</span>
+          </div>
         </div>}
         <div style={{display:"flex",gap:6}}>
           {["sr","en"].map(l=><button key={l} onClick={()=>setLang(l)} style={{padding:"7px 16px",borderRadius:20,fontSize:13,fontWeight:700,cursor:"pointer",border:"none",background:lang===l?"rgba(99,102,241,0.3)":"rgba(255,255,255,0.07)",color:lang===l?"#A5B4FC":"rgba(255,255,255,0.4)"}}>{l.toUpperCase()}</button>)}
@@ -2132,7 +2161,7 @@ export default function App(){
         <div style={{fontSize:10,fontWeight:700,letterSpacing:"1.5px",textTransform:"uppercase",color:"rgba(255,255,255,0.2)",marginBottom:10,paddingLeft:10}}>Alati</div>
         <div style={{flex:1}}>
           {MODS.map((m,i)=>(
-            <button key={m.id} onClick={()=>setMod(m.id)} style={{
+            <button key={m.id} onClick={()=>goMod(m.id)} style={{
               width:"100%",padding:"10px 12px",borderRadius:10,textAlign:"left",cursor:"pointer",
               border:"none",marginBottom:3,display:"flex",alignItems:"center",gap:10,transition:"all 0.15s",
               background:mod===m.id?`${MOD_COLORS[i]}18`:"transparent",
