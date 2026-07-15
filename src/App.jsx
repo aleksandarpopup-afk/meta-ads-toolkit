@@ -2128,7 +2128,7 @@ export default function App(){
     <div style={{display:"flex",flex:1,overflow:"hidden"}}>
 
       {/* SIDEBAR */}
-      <div style={{width:270,background:"rgba(255,255,255,0.015)",borderRight:`1px solid ${C.brd}`,padding:"28px 14px",flexShrink:0,overflowY:"auto",display:"flex",flexDirection:"column"}}>
+      <div style={{width:270,background:"rgba(255,255,255,0.015)",borderRight:`1px solid ${C.brd}`,padding:"28px 14px",flexShrink:0,overflowY:"auto",display:"flex",flexDirection:"column",scrollbarWidth:"none",msOverflowStyle:"none"}}>
         <div style={{fontSize:10,fontWeight:700,letterSpacing:"1.5px",textTransform:"uppercase",color:"rgba(255,255,255,0.2)",marginBottom:10,paddingLeft:10}}>Alati</div>
         <div style={{flex:1}}>
           {MODS.map((m,i)=>(
