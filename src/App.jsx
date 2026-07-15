@@ -1867,6 +1867,7 @@ Be specific and professional. Use actual numbers from the data.`;
 }
 
 // ── APP ──────────────────────────────────────────────────────────────────────
+const MODS=[
   {id:1,icon:"📊",col:"#6366F1",tk:"m1t",sk:"m1s"},
   {id:8,icon:"📄",col:"#F97316",tk:"m8t",sk:"m8s"},
   {id:9,icon:"🔗",col:"#00D4FF",tk:"m9t",sk:"m9s"},
