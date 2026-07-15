@@ -46,6 +46,7 @@ const T={
     sel:"Odaberi alat", selSub:"Svaki alat možeš koristiti nezavisno", back:"← Nazad",
     m1t:"Campaign Health Check", m1s:"Dijagnoza performansi kampanje",
     m8t:"Report Generator", m8s:"Profesionalni izveštaj sa PDF exportom",
+    m9t:"Bookmark Connector", m9s:"Poveži Ads Manager jednim klikom",
     m2t:"Budget Pace Kalkulator", m2s:"Prati tempo potrošnje budžeta",
     m7t:"Budget Scaling Calculator", m7s:"Bezbedno skaliraj budžet kampanje",
     m3t:"Ad Copy Generator", m3s:"Generiši ad tekstove za Meta",
@@ -55,6 +56,29 @@ const T={
     analyze:"Analiziraj →", gen:"Generiši →", calc:"Izračunaj →",
     newA:"← Nova analiza", poor:"Kritično", ok:"Prosečno", good:"Odlično",
     nxt:"Dalje →", prv:"←", res:"Rezultati", s1:"Osnove", s2:"Metrike", s3:"Targeting & Kreativa",
+    bm_title:"Bookmark Connector",
+    bm_sub:"Poveži Ads Manager, Looker Studio ili GA4 jednim klikom – bez screenshota, bez ručnog unosa.",
+    bm_step1:"Korak 1 – Jednom: Dodaj bookmark",
+    bm_drag:"Prevuci ovo dugme u Bookmarks bar",
+    bm_dragSub:"(Bookmark bar je traka sa sačuvanim sajtovima na vrhu browsera)",
+    bm_step2:"Korak 2 – Svaki dan: Prikupi podatke",
+    bm_howTitle:"Kako koristiti:",
+    bm_how1:"Otvori Meta Ads Manager, Looker Studio ili GA4",
+    bm_how2:"Klikni na bookmark koji si dodao",
+    bm_how3:"App automatski pokupi sve podatke i otvori analizu ovde",
+    bm_step3:"Korak 3 – Analiziraj uvezene podatke",
+    bm_noData:"Još uvek nema uvezenih podataka.",
+    bm_noDataSub:"Dodaj bookmark i klikni ga dok si u Ads Manageru.",
+    bm_dataTitle:"Uvezeni podaci",
+    bm_source:"Izvor",
+    bm_date:"Datum uvoza",
+    bm_dateRange:"Period",
+    bm_tables:"Tabele",
+    bm_rows:"redova",
+    bm_analyze:"Analiziraj uvezene podatke →",
+    bm_clear:"Obriši podatke",
+    bm_analyzing:"Analizira uvezene podatke...",
+    bm_works:"Radi sa:",
     rg_title:"Report Generator",
     rg_sub:"Profesionalni izveštaj za klijenta sa PDF exportom",
     rg_single:"Single Period Report",
@@ -175,6 +199,7 @@ const T={
     sel:"Select a tool", selSub:"Each tool can be used independently", back:"← Back",
     m1t:"Campaign Health Check", m1s:"Diagnose your campaign performance",
     m8t:"Report Generator", m8s:"Professional report with PDF export",
+    m9t:"Bookmark Connector", m9s:"Connect Ads Manager with one click",
     m2t:"Budget Pace Calculator", m2s:"Track your budget spending pace",
     m7t:"Budget Scaling Calculator", m7s:"Scale your budget safely without hurting performance",
     m3t:"Ad Copy Generator", m3s:"Generate Meta ad texts",
@@ -184,6 +209,29 @@ const T={
     analyze:"Analyze →", gen:"Generate →", calc:"Calculate →",
     newA:"← New Analysis", poor:"Critical", ok:"Average", good:"Excellent",
     nxt:"Next →", prv:"←", res:"Results", s1:"Basics", s2:"Metrics", s3:"Targeting & Creative",
+    bm_title:"Bookmark Connector",
+    bm_sub:"Connect Ads Manager, Looker Studio or GA4 with one click – no screenshots, no manual entry.",
+    bm_step1:"Step 1 – Once: Add the bookmark",
+    bm_drag:"Drag this button to your Bookmarks bar",
+    bm_dragSub:"(The Bookmarks bar is the strip of saved sites at the top of your browser)",
+    bm_step2:"Step 2 – Every day: Collect data",
+    bm_howTitle:"How to use:",
+    bm_how1:"Open Meta Ads Manager, Looker Studio or GA4",
+    bm_how2:"Click the bookmark you added",
+    bm_how3:"App automatically collects all data and opens analysis here",
+    bm_step3:"Step 3 – Analyze imported data",
+    bm_noData:"No imported data yet.",
+    bm_noDataSub:"Add the bookmark and click it while in Ads Manager.",
+    bm_dataTitle:"Imported Data",
+    bm_source:"Source",
+    bm_date:"Import date",
+    bm_dateRange:"Period",
+    bm_tables:"Tables",
+    bm_rows:"rows",
+    bm_analyze:"Analyze imported data →",
+    bm_clear:"Clear data",
+    bm_analyzing:"Analyzing imported data...",
+    bm_works:"Works with:",
     hTitle:"Diagnose your Meta campaign", hSub:"Enter your data and get a professional analysis with concrete recommendations.",
     hName:"Campaign Name", hNamePh:"e.g. Retargeting – June 2025",
     hGoal:"Campaign Objective", hGoals:["Conversions / Sales","Lead Generation","Traffic","Brand Awareness","Catalog / DPA"],
@@ -1658,6 +1706,7 @@ For "better": true means Period B is better for that metric, false means worse. 
 const MODS=[
   {id:1,icon:"📊",col:"#6366F1",tk:"m1t",sk:"m1s"},
   {id:8,icon:"📄",col:"#F97316",tk:"m8t",sk:"m8s"},
+  {id:9,icon:"🔗",col:"#00D4FF",tk:"m9t",sk:"m9s"},
   {id:2,icon:"💰",col:"#10B981",tk:"m2t",sk:"m2s"},
   {id:7,icon:"🚀",col:"#06B6D4",tk:"m7t",sk:"m7s"},
   {id:3,icon:"✍️",col:"#F59E0B",tk:"m3t",sk:"m3s"},
@@ -1679,8 +1728,6 @@ export default function App(){
   const t=T[lang];
   const w=useWindowSize();
   const isDesktop=w>=1024;
-  const Comp=mod===1?HealthMod:mod===8?ReportMod:mod===2?BudgetMod:mod===7?ScalingMod:mod===3?CopyMod:mod===4?AudMod:mod===5?RoasMod:mod===6?CheckMod:null;
-  const MOD_COLORS=["#6366F1","#F97316","#10B981","#06B6D4","#F59E0B","#EC4899","#8B5CF6","#34D399"];
 
   const ModCard=({m,i,large})=>(
     <button onClick={()=>setMod(m.id)} style={{
@@ -1699,6 +1746,16 @@ export default function App(){
       <div style={{color:MOD_COLORS[i],fontSize:12,fontWeight:700}}>Otvori →</div>
     </button>
   );
+
+  const Comp=mod===1?HealthMod:mod===8?ReportMod:mod===9?BookmarkMod:mod===2?BudgetMod:mod===7?ScalingMod:mod===3?CopyMod:mod===4?AudMod:mod===5?RoasMod:mod===6?CheckMod:null;
+  const MOD_COLORS=["#6366F1","#F97316","#00D4FF","#10B981","#06B6D4","#F59E0B","#EC4899","#8B5CF6","#34D399"];
+
+  // Handle mod from URL
+  useState(()=>{
+    const params=new URLSearchParams(window.location.search);
+    const modParam=params.get("mod");
+    if(modParam) setMod(parseInt(modParam));
+  });
 
   // ── MOBILE ─────────────────────────────────────────────────────────────────
   if(!isDesktop) return <div style={{minHeight:"100vh",background:C.bg,fontFamily:"'Plus Jakarta Sans',sans-serif",color:C.txt}}>
