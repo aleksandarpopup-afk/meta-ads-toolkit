@@ -1705,93 +1705,79 @@ For "better": true means Period B is better for that metric, false means worse. 
 // ── BOOKMARKLET CODE ─────────────────────────────────────────────────────────
 const BOOKMARKLET_CODE="javascript:(function(){"+
 "var appUrl='https://meta-ads-toolkit-a71e.vercel.app';"+
+"var apiUrl=appUrl+'/api/temp-upload';"+
 "var url=window.location.href;var title=document.title;var dateRange='';"+
 "var dMatch=url.match(/date[=%3D]+([0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{4}-[0-9]{2}-[0-9]{2})/);"+
 "if(dMatch){dateRange=dMatch[1].replace('_',' – ');}"+
 "var fb=document.createElement('div');"+
 "fb.style.cssText='position:fixed;top:20px;right:20px;z-index:99999;background:linear-gradient(135deg,#6366F1,#8B5CF6);color:white;padding:14px 20px;border-radius:12px;font-family:sans-serif;font-size:14px;font-weight:600;box-shadow:0 8px 32px rgba(99,102,241,0.4)';"+
-"fb.textContent='Meta Ads Toolkit – Otvaram...';document.body.appendChild(fb);"+
-"var newTab=window.open(appUrl+'?source=screenshot&mod=9','_blank');"+
-"fb.textContent='Meta Ads Toolkit – Pravim screenshot...';"+
+"fb.textContent='Meta Ads Toolkit – Otvaram app...';document.body.appendChild(fb);"+
+"var newTab=window.open(appUrl+'?source=loading&mod=9','_blank');"+
 "var payload={source:url,title:title,dateRange:dateRange,screenshot:null,tables:[],timestamp:new Date().toISOString()};"+
+"function sendToApi(p){"+
+"fetch(apiUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data:p})})"+
+".then(function(r){return r.json();})"+
+".then(function(result){"+
+"if(result.id){"+
+"fb.textContent='Meta Ads Toolkit – Gotovo!';"+
+"if(newTab){newTab.location.href=appUrl+'?import_id='+result.id+'&mod=9';}"+
+"}else{fb.textContent='Greška pri slanju podataka.';}"+
+"setTimeout(function(){fb.remove();},2000);"+
+"}).catch(function(){"+
+"fb.textContent='Greška pri konekciji.';"+
+"setTimeout(function(){fb.remove();},2000);"+
+"});}"+
 "var script=document.createElement('script');"+
 "script.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';"+
 "script.onload=function(){"+
-"html2canvas(document.body,{scale:0.8,useCORS:true,allowTaint:true,logging:false,height:Math.min(window.innerHeight,1800)}).then(function(canvas){"+
-"payload.screenshot=canvas.toDataURL('image/jpeg',0.75).split(',')[1];"+
-"try{sessionStorage.setItem('mat_import',JSON.stringify(payload));}catch(e){"+
-"try{"+
-"payload.screenshot=canvas.toDataURL('image/jpeg',0.4).split(',')[1];"+
-"sessionStorage.setItem('mat_import',JSON.stringify(payload));"+
-"}catch(e2){payload.screenshot=null;sessionStorage.setItem('mat_import',JSON.stringify(payload));}}"+
-"fb.textContent='Meta Ads Toolkit – Gotovo! Proverite novi tab.';"+
-"if(newTab)newTab.postMessage({type:'MAT_READY'},'*');"+
-"setTimeout(function(){fb.remove();},3000);"+
-"}).catch(function(){"+
-"payload.screenshot=null;"+
-"try{sessionStorage.setItem('mat_import',JSON.stringify(payload));}catch(e){}"+
-"fb.textContent='Meta Ads Toolkit – Otvoreno bez screenshota.';"+
-"setTimeout(function(){fb.remove();},2000);});"+
+"fb.textContent='Meta Ads Toolkit – Pravim screenshot...';"+
+"html2canvas(document.body,{scale:0.6,useCORS:true,allowTaint:true,logging:false,height:Math.min(window.innerHeight,1600)})"+
+".then(function(canvas){"+
+"payload.screenshot=canvas.toDataURL('image/jpeg',0.6).split(',')[1];"+
+"fb.textContent='Meta Ads Toolkit – Šaljem...';"+
+"sendToApi(payload);"+
+"}).catch(function(){sendToApi(payload);});"+
 "};"+
-"script.onerror=function(){"+
-"payload.screenshot=null;"+
-"try{sessionStorage.setItem('mat_import',JSON.stringify(payload));}catch(e){}"+
-"fb.textContent='Meta Ads Toolkit – Otvoreno (bez screenshot podrske).';"+
-"setTimeout(function(){fb.remove();},2000);"+
-"};"+
+"script.onerror=function(){sendToApi(payload);};"+
 "document.head.appendChild(script);"+
 "})();";
 
 // ── MODULE 9: BOOKMARK CONNECTOR ─────────────────────────────────────────────
 function BookmarkMod({t,lang}){
   const sr=lang==="sr";
-  const [importedData,setImportedData]=useState(()=>{
-    try{
-      const params=new URLSearchParams(window.location.search);
-      const source=params.get("source");
-      const bmdata=params.get("bmdata");
-      if(source==="screenshot"){
-        const stored=sessionStorage.getItem("mat_import")||localStorage.getItem("mat_import_temp");
-        if(stored){
-          sessionStorage.removeItem("mat_import");
-          localStorage.removeItem("mat_import_temp");
-          const parsed=JSON.parse(stored);
-          setTimeout(()=>window.history.replaceState({},"",window.location.pathname+"?mod=9"),100);
-          return parsed;
-        }
-      }
-      if(bmdata){
-        const parsed=JSON.parse(decodeURIComponent(bmdata));
-        setTimeout(()=>window.history.replaceState({},"",window.location.pathname+"?mod=9"),100);
-        localStorage.setItem("mat_last_import",JSON.stringify(parsed));
-        return parsed;
-      }
-      const stored=sessionStorage.getItem("mat_import");
-      if(stored){ sessionStorage.removeItem("mat_import"); const p=JSON.parse(stored); return p; }
-      const saved=localStorage.getItem("mat_last_import");
-      if(saved) return JSON.parse(saved);
-    }catch(e){}
-    return null;
-  });
+  const [importedData,setImportedData]=useState(null);
   const [analysis,setAnalysis]=useState("");
   const [loading,setLoading]=useState(false);
+  const [fetchingData,setFetchingData]=useState(false);
 
-  // Listen for postMessage from bookmarklet when screenshot is ready
   useEffect(()=>{
-    const handler=(e)=>{
-      if(e.data&&e.data.type==="MAT_READY"){
-        try{
-          const stored=sessionStorage.getItem("mat_import");
-          if(stored){
-            const parsed=JSON.parse(stored);
-            sessionStorage.removeItem("mat_import");
-            setImportedData(parsed);
+    const params=new URLSearchParams(window.location.search);
+    const importId=params.get("import_id");
+    const source=params.get("source");
+
+    if(importId){
+      setFetchingData(true);
+      window.history.replaceState({},"",window.location.pathname+"?mod=9");
+      fetch(`/api/temp-fetch?id=${importId}`)
+        .then(r=>r.json())
+        .then(result=>{
+          if(result.data){
+            setImportedData(result.data);
+            localStorage.setItem("mat_last_import",JSON.stringify({...result.data,screenshot:null}));
           }
-        }catch(err){}
-      }
-    };
-    window.addEventListener("message",handler);
-    return()=>window.removeEventListener("message",handler);
+          setFetchingData(false);
+        })
+        .catch(()=>setFetchingData(false));
+    } else if(source==="loading"){
+      // Waiting for redirect with import_id
+      window.history.replaceState({},"",window.location.pathname+"?mod=9");
+    } else {
+      // Check localStorage for previous import
+      try{
+        const saved=localStorage.getItem("mat_last_import");
+        if(saved) setImportedData(JSON.parse(saved));
+      }catch(e){}
+    }
   },[]);
 
   const analyze=async()=>{
@@ -1899,7 +1885,12 @@ Be specific. Use actual numbers from the screenshot.`;
     {/* STEP 3 – Data */}
     <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:14,padding:"20px"}}>
       <div style={{color:C.mut,fontSize:11,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",marginBottom:14}}>{t.bm_step3}</div>
-      {!importedData&&!loading&&<div style={{textAlign:"center",padding:"24px 0"}}>
+      {fetchingData&&<div style={{textAlign:"center",padding:"24px 0"}}>
+        <div style={{fontSize:32,marginBottom:12}}>✦</div>
+        <div style={{color:C.acl,fontWeight:700,fontSize:15,marginBottom:8}}>{sr?"Učitavam podatke iz bookmarklet-a...":"Loading data from bookmarklet..."}</div>
+        {[1,2,3].map(i=><div key={i} style={{height:12,background:"rgba(255,255,255,0.06)",borderRadius:6,width:i===3?"50%":"100%",marginBottom:8}}/>)}
+      </div>}
+      {!importedData&&!loading&&!fetchingData&&<div style={{textAlign:"center",padding:"24px 0"}}>
         <div style={{fontSize:36,marginBottom:10}}>📭</div>
         <div style={{color:C.txt,fontWeight:600,fontSize:14,marginBottom:6}}>{t.bm_noData}</div>
         <div style={{color:C.mut,fontSize:13}}>{t.bm_noDataSub}</div>
