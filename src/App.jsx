@@ -1703,7 +1703,7 @@ For "better": true means Period B is better for that metric, false means worse. 
 }
 
 // ── BOOKMARKLET CODE ─────────────────────────────────────────────────────────
-const BOOKMARKLET_CODE=`javascript:(function(){var url=window.location.href;var title=document.title;var dateRange='';var dateEls=document.querySelectorAll('[class*="date"],[class*="Date"],[class*="period"],[class*="range"]');for(var i=0;i<dateEls.length;i++){var txt=dateEls[i].innerText;if(txt&&txt.match(/\\d{1,2}[\\.\\-\\/]\\d{1,2}|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec/i)&&txt.length<80){dateRange=txt.trim();break;}}var allData=[];var tables=document.querySelectorAll('table');tables.forEach(function(table){var headers=[];table.querySelectorAll('thead th,tr:first-child th').forEach(function(c){headers.push(c.innerText.trim());});var rows=[];table.querySelectorAll('tbody tr').forEach(function(row){var cells=row.querySelectorAll('td');if(cells.length>0){var rd={};cells.forEach(function(cell,idx){rd[headers[idx]||'col'+idx]=cell.innerText.trim();});if(Object.values(rd).some(function(v){return v&&v.length>0;})){rows.push(rd);}}});if(rows.length>0&&headers.length>0)allData.push({headers:headers,rows:rows});});if(allData.length===0){var gh=[];document.querySelectorAll('[role="columnheader"]').forEach(function(c){gh.push(c.innerText.trim());});var gr=[];document.querySelectorAll('[role="row"]').forEach(function(row){var cells=row.querySelectorAll('[role="cell"]');if(cells.length>0){var rd={};cells.forEach(function(cell,idx){rd[gh[idx]||'col'+idx]=cell.innerText.trim();});if(Object.values(rd).some(function(v){return v&&v.length>0;}))gr.push(rd);}});if(gr.length>0)allData.push({headers:gh,rows:gr});}var payload={source:url,title:title,dateRange:dateRange,tables:allData,timestamp:new Date().toISOString()};var encoded=encodeURIComponent(JSON.stringify(payload));var appUrl='https://meta-ads-toolkit-a71e.vercel.app';var fb=document.createElement('div');fb.style.cssText='position:fixed;top:20px;right:20px;z-index:99999;background:linear-gradient(135deg,#6366F1,#8B5CF6);color:white;padding:14px 20px;border-radius:12px;font-family:sans-serif;font-size:14px;font-weight:600;box-shadow:0 8px 32px rgba(99,102,241,0.4)';fb.innerHTML='📊 Meta Ads Toolkit<br><span style="font-weight:400;font-size:12px">Prikupljam podatke...</span>';document.body.appendChild(fb);if(encoded.length<7000){window.open(appUrl+'?bmdata='+encoded+'&mod=9','_blank');}else{try{sessionStorage.setItem('mat_import',JSON.stringify(payload));}catch(e){}window.open(appUrl+'?source=bookmarklet&mod=9','_blank');}setTimeout(function(){fb.remove();},2500);})();`;
+const BOOKMARKLET_CODE="javascript:(function(){var url=window.location.href;var title=document.title;var dateRange='';var dateEls=document.querySelectorAll('[class*=\"date\"],[class*=\"Date\"],[class*=\"period\"],[class*=\"range\"]');for(var i=0;i<dateEls.length;i++){var txt=dateEls[i].innerText;if(txt&&txt.match(/\\d{1,2}[\\.\\-\\/]\\d{1,2}|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec/i)&&txt.length<80){dateRange=txt.trim();break;}}var allData=[];var tables=document.querySelectorAll('table');tables.forEach(function(table){var headers=[];table.querySelectorAll('thead th,tr:first-child th').forEach(function(c){headers.push(c.innerText.trim());});var rows=[];table.querySelectorAll('tbody tr').forEach(function(row){var cells=row.querySelectorAll('td');if(cells.length>0){var rd={};cells.forEach(function(cell,idx){rd[headers[idx]||'col'+idx]=cell.innerText.trim();});if(Object.values(rd).some(function(v){return v&&v.length>0;})){rows.push(rd);}}});if(rows.length>0&&headers.length>0)allData.push({headers:headers,rows:rows});});if(allData.length===0){var gh=[];document.querySelectorAll('[role=\"columnheader\"]').forEach(function(c){gh.push(c.innerText.trim());});var gr=[];document.querySelectorAll('[role=\"row\"]').forEach(function(row){var cells=row.querySelectorAll('[role=\"cell\"]');if(cells.length>0){var rd={};cells.forEach(function(cell,idx){rd[gh[idx]||'col'+idx]=cell.innerText.trim();});if(Object.values(rd).some(function(v){return v&&v.length>0;}))gr.push(rd);}});if(gr.length>0)allData.push({headers:gh,rows:gr});}var payload={source:url,title:title,dateRange:dateRange,tables:allData,timestamp:new Date().toISOString()};var encoded=encodeURIComponent(JSON.stringify(payload));var appUrl='https://meta-ads-toolkit-a71e.vercel.app';var fb=document.createElement('div');fb.style.cssText='position:fixed;top:20px;right:20px;z-index:99999;background:linear-gradient(135deg,#6366F1,#8B5CF6);color:white;padding:14px 20px;border-radius:12px;font-family:sans-serif;font-size:14px;font-weight:600;box-shadow:0 8px 32px rgba(99,102,241,0.4)';fb.innerHTML='Meta Ads Toolkit - Prikupljam podatke...';document.body.appendChild(fb);if(encoded.length<7000){window.open(appUrl+'?bmdata='+encoded+'&mod=9','_blank');}else{try{sessionStorage.setItem('mat_import',JSON.stringify(payload));}catch(e){}window.open(appUrl+'?source=bookmarklet&mod=9','_blank');}setTimeout(function(){fb.remove();},2500);})();";
 
 // ── MODULE 9: BOOKMARK CONNECTOR ─────────────────────────────────────────────
 function BookmarkMod({t,lang}){
@@ -1946,10 +1946,10 @@ export default function App(){
   </div>;
 
   // ── DESKTOP ────────────────────────────────────────────────────────────────
-  return <div style={{minHeight:"100vh",background:C.bg,fontFamily:"'Plus Jakarta Sans',sans-serif",color:C.txt,display:"flex",flexDirection:"column"}}>
+  return <div style={{height:"100vh",background:C.bg,fontFamily:"'Plus Jakarta Sans',sans-serif",color:C.txt,display:"flex",flexDirection:"column",overflow:"hidden"}}>
 
     {/* TOP NAV */}
-    <div style={{background:"rgba(255,255,255,0.02)",borderBottom:`1px solid ${C.brd}`,padding:"0 32px",display:"flex",justifyContent:"space-between",alignItems:"center",height:64,position:"sticky",top:0,zIndex:100,backdropFilter:"blur(10px)",flexShrink:0}}>
+    <div style={{background:"rgba(255,255,255,0.02)",borderBottom:`1px solid ${C.brd}`,padding:"0 32px",display:"flex",justifyContent:"space-between",alignItems:"center",height:64,flexShrink:0,zIndex:100}}>
       <div style={{display:"flex",alignItems:"center",gap:12,cursor:"pointer"}} onClick={()=>setMod(null)}>
         <div style={{width:38,height:38,borderRadius:10,background:"linear-gradient(135deg,#6366F1,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:19}}>📊</div>
         <div>
@@ -1969,10 +1969,10 @@ export default function App(){
       </div>
     </div>
 
-    <div style={{display:"flex",flex:1}}>
+    <div style={{display:"flex",flex:1,overflow:"hidden"}}>
 
       {/* SIDEBAR */}
-      <div style={{width:270,background:"rgba(255,255,255,0.015)",borderRight:`1px solid ${C.brd}`,padding:"28px 14px",flexShrink:0,position:"sticky",top:64,height:"calc(100vh - 64px)",overflowY:"auto",display:"flex",flexDirection:"column"}}>
+      <div style={{width:270,background:"rgba(255,255,255,0.015)",borderRight:`1px solid ${C.brd}`,padding:"28px 14px",flexShrink:0,overflowY:"auto",display:"flex",flexDirection:"column"}}>
         <div style={{fontSize:10,fontWeight:700,letterSpacing:"1.5px",textTransform:"uppercase",color:"rgba(255,255,255,0.2)",marginBottom:10,paddingLeft:10}}>Alati</div>
         <div style={{flex:1}}>
           {MODS.map((m,i)=>(
@@ -2000,7 +2000,7 @@ export default function App(){
 
       {/* MAIN */}
       <div style={{flex:1,overflowY:"auto",minWidth:0}}>
-        {!mod&&<div style={{padding:"40px 48px",maxWidth:1100}}>
+        {!mod&&<div style={{padding:"40px 48px 60px",maxWidth:1100}}>
           <div style={{marginBottom:40}}>
             <div style={{fontSize:11,fontWeight:700,letterSpacing:"2px",textTransform:"uppercase",color:"#A5B4FC",marginBottom:12}}>META ADS TOOLKIT</div>
             <h1 style={{fontSize:42,fontWeight:900,margin:"0 0 10px",letterSpacing:"-1.5px",lineHeight:1.05}}>{t.sel}</h1>
@@ -2009,11 +2009,14 @@ export default function App(){
           <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:18,marginBottom:18}}>
             {MODS.slice(0,4).map((m,i)=><ModCard key={m.id} m={m} i={i} large={true}/>)}
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:18}}>
-            {MODS.slice(4).map((m,i)=><ModCard key={m.id} m={m} i={i+4} large={true}/>)}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:18,marginBottom:18}}>
+            {MODS.slice(4,8).map((m,i)=><ModCard key={m.id} m={m} i={i+4} large={true}/>)}
           </div>
+          {MODS.slice(8).length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:18}}>
+            {MODS.slice(8).map((m,i)=><ModCard key={m.id} m={m} i={i+8} large={true}/>)}
+          </div>}
         </div>}
-        {mod&&Comp&&<div style={{padding:"40px 48px",maxWidth:860}}><Comp t={t} lang={lang}/></div>}
+        {mod&&Comp&&<div style={{padding:"40px 48px 60px",maxWidth:860}}><Comp t={t} lang={lang}/></div>}
       </div>
     </div>
   </div>;
