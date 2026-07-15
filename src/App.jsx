@@ -1704,44 +1704,40 @@ For "better": true means Period B is better for that metric, false means worse. 
 
 // ── BOOKMARKLET CODE ─────────────────────────────────────────────────────────
 const BOOKMARKLET_CODE="javascript:(function(){"+
-"var fb=document.createElement('div');"+
-"fb.style.cssText='position:fixed;top:20px;right:20px;z-index:99999;background:linear-gradient(135deg,#6366F1,#8B5CF6);color:white;padding:14px 20px;border-radius:12px;font-family:sans-serif;font-size:14px;font-weight:600;box-shadow:0 8px 32px rgba(99,102,241,0.4)';"+
-"fb.textContent='Meta Ads Toolkit – Pravim screenshot...';document.body.appendChild(fb);"+
-"var url=window.location.href;var title=document.title;"+
-"var dateRange='';"+
+"var appUrl='https://meta-ads-toolkit-a71e.vercel.app';"+
+"var url=window.location.href;var title=document.title;var dateRange='';"+
 "var dMatch=url.match(/date[=%3D]+([0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{4}-[0-9]{2}-[0-9]{2})/);"+
 "if(dMatch){dateRange=dMatch[1].replace('_',' – ');}"+
+"var fb=document.createElement('div');"+
+"fb.style.cssText='position:fixed;top:20px;right:20px;z-index:99999;background:linear-gradient(135deg,#6366F1,#8B5CF6);color:white;padding:14px 20px;border-radius:12px;font-family:sans-serif;font-size:14px;font-weight:600;box-shadow:0 8px 32px rgba(99,102,241,0.4)';"+
+"fb.textContent='Meta Ads Toolkit – Otvaram...';document.body.appendChild(fb);"+
+"var newTab=window.open(appUrl+'?source=screenshot&mod=9','_blank');"+
+"fb.textContent='Meta Ads Toolkit – Pravim screenshot...';"+
+"var payload={source:url,title:title,dateRange:dateRange,screenshot:null,tables:[],timestamp:new Date().toISOString()};"+
 "var script=document.createElement('script');"+
 "script.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';"+
 "script.onload=function(){"+
-"fb.textContent='Meta Ads Toolkit – Snimam ekran...';"+
-"html2canvas(document.body,{"+
-"scale:1,"+
-"useCORS:true,"+
-"allowTaint:true,"+
-"logging:false,"+
-"width:window.innerWidth,"+
-"height:Math.min(window.innerHeight,2000)"+
-"}).then(function(canvas){"+
-"fb.textContent='Meta Ads Toolkit – Šaljem podatke...';"+
-"var imgData=canvas.toDataURL('image/jpeg',0.8);"+
-"var base64=imgData.split(',')[1];"+
-"var payload={source:url,title:title,dateRange:dateRange,screenshot:base64,tables:[],timestamp:new Date().toISOString()};"+
-"var appUrl='https://meta-ads-toolkit-a71e.vercel.app';"+
+"html2canvas(document.body,{scale:0.8,useCORS:true,allowTaint:true,logging:false,height:Math.min(window.innerHeight,1800)}).then(function(canvas){"+
+"payload.screenshot=canvas.toDataURL('image/jpeg',0.75).split(',')[1];"+
 "try{sessionStorage.setItem('mat_import',JSON.stringify(payload));}catch(e){"+
-"try{localStorage.setItem('mat_import_temp',JSON.stringify(payload));}catch(e2){}}"+
-"fb.textContent='Meta Ads Toolkit – Gotovo!';"+
-"setTimeout(function(){"+
-"window.open(appUrl+'?source=screenshot&mod=9','_blank');"+
-"fb.remove();"+
-"},500);"+
-"}).catch(function(err){"+
-"fb.textContent='Greška: '+err.message;"+
+"try{"+
+"payload.screenshot=canvas.toDataURL('image/jpeg',0.4).split(',')[1];"+
+"sessionStorage.setItem('mat_import',JSON.stringify(payload));"+
+"}catch(e2){payload.screenshot=null;sessionStorage.setItem('mat_import',JSON.stringify(payload));}}"+
+"fb.textContent='Meta Ads Toolkit – Gotovo! Proverite novi tab.';"+
+"if(newTab)newTab.postMessage({type:'MAT_READY'},'*');"+
 "setTimeout(function(){fb.remove();},3000);"+
-"});};"+
+"}).catch(function(){"+
+"payload.screenshot=null;"+
+"try{sessionStorage.setItem('mat_import',JSON.stringify(payload));}catch(e){}"+
+"fb.textContent='Meta Ads Toolkit – Otvoreno bez screenshota.';"+
+"setTimeout(function(){fb.remove();},2000);});"+
+"};"+
 "script.onerror=function(){"+
-"fb.textContent='Greška pri učitavanju. Pokušaj ponovo.';"+
-"setTimeout(function(){fb.remove();},3000);"+
+"payload.screenshot=null;"+
+"try{sessionStorage.setItem('mat_import',JSON.stringify(payload));}catch(e){}"+
+"fb.textContent='Meta Ads Toolkit – Otvoreno (bez screenshot podrske).';"+
+"setTimeout(function(){fb.remove();},2000);"+
 "};"+
 "document.head.appendChild(script);"+
 "})();";
@@ -1779,6 +1775,24 @@ function BookmarkMod({t,lang}){
   });
   const [analysis,setAnalysis]=useState("");
   const [loading,setLoading]=useState(false);
+
+  // Listen for postMessage from bookmarklet when screenshot is ready
+  useEffect(()=>{
+    const handler=(e)=>{
+      if(e.data&&e.data.type==="MAT_READY"){
+        try{
+          const stored=sessionStorage.getItem("mat_import");
+          if(stored){
+            const parsed=JSON.parse(stored);
+            sessionStorage.removeItem("mat_import");
+            setImportedData(parsed);
+          }
+        }catch(err){}
+      }
+    };
+    window.addEventListener("message",handler);
+    return()=>window.removeEventListener("message",handler);
+  },[]);
 
   const analyze=async()=>{
     if(!importedData) return;
