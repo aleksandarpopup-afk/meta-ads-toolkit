@@ -1704,49 +1704,47 @@ For "better": true means Period B is better for that metric, false means worse. 
 
 // ── BOOKMARKLET CODE ─────────────────────────────────────────────────────────
 const BOOKMARKLET_CODE="javascript:(function(){"+
-"function scrape(){"+
-"var url=window.location.href;var title=document.title;var dateRange='';"+
-"var dMatch=url.match(/date%3D([^%&]+)/);"+
-"if(dMatch){dateRange=decodeURIComponent(dMatch[1]).replace(/_/g,' ').replace(/%2C/g,' / ');}"+
-"var allData=[];var headers=[];var rows=[];"+
-"var headerEls=document.querySelectorAll('[role=\"columnheader\"]');"+
-"headerEls.forEach(function(h){var txt=h.innerText.trim();if(txt&&txt.length>0&&txt.length<80)headers.push(txt);});"+
-"if(headers.length>0){"+
-"document.querySelectorAll('[role=\"row\"]').forEach(function(row){"+
-"if(row.querySelector('[role=\"columnheader\"]'))return;"+
-"var cells=row.querySelectorAll('[role=\"cell\"]');"+
-"if(cells.length>1){var rd={};var hasData=false;"+
-"cells.forEach(function(cell,idx){var txt=cell.innerText.trim().replace(/\\n+/g,' ');"+
-"rd[headers[idx]||'col'+idx]=txt;if(txt)hasData=true;});"+
-"if(hasData)rows.push(rd);}});"+
-"if(rows.length>0)allData.push({headers:headers,rows:rows});}"+
-"if(allData.length===0){"+
-"document.querySelectorAll('table').forEach(function(tbl){"+
-"var th=[];var tr=[];"+
-"tbl.querySelectorAll('th,[role=\"columnheader\"]').forEach(function(c){th.push(c.innerText.trim());});"+
-"tbl.querySelectorAll('tbody tr,[role=\"row\"]').forEach(function(row){"+
-"var cells=row.querySelectorAll('td,[role=\"cell\"]');"+
-"if(cells.length>0){var rd={};cells.forEach(function(c,i){rd[th[i]||'col'+i]=c.innerText.trim();});"+
-"if(Object.values(rd).some(function(v){return v;}))tr.push(rd);}});"+
-"if(tr.length>0)allData.push({headers:th,rows:tr});});}"+
-"return{url:url,title:title,dateRange:dateRange,tables:allData};}"+
 "var fb=document.createElement('div');"+
 "fb.style.cssText='position:fixed;top:20px;right:20px;z-index:99999;background:linear-gradient(135deg,#6366F1,#8B5CF6);color:white;padding:14px 20px;border-radius:12px;font-family:sans-serif;font-size:14px;font-weight:600;box-shadow:0 8px 32px rgba(99,102,241,0.4)';"+
-"fb.textContent='Meta Ads Toolkit - Čekam podatke (3s)...';document.body.appendChild(fb);"+
-"window.scrollTo(0,document.body.scrollHeight);"+
-"setTimeout(function(){window.scrollTo(0,0);},500);"+
-"setTimeout(function(){"+
-"var result=scrape();"+
-"var rowCount=result.tables.length>0?result.tables[0].rows.length:0;"+
-"fb.textContent='Meta Ads Toolkit - Pokupio '+rowCount+' redova!';"+
-"var payload={source:result.url,title:result.title,dateRange:result.dateRange,tables:result.tables,timestamp:new Date().toISOString()};"+
-"var encoded=encodeURIComponent(JSON.stringify(payload));"+
+"fb.textContent='Meta Ads Toolkit – Pravim screenshot...';document.body.appendChild(fb);"+
+"var url=window.location.href;var title=document.title;"+
+"var dateRange='';"+
+"var dMatch=url.match(/date[=%3D]+([0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{4}-[0-9]{2}-[0-9]{2})/);"+
+"if(dMatch){dateRange=dMatch[1].replace('_',' – ');}"+
+"var script=document.createElement('script');"+
+"script.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';"+
+"script.onload=function(){"+
+"fb.textContent='Meta Ads Toolkit – Snimam ekran...';"+
+"html2canvas(document.body,{"+
+"scale:1,"+
+"useCORS:true,"+
+"allowTaint:true,"+
+"logging:false,"+
+"width:window.innerWidth,"+
+"height:Math.min(window.innerHeight,2000)"+
+"}).then(function(canvas){"+
+"fb.textContent='Meta Ads Toolkit – Šaljem podatke...';"+
+"var imgData=canvas.toDataURL('image/jpeg',0.8);"+
+"var base64=imgData.split(',')[1];"+
+"var payload={source:url,title:title,dateRange:dateRange,screenshot:base64,tables:[],timestamp:new Date().toISOString()};"+
 "var appUrl='https://meta-ads-toolkit-a71e.vercel.app';"+
+"try{sessionStorage.setItem('mat_import',JSON.stringify(payload));}catch(e){"+
+"try{localStorage.setItem('mat_import_temp',JSON.stringify(payload));}catch(e2){}}"+
+"fb.textContent='Meta Ads Toolkit – Gotovo!';"+
 "setTimeout(function(){"+
-"if(encoded.length<7000){window.open(appUrl+'?bmdata='+encoded+'&mod=9','_blank');}"+
-"else{try{sessionStorage.setItem('mat_import',JSON.stringify(payload));}catch(e){}window.open(appUrl+'?source=bookmarklet&mod=9','_blank');}"+
-"fb.remove();},1000);"+
-"},3000);})();";
+"window.open(appUrl+'?source=screenshot&mod=9','_blank');"+
+"fb.remove();"+
+"},500);"+
+"}).catch(function(err){"+
+"fb.textContent='Greška: '+err.message;"+
+"setTimeout(function(){fb.remove();},3000);"+
+"});};"+
+"script.onerror=function(){"+
+"fb.textContent='Greška pri učitavanju. Pokušaj ponovo.';"+
+"setTimeout(function(){fb.remove();},3000);"+
+"};"+
+"document.head.appendChild(script);"+
+"})();";
 
 // ── MODULE 9: BOOKMARK CONNECTOR ─────────────────────────────────────────────
 function BookmarkMod({t,lang}){
@@ -1754,7 +1752,18 @@ function BookmarkMod({t,lang}){
   const [importedData,setImportedData]=useState(()=>{
     try{
       const params=new URLSearchParams(window.location.search);
+      const source=params.get("source");
       const bmdata=params.get("bmdata");
+      if(source==="screenshot"){
+        const stored=sessionStorage.getItem("mat_import")||localStorage.getItem("mat_import_temp");
+        if(stored){
+          sessionStorage.removeItem("mat_import");
+          localStorage.removeItem("mat_import_temp");
+          const parsed=JSON.parse(stored);
+          setTimeout(()=>window.history.replaceState({},"",window.location.pathname+"?mod=9"),100);
+          return parsed;
+        }
+      }
       if(bmdata){
         const parsed=JSON.parse(decodeURIComponent(bmdata));
         setTimeout(()=>window.history.replaceState({},"",window.location.pathname+"?mod=9"),100);
@@ -1762,7 +1771,7 @@ function BookmarkMod({t,lang}){
         return parsed;
       }
       const stored=sessionStorage.getItem("mat_import");
-      if(stored){ sessionStorage.removeItem("mat_import"); const p=JSON.parse(stored); localStorage.setItem("mat_last_import",JSON.stringify(p)); return p; }
+      if(stored){ sessionStorage.removeItem("mat_import"); const p=JSON.parse(stored); return p; }
       const saved=localStorage.getItem("mat_last_import");
       if(saved) return JSON.parse(saved);
     }catch(e){}
@@ -1775,19 +1784,20 @@ function BookmarkMod({t,lang}){
     if(!importedData) return;
     setLoading(true); setAnalysis("");
     try{
-      const tablesSummary=importedData.tables.slice(0,3).map((tbl,i)=>{
-        return `Tabela ${i+1} (${tbl.rows.length} redova):\nKolone: ${tbl.headers.join(", ")}\nPodaci (prvih 15 redova):\n${tbl.rows.slice(0,15).map(r=>Object.values(r).join(" | ")).join("\n")}`;
-      }).join("\n\n");
-      const prompt=sr
-        ?`Ti si senior Meta Ads ekspert. Analiziraj ove uvezene podatke iz ${importedData.title||"marketing alata"}. Piši isključivo na srpskom jeziku, ekavski.
+      const appUrl="https://api.anthropic.com/v1/messages";
+      const headers={"Content-Type":"application/json","x-api-key":API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"};
+      
+      let messages;
+      
+      // If we have a screenshot, use vision
+      if(importedData.screenshot){
+        const prompt=sr
+          ?`Ti si senior Meta Ads ekspert. Analiziraj ovaj screenshot iz ${importedData.title||"marketing alata"}. Piši isključivo na srpskom jeziku, ekavski.
 
 Izvor: ${importedData.source}
 Period: ${importedData.dateRange||"Nije detektovan"}
 
-UVEZENI PODACI:
-${tablesSummary}
-
-NE koristi Markdown. Koristi samo običan tekst sa sekcijama:
+Pročitaj sve podatke koji su vidljivi i napiši analizu. NE koristi Markdown. Koristi samo običan tekst:
 
 EXECUTIVE SUMMARY
 (Šta vidiš – o čemu se radi, koji je kontekst)
@@ -1801,32 +1811,37 @@ PROBLEMI I PRILIKE
 PRIORITETNE PREPORUKE
 (3-5 konkretnih akcija na osnovu ovih podataka)
 
-Budi konkretan i profesionalan. Koristi stvarne brojke iz podataka.`
-        :`You are a senior Meta Ads expert. Analyze this imported data from ${importedData.title||"a marketing tool"}.
+Budi konkretan i profesionalan. Koristi stvarne brojke sa screenshota.`
+          :`You are a senior Meta Ads expert. Analyze this screenshot from ${importedData.title||"a marketing tool"}.
 
 Source: ${importedData.source}
 Period: ${importedData.dateRange||"Not detected"}
 
-IMPORTED DATA:
-${tablesSummary}
-
-Do NOT use Markdown. Plain text only:
+Read all visible data and write an analysis. Do NOT use Markdown. Plain text only:
 
 EXECUTIVE SUMMARY
-(What you see – context and overview)
-
 KEY FINDINGS
-(Most important data points – numbers, trends, standout campaigns)
-
 ISSUES AND OPPORTUNITIES
-(What's not working, room for improvement)
-
 PRIORITY RECOMMENDATIONS
-(3-5 concrete actions based on this data)
 
-Be specific and professional. Use actual numbers from the data.`;
+Be specific. Use actual numbers from the screenshot.`;
 
-      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:prompt}]})});
+        messages=[{role:"user",content:[
+          {type:"image",source:{type:"base64",media_type:"image/jpeg",data:importedData.screenshot}},
+          {type:"text",text:prompt}
+        ]}];
+      } else {
+        // Use text data
+        const tablesSummary=importedData.tables.slice(0,3).map((tbl,i)=>{
+          return `Tabela ${i+1} (${tbl.rows.length} redova):\nKolone: ${tbl.headers.join(", ")}\nPodaci:\n${tbl.rows.slice(0,15).map(r=>Object.values(r).join(" | ")).join("\n")}`;
+        }).join("\n\n");
+        const prompt=sr
+          ?`Ti si senior Meta Ads ekspert. Analiziraj ove uvezene podatke. Piši isključivo na srpskom jeziku, ekavski. NE koristi Markdown.\n\nIzvor: ${importedData.source}\nPeriod: ${importedData.dateRange||"Nije detektovan"}\n\nPODACI:\n${tablesSummary}\n\nEXECUTIVE SUMMARY\nKLJUČNI NALAZI\nPROBLEMI I PRILIKE\nPRIORITETNE PREPORUKE`
+          :`You are a senior Meta Ads expert. Analyze this data. Plain text only.\n\nSource: ${importedData.source}\n\nDATA:\n${tablesSummary}\n\nEXECUTIVE SUMMARY\nKEY FINDINGS\nISSUES AND OPPORTUNITIES\nPRIORITY RECOMMENDATIONS`;
+        messages=[{role:"user",content:prompt}];
+      }
+
+      const res=await fetch(appUrl,{method:"POST",headers,body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,messages})});
       const data=await res.json();
       setAnalysis(data.content?.[0]?.text||"");
     }catch(e){ setAnalysis(sr?"Greška pri analizi. Pokušaj ponovo.":"Error during analysis. Please try again."); }
@@ -1882,9 +1897,15 @@ Be specific and professional. Use actual numbers from the data.`;
             <div style={{color:C.mut,fontSize:12}}>{t.bm_source}: <span style={{color:C.txt,fontWeight:600}}>{importedData.title||importedData.source}</span></div>
             {importedData.dateRange&&<div style={{color:C.mut,fontSize:12}}>{t.bm_dateRange}: <span style={{color:C.txt,fontWeight:600}}>{importedData.dateRange}</span></div>}
             <div style={{color:C.mut,fontSize:12}}>{t.bm_date}: <span style={{color:C.txt,fontWeight:600}}>{new Date(importedData.timestamp).toLocaleString(sr?"sr-RS":"en-US")}</span></div>
-            <div style={{color:C.mut,fontSize:12}}>{t.bm_tables}: <span style={{color:C.txt,fontWeight:600}}>{importedData.tables.length} ({importedData.tables.reduce((a,tb)=>a+tb.rows.length,0)} {t.bm_rows})</span></div>
+            {importedData.screenshot
+              ? <div style={{color:C.mut,fontSize:12}}>Tip: <span style={{color:C.grn,fontWeight:600}}>Screenshot ✓</span></div>
+              : <div style={{color:C.mut,fontSize:12}}>{t.bm_tables}: <span style={{color:C.txt,fontWeight:600}}>{importedData.tables.length} ({importedData.tables.reduce((a,tb)=>a+tb.rows.length,0)} {t.bm_rows})</span></div>
+            }
           </div>
         </div>
+        {importedData.screenshot&&<div style={{marginBottom:16}}>
+          <img src={`data:image/jpeg;base64,${importedData.screenshot}`} alt="screenshot" style={{width:"100%",borderRadius:10,border:`1px solid ${C.brd}`}}/>
+        </div>}
         <div style={{display:"flex",gap:10}}>
           <Btn onClick={analyze}>{t.bm_analyze}</Btn>
           <button onClick={clear} style={{background:"none",border:`1px solid ${C.brd}`,borderRadius:11,color:C.mut,fontSize:13,fontWeight:600,padding:"13px 16px",cursor:"pointer"}}>{t.bm_clear}</button>
