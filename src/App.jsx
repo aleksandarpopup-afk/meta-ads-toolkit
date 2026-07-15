@@ -1470,7 +1470,7 @@ function ReportMod({t,lang}){
         content.push({type:"text",text:sr
           ?`Ti si senior marketing konsultant. Klijent: "${client||"Nije navedeno"}". Period: "${period||"Nije navedeno"}". Piši isključivo na srpskom jeziku, ekavski.
 
-${isCsv?`Analiziraj ovaj CSV export iz Meta Ads Managera:\n\n${csvSummary}`:"Analiziraj ovaj screenshot."}
+${isCsv?`Analiziraj ovaj CSV export iz marketing alata:\n\n${csvSummary}`:"Analiziraj ovaj screenshot."}
 
 Napiši profesionalni izveštaj u JSON formatu:
 {
@@ -1762,7 +1762,7 @@ For "better": true means Period B is better, false means worse. Return ONLY JSON
         📸 {sr?"Screenshot":"Screenshot"}
       </button>
       <button onClick={()=>setInputMode("csv")} style={{flex:1,padding:"10px",borderRadius:10,border:`1px solid ${inputMode==="csv"?"rgba(16,185,129,0.6)":C.brd}`,background:inputMode==="csv"?"rgba(16,185,129,0.15)":"transparent",color:inputMode==="csv"?C.grn:C.mut,fontSize:13,fontWeight:600,cursor:"pointer"}}>
-        📊 CSV {sr?"(Meta Export)":"(Meta Export)"}
+        📊 CSV
       </button>
     </div>
 
@@ -1779,8 +1779,8 @@ For "better": true means Period B is better, false means worse. Return ONLY JSON
           <Btn onClick={generate} disabled={!csvA||!csvB}>{t.rg_generate}</Btn></>
         :<><CSVBox csv={csvA} name={csvNameA} setCsv={setCsvA} setName={setCsvNameA} label={sr?"CSV Export iz Meta Ads Managera":"CSV Export from Meta Ads Manager"} id="csvUploadA"/>
           <div style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px",marginBottom:16}}>
-            <div style={{color:C.mut,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:8}}>{sr?"Kako da exportuješ iz Meta:":"How to export from Meta:"}</div>
-            {[sr?"Otvori Meta Ads Manager":"Open Meta Ads Manager",sr?"Podesi datum i kolone koje hoćeš":"Set date and columns you want",sr?"Klikni Export (gore desno u tabeli)":"Click Export (top right in table)",sr?"Export table data → CSV":"Export table data → CSV",sr?"Upload taj fajl ovde":"Upload that file here"].map((s,i)=><div key={i} style={{display:"flex",gap:10,marginBottom:6,alignItems:"flex-start"}}><span style={{color:C.acl,fontWeight:700,fontSize:12,minWidth:16}}>{i+1}.</span><span style={{color:"rgba(255,255,255,0.6)",fontSize:12}}>{s}</span></div>)}
+            <div style={{color:C.mut,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:8}}>{sr?"Kako da exportuješ CSV:":"How to export CSV:"}</div>
+            {[sr?"Meta Ads Manager → Export → Export table data → CSV":"Meta Ads Manager → Export → Export table data → CSV",sr?"Looker Studio → Export → CSV":"Looker Studio → Export → CSV",sr?"Google Ads → Download → CSV":"Google Ads → Download → CSV",sr?"Whatagraph, GA4 i drugi alati – koristite njihov CSV export":"Whatagraph, GA4 and other tools – use their CSV export"].map((s,i)=><div key={i} style={{display:"flex",gap:10,marginBottom:6,alignItems:"flex-start"}}><span style={{color:C.acl,fontWeight:700,fontSize:12,minWidth:16}}>•</span><span style={{color:"rgba(255,255,255,0.6)",fontSize:12}}>{s}</span></div>)}
           </div>
           <Btn onClick={generate} disabled={!csvA}>{t.rg_generate}</Btn></>
       }
