@@ -1370,16 +1370,40 @@ function ScalingMod({t,lang}){
 // ── MODULE 8: AI REPORT GENERATOR ────────────────────────────────────────────
 function ReportMod({t,lang}){
   const sr=lang==="sr";
-  const [type,setType]=useState(null); // null=izbor, "single", "compare"
+  const [type,setType]=useState(null);
+  const [inputMode,setInputMode]=useState("screenshot"); // "screenshot" or "csv"
   const [client,setClient]=useState("");
   const [period,setPeriod]=useState("");
   const [periodA,setPeriodA]=useState("");
   const [periodB,setPeriodB]=useState("");
   const [imgA,setImgA]=useState(null); const [prevA,setPrevA]=useState(null);
   const [imgB,setImgB]=useState(null); const [prevB,setPrevB]=useState(null);
+  const [csvA,setCsvA]=useState(null); const [csvNameA,setCsvNameA]=useState("");
+  const [csvB,setCsvB]=useState(null); const [csvNameB,setCsvNameB]=useState("");
   const [report,setReport]=useState(null);
   const [loading,setLoading]=useState(false);
   const [dragA,setDragA]=useState(false); const [dragB,setDragB]=useState(false);
+
+  const parseCSV=(text)=>{
+    const lines=text.split("\n").filter(l=>l.trim());
+    if(lines.length<2) return null;
+    const headers=lines[0].split(",").map(h=>h.replace(/"/g,"").trim());
+    const rows=lines.slice(1).map(line=>{
+      const vals=line.match(/(".*?"|[^,]+)/g)||[];
+      const row={};
+      headers.forEach((h,i)=>{ row[h]=(vals[i]||"").replace(/"/g,"").trim(); });
+      return row;
+    }).filter(r=>Object.values(r).some(v=>v));
+    return{headers,rows};
+  };
+
+  const handleCSV=(file,setCsv,setName)=>{
+    if(!file) return;
+    setName(file.name);
+    const reader=new FileReader();
+    reader.onload=e=>setCsv(e.target.result);
+    reader.readAsText(file,"UTF-8");
+  };
 
   const handleFile=(file,setImg,setPrev)=>{
     if(!file||!file.type.startsWith("image/")) return;
@@ -1387,6 +1411,27 @@ function ReportMod({t,lang}){
     reader.onload=e=>{ setImg(e.target.result.split(",")[1]); setPrev(e.target.result); };
     reader.readAsDataURL(file);
   };
+
+  const CSVBox=({csv,name,setCsv,setName,label,id})=>(
+    <div style={{marginBottom:16}}>
+      <Lbl c={label}/>
+      {!csv
+        ?<div onClick={()=>document.getElementById(id).click()}
+          style={{border:"2px dashed rgba(255,255,255,0.15)",borderRadius:14,padding:"30px 20px",textAlign:"center",cursor:"pointer",background:"rgba(255,255,255,0.02)",transition:"all 0.2s"}}
+          onMouseEnter={e=>e.currentTarget.style.borderColor="#6366F1"}
+          onMouseLeave={e=>e.currentTarget.style.borderColor="rgba(255,255,255,0.15)"}>
+          <div style={{fontSize:32,marginBottom:8}}>📊</div>
+          <div style={{color:C.txt,fontWeight:600,fontSize:14,marginBottom:4}}>{sr?"Klikni da odabereš CSV fajl":"Click to select CSV file"}</div>
+          <div style={{color:C.mut,fontSize:12}}>{sr?"Export iz Meta Ads Manager → Export table data → CSV":"Export from Meta Ads Manager → Export table data → CSV"}</div>
+        </div>
+        :<div style={{background:"rgba(52,211,153,0.08)",border:"1px solid rgba(52,211,153,0.2)",borderRadius:12,padding:"14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div><div style={{color:C.grn,fontWeight:700,fontSize:13}}>✅ {name}</div><div style={{color:C.mut,fontSize:11,marginTop:4}}>{sr?"CSV učitan":"CSV loaded"}</div></div>
+          <button onClick={()=>{setCsv(null);setName("");}} style={{background:"none",border:`1px solid ${C.brd}`,borderRadius:8,color:C.mut,fontSize:12,padding:"6px 12px",cursor:"pointer"}}>{sr?"Promeni":"Change"}</button>
+        </div>
+      }
+      <input id={id} type="file" accept=".csv,text/csv" style={{display:"none"}} onChange={e=>handleCSV(e.target.files[0],setCsv,setName)}/>
+    </div>
+  );
 
   const UploadBox=({img,prev,setImg,setPrev,label,drag,setDrag,id})=>(
     <div style={{marginBottom:16}}>
@@ -1415,15 +1460,22 @@ function ReportMod({t,lang}){
     setLoading(true); setReport(null);
     try {
       const content=[];
-      if(type==="single"){
-        content.push({type:"image",source:{type:"base64",media_type:"image/jpeg",data:imgA}});
-        content.push({type:"text",text:sr
-          ?`Ti si senior marketing konsultant. Klijent: "${client||"Nije navedeno"}". Period: "${period||"Nije navedeno"}". Piši isključivo na srpskom jeziku, ekavski (npr. "prosečan" ne "prosječan").
+      const isCsv=inputMode==="csv";
 
-Analiziraj ovaj screenshot i napiši profesionalni izveštaj u JSON formatu:
+      if(type==="single"){
+        const csvParsed=isCsv&&csvA?parseCSV(csvA):null;
+        const csvSummary=csvParsed?`Kolone: ${csvParsed.headers.join(", ")}\n\nPodaci:\n${csvParsed.rows.slice(0,50).map(r=>Object.values(r).join(" | ")).join("\n")}`:"";
+
+        if(!isCsv&&imgA) content.push({type:"image",source:{type:"base64",media_type:"image/jpeg",data:imgA}});
+        content.push({type:"text",text:sr
+          ?`Ti si senior marketing konsultant. Klijent: "${client||"Nije navedeno"}". Period: "${period||"Nije navedeno"}". Piši isključivo na srpskom jeziku, ekavski.
+
+${isCsv?`Analiziraj ovaj CSV export iz Meta Ads Managera:\n\n${csvSummary}`:"Analiziraj ovaj screenshot."}
+
+Napiši profesionalni izveštaj u JSON formatu:
 {
   "execSummary": "2-3 rečenice executive summary za klijenta",
-  "metrics": [{"name":"naziv metrike","value":"vrednost koju vidiš"}],
+  "metrics": [{"name":"naziv metrike","value":"vrednost"}],
   "issues": ["problem 1","problem 2","problem 3"],
   "good": ["pozitivna stvar 1","pozitivna stvar 2"],
   "actions": ["akcija 1","akcija 2","akcija 3","akcija 4","akcija 5"],
@@ -1432,10 +1484,12 @@ Analiziraj ovaj screenshot i napiši profesionalni izveštaj u JSON formatu:
 Vrati SAMO JSON, bez teksta pre ili posle.`
           :`You are a senior marketing consultant. Client: "${client||"Not specified"}". Period: "${period||"Not specified"}".
 
-Analyze this screenshot and write a professional report in JSON format:
+${isCsv?`Analyze this CSV export from Meta Ads Manager:\n\n${csvSummary}`:"Analyze this screenshot."}
+
+Write a professional report in JSON format:
 {
-  "execSummary": "2-3 sentence executive summary for the client",
-  "metrics": [{"name":"metric name","value":"value you see"}],
+  "execSummary": "2-3 sentence executive summary",
+  "metrics": [{"name":"metric name","value":"value"}],
   "issues": ["issue 1","issue 2","issue 3"],
   "good": ["positive thing 1","positive thing 2"],
   "actions": ["action 1","action 2","action 3","action 4","action 5"],
@@ -1443,36 +1497,43 @@ Analyze this screenshot and write a professional report in JSON format:
 }
 Return ONLY JSON, no text before or after.`});
       } else {
-        content.push({type:"image",source:{type:"base64",media_type:"image/jpeg",data:imgA}});
-        content.push({type:"text",text:sr?`Ovo je screenshot za Period A: ${periodA||"Period A"}`:`This is the screenshot for Period A: ${periodA||"Period A"}`});
-        content.push({type:"image",source:{type:"base64",media_type:"image/jpeg",data:imgB}});
+        const csvParsedA=isCsv&&csvA?parseCSV(csvA):null;
+        const csvParsedB=isCsv&&csvB?parseCSV(csvB):null;
+        const csvSumA=csvParsedA?`Kolone: ${csvParsedA.headers.join(", ")}\nPodaci:\n${csvParsedA.rows.slice(0,30).map(r=>Object.values(r).join(" | ")).join("\n")}`:"";
+        const csvSumB=csvParsedB?`Kolone: ${csvParsedB.headers.join(", ")}\nPodaci:\n${csvParsedB.rows.slice(0,30).map(r=>Object.values(r).join(" | ")).join("\n")}`:"";
+
+        if(!isCsv){
+          content.push({type:"image",source:{type:"base64",media_type:"image/jpeg",data:imgA}});
+          content.push({type:"text",text:sr?`Ovo je screenshot za Period A: ${periodA||"Period A"}`:`This is the screenshot for Period A: ${periodA||"Period A"}`});
+          content.push({type:"image",source:{type:"base64",media_type:"image/jpeg",data:imgB}});
+        }
         content.push({type:"text",text:sr
-          ?`Ovo je screenshot za Period B: ${periodB||"Period B"}. Klijent: "${client||"Nije navedeno"}". Piši isključivo na srpskom jeziku, ekavski (npr. "prosečan" ne "prosječan").
+          ?`${isCsv?`Ovo su CSV podaci za Period A (${periodA||"Period A"}):\n${csvSumA}\n\nOvo su CSV podaci za Period B (${periodB||"Period B"}):\n${csvSumB}`:`Ovo je screenshot za Period B: ${periodB||"Period B"}`}. Klijent: "${client||"Nije navedeno"}". Piši isključivo na srpskom jeziku, ekavski.
 
 Uporedi ova dva perioda i vrati JSON:
 {
   "execSummary": "2-3 rečenice executive summary poređenja",
   "comparison": [{"metric":"naziv metrike","valueA":"vrednost period A","valueB":"vrednost period B","change":"npr. +25%","better":true}],
-  "issues": ["problem koji se vidi u poređenju 1","problem 2"],
+  "issues": ["problem 1","problem 2"],
   "good": ["poboljšanje 1","poboljšanje 2"],
   "actions": ["akcija 1","akcija 2","akcija 3"],
   "strategic": ["preporuka 1","preporuka 2"],
-  "aiComment": "3-4 rečenice komentara na poređenje – šta se promenilo i zašto"
+  "aiComment": "3-4 rečenice komentara – šta se promenilo i zašto"
 }
-Za "better": true znači da je Period B bolji za tu metriku, false znači lošiji. Vrati SAMO JSON.`
-          :`This is the screenshot for Period B: ${periodB||"Period B"}. Client: "${client||"Not specified"}".
+Za "better": true znači Period B bolji, false znači lošiji. Vrati SAMO JSON.`
+          :`${isCsv?`These are CSV data for Period A (${periodA||"Period A"}):\n${csvSumA}\n\nThese are CSV data for Period B (${periodB||"Period B"}):\n${csvSumB}`:`This is the screenshot for Period B: ${periodB||"Period B"}`}. Client: "${client||"Not specified"}".
 
 Compare these two periods and return JSON:
 {
   "execSummary": "2-3 sentence executive summary of comparison",
   "comparison": [{"metric":"metric name","valueA":"period A value","valueB":"period B value","change":"e.g. +25%","better":true}],
-  "issues": ["issue seen in comparison 1","issue 2"],
+  "issues": ["issue 1","issue 2"],
   "good": ["improvement 1","improvement 2"],
   "actions": ["action 1","action 2","action 3"],
   "strategic": ["recommendation 1","recommendation 2"],
-  "aiComment": "3-4 sentence AI comment on comparison – what changed and why"
+  "aiComment": "3-4 sentence comment – what changed and why"
 }
-For "better": true means Period B is better for that metric, false means worse. Return ONLY JSON.`});
+For "better": true means Period B is better, false means worse. Return ONLY JSON.`});
       }
       const res=await fetch("https://api.anthropic.com/v1/messages",{
         method:"POST",
@@ -1695,10 +1756,35 @@ For "better": true means Period B is better for that metric, false means worse. 
       <div><Lbl c={t.rg_periodB}/><TIn v={periodB} ch={setPeriodB} ph={t.rg_periodBPh}/></div>
     </div>}
 
-    <UploadBox img={imgA} prev={prevA} setImg={setImgA} setPrev={setPrevA} label={type==="compare"?t.rg_uploadA:t.rg_upload} drag={dragA} setDrag={setDragA} id="rgUploadA"/>
-    {type==="compare"&&<UploadBox img={imgB} prev={prevB} setImg={setImgB} setPrev={setPrevB} label={t.rg_uploadB} drag={dragB} setDrag={setDragB} id="rgUploadB"/>}
+    {/* Input mode toggle */}
+    <div style={{display:"flex",gap:8,marginBottom:20}}>
+      <button onClick={()=>setInputMode("screenshot")} style={{flex:1,padding:"10px",borderRadius:10,border:`1px solid ${inputMode==="screenshot"?"rgba(99,102,241,0.6)":C.brd}`,background:inputMode==="screenshot"?"rgba(99,102,241,0.15)":"transparent",color:inputMode==="screenshot"?C.acl:C.mut,fontSize:13,fontWeight:600,cursor:"pointer"}}>
+        📸 {sr?"Screenshot":"Screenshot"}
+      </button>
+      <button onClick={()=>setInputMode("csv")} style={{flex:1,padding:"10px",borderRadius:10,border:`1px solid ${inputMode==="csv"?"rgba(16,185,129,0.6)":C.brd}`,background:inputMode==="csv"?"rgba(16,185,129,0.15)":"transparent",color:inputMode==="csv"?C.grn:C.mut,fontSize:13,fontWeight:600,cursor:"pointer"}}>
+        📊 CSV {sr?"(Meta Export)":"(Meta Export)"}
+      </button>
+    </div>
 
-    <Btn onClick={generate} disabled={!imgA||(type==="compare"&&!imgB)}>{t.rg_generate}</Btn>
+    {inputMode==="screenshot"&&<>
+      <UploadBox img={imgA} prev={prevA} setImg={setImgA} setPrev={setPrevA} label={type==="compare"?t.rg_uploadA:t.rg_upload} drag={dragA} setDrag={setDragA} id="rgUploadA"/>
+      {type==="compare"&&<UploadBox img={imgB} prev={prevB} setImg={setImgB} setPrev={setPrevB} label={t.rg_uploadB} drag={dragB} setDrag={setDragB} id="rgUploadB"/>}
+      <Btn onClick={generate} disabled={!imgA||(type==="compare"&&!imgB)}>{t.rg_generate}</Btn>
+    </>}
+
+    {inputMode==="csv"&&<>
+      {type==="compare"
+        ?<><CSVBox csv={csvA} name={csvNameA} setCsv={setCsvA} setName={setCsvNameA} label={sr?"CSV – Period A (stariji)":"CSV – Period A (older)"} id="csvUploadA"/>
+          <CSVBox csv={csvB} name={csvNameB} setCsv={setCsvB} setName={setCsvNameB} label={sr?"CSV – Period B (noviji)":"CSV – Period B (newer)"} id="csvUploadB"/>
+          <Btn onClick={generate} disabled={!csvA||!csvB}>{t.rg_generate}</Btn></>
+        :<><CSVBox csv={csvA} name={csvNameA} setCsv={setCsvA} setName={setCsvNameA} label={sr?"CSV Export iz Meta Ads Managera":"CSV Export from Meta Ads Manager"} id="csvUploadA"/>
+          <div style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px",marginBottom:16}}>
+            <div style={{color:C.mut,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:8}}>{sr?"Kako da exportuješ iz Meta:":"How to export from Meta:"}</div>
+            {[sr?"Otvori Meta Ads Manager":"Open Meta Ads Manager",sr?"Podesi datum i kolone koje hoćeš":"Set date and columns you want",sr?"Klikni Export (gore desno u tabeli)":"Click Export (top right in table)",sr?"Export table data → CSV":"Export table data → CSV",sr?"Upload taj fajl ovde":"Upload that file here"].map((s,i)=><div key={i} style={{display:"flex",gap:10,marginBottom:6,alignItems:"flex-start"}}><span style={{color:C.acl,fontWeight:700,fontSize:12,minWidth:16}}>{i+1}.</span><span style={{color:"rgba(255,255,255,0.6)",fontSize:12}}>{s}</span></div>)}
+          </div>
+          <Btn onClick={generate} disabled={!csvA}>{t.rg_generate}</Btn></>
+      }
+    </>}
   </div>;
 }
 
