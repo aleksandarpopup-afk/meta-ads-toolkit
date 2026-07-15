@@ -1666,77 +1666,138 @@ const MODS=[
   {id:6,icon:"✅",col:"#34D399",tk:"m6t",sk:"m6s"},
 ];
 
+// ── RESPONSIVE HOOK ──────────────────────────────────────────────────────────
+function useWindowSize(){
+  const [w,setW]=useState(window.innerWidth);
+  useState(()=>{const h=()=>setW(window.innerWidth);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h);});
+  return w;
+}
+
 export default function App(){
   const [lang,setLang]=useState("sr");
   const [mod,setMod]=useState(null);
   const t=T[lang];
+  const w=useWindowSize();
+  const isDesktop=w>=1024;
   const Comp=mod===1?HealthMod:mod===8?ReportMod:mod===2?BudgetMod:mod===7?ScalingMod:mod===3?CopyMod:mod===4?AudMod:mod===5?RoasMod:mod===6?CheckMod:null;
   const MOD_COLORS=["#6366F1","#F97316","#10B981","#06B6D4","#F59E0B","#EC4899","#8B5CF6","#34D399"];
 
-  return <div style={{minHeight:"100vh",background:C.bg,fontFamily:"'Plus Jakarta Sans',sans-serif",color:C.txt}}>
-    {/* TOP BAR */}
+  const ModCard=({m,i,large})=>(
+    <button onClick={()=>setMod(m.id)} style={{
+      background:`linear-gradient(145deg,${MOD_COLORS[i]}22,${MOD_COLORS[i]}08 60%,#0d0d1a)`,
+      border:`1px solid ${MOD_COLORS[i]}45`,borderTop:`1px solid ${MOD_COLORS[i]}70`,
+      borderRadius:16,padding:large?"22px 18px":"18px 15px",textAlign:"left",
+      cursor:"pointer",display:"block",transition:"all 0.2s",
+      WebkitTapHighlightColor:"transparent",
+      boxShadow:`0 4px 24px ${MOD_COLORS[i]}20`,
+    }}
+    onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow=`0 12px 40px ${MOD_COLORS[i]}35`;}}
+    onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow=`0 4px 24px ${MOD_COLORS[i]}20`;}}>
+      <div style={{width:large?48:40,height:large?48:40,borderRadius:12,background:`linear-gradient(135deg,${MOD_COLORS[i]}40,${MOD_COLORS[i]}20)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:large?24:20,marginBottom:large?14:12}}>{m.icon}</div>
+      <div style={{color:"#fff",fontWeight:700,fontSize:large?15:13,marginBottom:4,lineHeight:1.3}}>{t[m.tk]}</div>
+      <div style={{color:"rgba(255,255,255,0.45)",fontSize:large?12:11,lineHeight:1.5,marginBottom:large?14:12}}>{t[m.sk]}</div>
+      <div style={{color:MOD_COLORS[i],fontSize:12,fontWeight:700}}>Otvori →</div>
+    </button>
+  );
+
+  // ── MOBILE ─────────────────────────────────────────────────────────────────
+  if(!isDesktop) return <div style={{minHeight:"100vh",background:C.bg,fontFamily:"'Plus Jakarta Sans',sans-serif",color:C.txt}}>
     <div style={{background:"rgba(255,255,255,0.02)",borderBottom:`1px solid ${C.brd}`,padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:100,backdropFilter:"blur(10px)"}}>
       <div style={{display:"flex",alignItems:"center",gap:9,cursor:mod?"pointer":"default"}} onClick={()=>setMod(null)}>
         <div style={{width:32,height:32,borderRadius:9,background:"linear-gradient(135deg,#6366F1,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>📊</div>
-        <div style={{fontWeight:800,fontSize:15,letterSpacing:"-0.3px"}}>{t.appTitle}</div>
+        <div style={{fontWeight:800,fontSize:15}}>{t.appTitle}</div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:6}}>
-        {mod&&<button onClick={()=>setMod(null)} style={{background:"rgba(255,255,255,0.08)",border:"none",borderRadius:20,color:C.txt,fontSize:12,fontWeight:600,padding:"7px 14px",cursor:"pointer"}}>{t.back}</button>}
-        {["sr","en"].map(l=><button key={l} onClick={()=>setLang(l)} style={{padding:"6px 12px",borderRadius:20,fontSize:12,fontWeight:700,cursor:"pointer",border:"none",background:lang===l?"rgba(99,102,241,0.3)":"rgba(255,255,255,0.07)",color:lang===l?C.acl:C.mut}}>{l.toUpperCase()}</button>)}
+        {mod&&<button onClick={()=>setMod(null)} style={{background:"rgba(255,255,255,0.08)",border:"none",borderRadius:20,color:"#fff",fontSize:12,fontWeight:600,padding:"7px 14px",cursor:"pointer"}}>{t.back}</button>}
+        {["sr","en"].map(l=><button key={l} onClick={()=>setLang(l)} style={{padding:"6px 12px",borderRadius:20,fontSize:12,fontWeight:700,cursor:"pointer",border:"none",background:lang===l?"rgba(99,102,241,0.3)":"rgba(255,255,255,0.07)",color:lang===l?"#A5B4FC":"rgba(255,255,255,0.4)"}}>{l.toUpperCase()}</button>)}
+      </div>
+    </div>
+    <div style={{maxWidth:580,margin:"0 auto",padding:"0 0 40px"}}>
+      {!mod&&<>
+        <div style={{padding:"28px 16px 20px",background:"linear-gradient(180deg,rgba(99,102,241,0.08) 0%,transparent 100%)"}}>
+          <div style={{fontSize:11,fontWeight:700,letterSpacing:"2px",textTransform:"uppercase",color:"#A5B4FC",marginBottom:8}}>META ADS TOOLKIT</div>
+          <h1 style={{fontSize:26,fontWeight:900,margin:"0 0 6px",letterSpacing:"-0.5px",lineHeight:1.2}}>{t.sel}</h1>
+          <p style={{color:"rgba(255,255,255,0.4)",fontSize:13,margin:0}}>{t.selSub}</p>
+        </div>
+        <div style={{padding:"0 12px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+          {MODS.map((m,i)=><ModCard key={m.id} m={m} i={i} large={false}/>)}
+        </div>
+        <div style={{padding:"24px 16px 0",textAlign:"center"}}><div style={{color:"rgba(255,255,255,0.2)",fontSize:11}}>Meta Ads Toolkit · v1.0 · by aleksandarpopup</div></div>
+      </>}
+      {mod&&Comp&&<div style={{padding:"20px 16px"}}><Comp t={t} lang={lang}/></div>}
+    </div>
+  </div>;
+
+  // ── DESKTOP ────────────────────────────────────────────────────────────────
+  return <div style={{minHeight:"100vh",background:C.bg,fontFamily:"'Plus Jakarta Sans',sans-serif",color:C.txt,display:"flex",flexDirection:"column"}}>
+
+    {/* TOP NAV */}
+    <div style={{background:"rgba(255,255,255,0.02)",borderBottom:`1px solid ${C.brd}`,padding:"0 32px",display:"flex",justifyContent:"space-between",alignItems:"center",height:64,position:"sticky",top:0,zIndex:100,backdropFilter:"blur(10px)",flexShrink:0}}>
+      <div style={{display:"flex",alignItems:"center",gap:12,cursor:"pointer"}} onClick={()=>setMod(null)}>
+        <div style={{width:38,height:38,borderRadius:10,background:"linear-gradient(135deg,#6366F1,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:19}}>📊</div>
+        <div>
+          <div style={{fontWeight:800,fontSize:17,letterSpacing:"-0.3px"}}>{t.appTitle}</div>
+          <div style={{color:"rgba(255,255,255,0.35)",fontSize:11}}>{t.appSub}</div>
+        </div>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:20}}>
+        {mod&&<div style={{color:"rgba(255,255,255,0.4)",fontSize:13}}>
+          <span style={{cursor:"pointer",color:"#A5B4FC"}} onClick={()=>setMod(null)}>{t.sel}</span>
+          <span style={{margin:"0 8px",color:"rgba(255,255,255,0.2)"}}>›</span>
+          <span style={{color:"#fff",fontWeight:600}}>{t[MODS.find(m=>m.id===mod)?.tk]}</span>
+        </div>}
+        <div style={{display:"flex",gap:6}}>
+          {["sr","en"].map(l=><button key={l} onClick={()=>setLang(l)} style={{padding:"7px 16px",borderRadius:20,fontSize:13,fontWeight:700,cursor:"pointer",border:"none",background:lang===l?"rgba(99,102,241,0.3)":"rgba(255,255,255,0.07)",color:lang===l?"#A5B4FC":"rgba(255,255,255,0.4)"}}>{l.toUpperCase()}</button>)}
+        </div>
       </div>
     </div>
 
-    <div style={{maxWidth:580,margin:"0 auto",padding:"0 0 40px",boxSizing:"border-box"}}>
-      {!mod&&<>
-        {/* HERO */}
-        <div style={{padding:"28px 16px 20px",background:"linear-gradient(180deg,rgba(99,102,241,0.08) 0%,transparent 100%)"}}>
-          <div style={{fontSize:11,fontWeight:700,letterSpacing:"2px",textTransform:"uppercase",color:C.acl,marginBottom:8}}>META ADS TOOLKIT</div>
-          <h1 style={{fontSize:26,fontWeight:900,margin:"0 0 6px",letterSpacing:"-0.5px",lineHeight:1.2}}>{t.sel}</h1>
-          <p style={{color:C.mut,fontSize:13,margin:0}}>{t.selSub}</p>
-        </div>
+    <div style={{display:"flex",flex:1}}>
 
-        {/* MODULE GRID – 2 kolone */}
-        <div style={{padding:"0 12px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+      {/* SIDEBAR */}
+      <div style={{width:270,background:"rgba(255,255,255,0.015)",borderRight:`1px solid ${C.brd}`,padding:"28px 14px",flexShrink:0,position:"sticky",top:64,height:"calc(100vh - 64px)",overflowY:"auto",display:"flex",flexDirection:"column"}}>
+        <div style={{fontSize:10,fontWeight:700,letterSpacing:"1.5px",textTransform:"uppercase",color:"rgba(255,255,255,0.2)",marginBottom:10,paddingLeft:10}}>Alati</div>
+        <div style={{flex:1}}>
           {MODS.map((m,i)=>(
             <button key={m.id} onClick={()=>setMod(m.id)} style={{
-              background:`linear-gradient(145deg,${MOD_COLORS[i]}22,${MOD_COLORS[i]}08 60%,#0d0d1a)`,
-              border:`1px solid ${MOD_COLORS[i]}45`,
-              borderTop:`1px solid ${MOD_COLORS[i]}70`,
-              borderRadius:18,padding:"18px 15px",textAlign:"left",
-              cursor:"pointer",display:"block",transition:"all 0.2s",
-              WebkitTapHighlightColor:"transparent",
-              boxShadow:`0 4px 24px ${MOD_COLORS[i]}25, 0 1px 0 rgba(255,255,255,0.06) inset`,
+              width:"100%",padding:"10px 12px",borderRadius:10,textAlign:"left",cursor:"pointer",
+              border:"none",marginBottom:3,display:"flex",alignItems:"center",gap:10,transition:"all 0.15s",
+              background:mod===m.id?`${MOD_COLORS[i]}18`:"transparent",
             }}
-            onMouseEnter={e=>{
-              e.currentTarget.style.transform="translateY(-2px)";
-              e.currentTarget.style.boxShadow=`0 8px 32px ${MOD_COLORS[i]}40, 0 1px 0 rgba(255,255,255,0.08) inset`;
-            }}
-            onMouseLeave={e=>{
-              e.currentTarget.style.transform="translateY(0)";
-              e.currentTarget.style.boxShadow=`0 4px 24px ${MOD_COLORS[i]}25, 0 1px 0 rgba(255,255,255,0.06) inset`;
-            }}
-            >
-              <div style={{
-                width:40,height:40,borderRadius:12,
-                background:`linear-gradient(135deg,${MOD_COLORS[i]}40,${MOD_COLORS[i]}20)`,
-                display:"flex",alignItems:"center",justifyContent:"center",
-                fontSize:20,marginBottom:12,
-              }}>{m.icon}</div>
-              <div style={{color:C.txt,fontWeight:700,fontSize:13,marginBottom:4,lineHeight:1.3}}>{t[m.tk]}</div>
-              <div style={{color:C.mut,fontSize:11,lineHeight:1.4}}>{t[m.sk]}</div>
-              <div style={{marginTop:12,color:MOD_COLORS[i],fontSize:11,fontWeight:700}}>Otvori →</div>
+            onMouseEnter={e=>{if(mod!==m.id)e.currentTarget.style.background="rgba(255,255,255,0.05)";}}
+            onMouseLeave={e=>{if(mod!==m.id)e.currentTarget.style.background="transparent";}}>
+              <div style={{width:34,height:34,borderRadius:9,background:`linear-gradient(135deg,${MOD_COLORS[i]}40,${MOD_COLORS[i]}20)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>{m.icon}</div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{color:mod===m.id?"#fff":"rgba(255,255,255,0.65)",fontWeight:mod===m.id?700:500,fontSize:13,lineHeight:1.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t[m.tk]}</div>
+                <div style={{color:"rgba(255,255,255,0.25)",fontSize:11,marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t[m.sk]}</div>
+              </div>
+              {mod===m.id&&<div style={{width:3,height:20,borderRadius:2,background:MOD_COLORS[i],flexShrink:0}}/>}
             </button>
           ))}
         </div>
-
-        {/* FOOTER */}
-        <div style={{padding:"24px 16px 0",textAlign:"center"}}>
-          <div style={{color:C.dim,fontSize:11}}>Meta Ads Toolkit · v1.0 · by aleksandarpopup</div>
+        <div style={{paddingTop:20,borderTop:`1px solid ${C.brd}`,textAlign:"center"}}>
+          <div style={{color:"rgba(255,255,255,0.2)",fontSize:11}}>Meta Ads Toolkit · v1.0</div>
+          <div style={{color:"rgba(255,255,255,0.15)",fontSize:10,marginTop:3}}>by aleksandarpopup</div>
         </div>
-      </>}
+      </div>
 
-      {/* MODULE VIEW */}
-      {mod&&Comp&&<div style={{padding:"20px 16px"}}><Comp t={t} lang={lang}/></div>}
+      {/* MAIN */}
+      <div style={{flex:1,overflowY:"auto",minWidth:0}}>
+        {!mod&&<div style={{padding:"40px 48px",maxWidth:1100}}>
+          <div style={{marginBottom:40}}>
+            <div style={{fontSize:11,fontWeight:700,letterSpacing:"2px",textTransform:"uppercase",color:"#A5B4FC",marginBottom:12}}>META ADS TOOLKIT</div>
+            <h1 style={{fontSize:42,fontWeight:900,margin:"0 0 10px",letterSpacing:"-1.5px",lineHeight:1.05}}>{t.sel}</h1>
+            <p style={{color:"rgba(255,255,255,0.4)",fontSize:16,margin:0}}>{t.selSub}</p>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:18,marginBottom:18}}>
+            {MODS.slice(0,4).map((m,i)=><ModCard key={m.id} m={m} i={i} large={true}/>)}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:18}}>
+            {MODS.slice(4).map((m,i)=><ModCard key={m.id} m={m} i={i+4} large={true}/>)}
+          </div>
+        </div>}
+        {mod&&Comp&&<div style={{padding:"40px 48px",maxWidth:860}}><Comp t={t} lang={lang}/></div>}
+      </div>
     </div>
   </div>;
 }
