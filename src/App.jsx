@@ -1702,8 +1702,171 @@ For "better": true means Period B is better for that metric, false means worse. 
   </div>;
 }
 
+// ── BOOKMARKLET CODE ─────────────────────────────────────────────────────────
+const BOOKMARKLET_CODE=`javascript:(function(){var url=window.location.href;var title=document.title;var dateRange='';var dateEls=document.querySelectorAll('[class*="date"],[class*="Date"],[class*="period"],[class*="range"]');for(var i=0;i<dateEls.length;i++){var txt=dateEls[i].innerText;if(txt&&txt.match(/\\d{1,2}[\\.\\-\\/]\\d{1,2}|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec/i)&&txt.length<80){dateRange=txt.trim();break;}}var allData=[];var tables=document.querySelectorAll('table');tables.forEach(function(table){var headers=[];table.querySelectorAll('thead th,tr:first-child th').forEach(function(c){headers.push(c.innerText.trim());});var rows=[];table.querySelectorAll('tbody tr').forEach(function(row){var cells=row.querySelectorAll('td');if(cells.length>0){var rd={};cells.forEach(function(cell,idx){rd[headers[idx]||'col'+idx]=cell.innerText.trim();});if(Object.values(rd).some(function(v){return v&&v.length>0;})){rows.push(rd);}}});if(rows.length>0&&headers.length>0)allData.push({headers:headers,rows:rows});});if(allData.length===0){var gh=[];document.querySelectorAll('[role="columnheader"]').forEach(function(c){gh.push(c.innerText.trim());});var gr=[];document.querySelectorAll('[role="row"]').forEach(function(row){var cells=row.querySelectorAll('[role="cell"]');if(cells.length>0){var rd={};cells.forEach(function(cell,idx){rd[gh[idx]||'col'+idx]=cell.innerText.trim();});if(Object.values(rd).some(function(v){return v&&v.length>0;}))gr.push(rd);}});if(gr.length>0)allData.push({headers:gh,rows:gr});}var payload={source:url,title:title,dateRange:dateRange,tables:allData,timestamp:new Date().toISOString()};var encoded=encodeURIComponent(JSON.stringify(payload));var appUrl='https://meta-ads-toolkit-a71e.vercel.app';var fb=document.createElement('div');fb.style.cssText='position:fixed;top:20px;right:20px;z-index:99999;background:linear-gradient(135deg,#6366F1,#8B5CF6);color:white;padding:14px 20px;border-radius:12px;font-family:sans-serif;font-size:14px;font-weight:600;box-shadow:0 8px 32px rgba(99,102,241,0.4)';fb.innerHTML='📊 Meta Ads Toolkit<br><span style="font-weight:400;font-size:12px">Prikupljam podatke...</span>';document.body.appendChild(fb);if(encoded.length<7000){window.open(appUrl+'?bmdata='+encoded+'&mod=9','_blank');}else{try{sessionStorage.setItem('mat_import',JSON.stringify(payload));}catch(e){}window.open(appUrl+'?source=bookmarklet&mod=9','_blank');}setTimeout(function(){fb.remove();},2500);})();`;
+
+// ── MODULE 9: BOOKMARK CONNECTOR ─────────────────────────────────────────────
+function BookmarkMod({t,lang}){
+  const sr=lang==="sr";
+  const [importedData,setImportedData]=useState(()=>{
+    try{
+      const params=new URLSearchParams(window.location.search);
+      const bmdata=params.get("bmdata");
+      if(bmdata){
+        const parsed=JSON.parse(decodeURIComponent(bmdata));
+        setTimeout(()=>window.history.replaceState({},"",window.location.pathname+"?mod=9"),100);
+        localStorage.setItem("mat_last_import",JSON.stringify(parsed));
+        return parsed;
+      }
+      const stored=sessionStorage.getItem("mat_import");
+      if(stored){ sessionStorage.removeItem("mat_import"); const p=JSON.parse(stored); localStorage.setItem("mat_last_import",JSON.stringify(p)); return p; }
+      const saved=localStorage.getItem("mat_last_import");
+      if(saved) return JSON.parse(saved);
+    }catch(e){}
+    return null;
+  });
+  const [analysis,setAnalysis]=useState("");
+  const [loading,setLoading]=useState(false);
+
+  const analyze=async()=>{
+    if(!importedData) return;
+    setLoading(true); setAnalysis("");
+    try{
+      const tablesSummary=importedData.tables.slice(0,3).map((tbl,i)=>{
+        return `Tabela ${i+1} (${tbl.rows.length} redova):\nKolone: ${tbl.headers.join(", ")}\nPodaci (prvih 15 redova):\n${tbl.rows.slice(0,15).map(r=>Object.values(r).join(" | ")).join("\n")}`;
+      }).join("\n\n");
+      const prompt=sr
+        ?`Ti si senior Meta Ads ekspert. Analiziraj ove uvezene podatke iz ${importedData.title||"marketing alata"}. Piši isključivo na srpskom jeziku, ekavski.
+
+Izvor: ${importedData.source}
+Period: ${importedData.dateRange||"Nije detektovan"}
+
+UVEZENI PODACI:
+${tablesSummary}
+
+NE koristi Markdown. Koristi samo običan tekst sa sekcijama:
+
+EXECUTIVE SUMMARY
+(Šta vidiš – o čemu se radi, koji je kontekst)
+
+KLJUČNI NALAZI
+(Najvažniji podaci – brojke, trendovi, kampanje koje se ističu)
+
+PROBLEMI I PRILIKE
+(Šta ne radi dobro, gde ima prostora za poboljšanje)
+
+PRIORITETNE PREPORUKE
+(3-5 konkretnih akcija na osnovu ovih podataka)
+
+Budi konkretan i profesionalan. Koristi stvarne brojke iz podataka.`
+        :`You are a senior Meta Ads expert. Analyze this imported data from ${importedData.title||"a marketing tool"}.
+
+Source: ${importedData.source}
+Period: ${importedData.dateRange||"Not detected"}
+
+IMPORTED DATA:
+${tablesSummary}
+
+Do NOT use Markdown. Plain text only:
+
+EXECUTIVE SUMMARY
+(What you see – context and overview)
+
+KEY FINDINGS
+(Most important data points – numbers, trends, standout campaigns)
+
+ISSUES AND OPPORTUNITIES
+(What's not working, room for improvement)
+
+PRIORITY RECOMMENDATIONS
+(3-5 concrete actions based on this data)
+
+Be specific and professional. Use actual numbers from the data.`;
+
+      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:prompt}]})});
+      const data=await res.json();
+      setAnalysis(data.content?.[0]?.text||"");
+    }catch(e){ setAnalysis(sr?"Greška pri analizi. Pokušaj ponovo.":"Error during analysis. Please try again."); }
+    setLoading(false);
+  };
+
+  const clear=()=>{ setImportedData(null); setAnalysis(""); localStorage.removeItem("mat_last_import"); };
+  const sources=["Meta Ads Manager","Looker Studio","Google Ads","GA4","Whatagraph","Excel Online"];
+
+  return <div>
+    <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>{t.bm_title}</h2>
+    <p style={{color:C.mut,fontSize:13,margin:"0 0 24px",lineHeight:1.6}}>{t.bm_sub}</p>
+
+    {/* STEP 1 */}
+    <div style={{background:"rgba(99,102,241,0.06)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:14,padding:"20px",marginBottom:16}}>
+      <div style={{color:C.acl,fontSize:11,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",marginBottom:10}}>{t.bm_step1}</div>
+      <p style={{color:C.mut,fontSize:13,margin:"0 0 16px"}}>{t.bm_dragSub}</p>
+      <div style={{display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
+        <a href={BOOKMARKLET_CODE} draggable="true" onClick={e=>e.preventDefault()} style={{display:"inline-flex",alignItems:"center",gap:8,background:"linear-gradient(135deg,#6366F1,#8B5CF6)",color:"#fff",padding:"12px 20px",borderRadius:12,fontWeight:700,fontSize:14,textDecoration:"none",boxShadow:"0 4px 20px rgba(99,102,241,0.4)",cursor:"grab",userSelect:"none",flexShrink:0}}>
+          📊 Meta Ads Toolkit
+        </a>
+        <div style={{color:C.mut,fontSize:13}}>← {t.bm_drag}</div>
+      </div>
+      <div style={{marginTop:14,background:"rgba(255,255,255,0.03)",borderRadius:10,padding:"12px 14px"}}>
+        <div style={{color:C.dim,fontSize:11,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8}}>{t.bm_works}</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:8}}>{sources.map(s=><span key={s} style={{background:"rgba(255,255,255,0.06)",border:`1px solid ${C.brd}`,borderRadius:20,color:C.mut,fontSize:11,fontWeight:600,padding:"4px 10px"}}>{s}</span>)}</div>
+      </div>
+    </div>
+
+    {/* STEP 2 */}
+    <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:14,padding:"20px",marginBottom:16}}>
+      <div style={{color:C.mut,fontSize:11,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",marginBottom:14}}>{t.bm_step2}</div>
+      {[t.bm_how1,t.bm_how2,t.bm_how3].map((step,i)=>(
+        <div key={i} style={{display:"flex",gap:12,marginBottom:i<2?12:0,alignItems:"flex-start"}}>
+          <div style={{width:24,height:24,borderRadius:"50%",background:"linear-gradient(135deg,#6366F1,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#fff",flexShrink:0}}>{i+1}</div>
+          <div style={{color:"rgba(255,255,255,0.75)",fontSize:13,lineHeight:1.5,paddingTop:2}}>{step}</div>
+        </div>
+      ))}
+    </div>
+
+    {/* STEP 3 – Data */}
+    <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:14,padding:"20px"}}>
+      <div style={{color:C.mut,fontSize:11,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",marginBottom:14}}>{t.bm_step3}</div>
+      {!importedData&&!loading&&<div style={{textAlign:"center",padding:"24px 0"}}>
+        <div style={{fontSize:36,marginBottom:10}}>📭</div>
+        <div style={{color:C.txt,fontWeight:600,fontSize:14,marginBottom:6}}>{t.bm_noData}</div>
+        <div style={{color:C.mut,fontSize:13}}>{t.bm_noDataSub}</div>
+      </div>}
+      {importedData&&!analysis&&!loading&&<>
+        <div style={{background:"rgba(52,211,153,0.08)",border:"1px solid rgba(52,211,153,0.2)",borderRadius:12,padding:"14px",marginBottom:16}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}><span style={{fontSize:18}}>✅</span><span style={{color:C.grn,fontWeight:700,fontSize:14}}>{t.bm_dataTitle}</span></div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            <div style={{color:C.mut,fontSize:12}}>{t.bm_source}: <span style={{color:C.txt,fontWeight:600}}>{importedData.title||importedData.source}</span></div>
+            {importedData.dateRange&&<div style={{color:C.mut,fontSize:12}}>{t.bm_dateRange}: <span style={{color:C.txt,fontWeight:600}}>{importedData.dateRange}</span></div>}
+            <div style={{color:C.mut,fontSize:12}}>{t.bm_date}: <span style={{color:C.txt,fontWeight:600}}>{new Date(importedData.timestamp).toLocaleString(sr?"sr-RS":"en-US")}</span></div>
+            <div style={{color:C.mut,fontSize:12}}>{t.bm_tables}: <span style={{color:C.txt,fontWeight:600}}>{importedData.tables.length} ({importedData.tables.reduce((a,tb)=>a+tb.rows.length,0)} {t.bm_rows})</span></div>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:10}}>
+          <Btn onClick={analyze}>{t.bm_analyze}</Btn>
+          <button onClick={clear} style={{background:"none",border:`1px solid ${C.brd}`,borderRadius:11,color:C.mut,fontSize:13,fontWeight:600,padding:"13px 16px",cursor:"pointer"}}>{t.bm_clear}</button>
+        </div>
+      </>}
+      {loading&&<div style={{textAlign:"center",padding:"24px 0"}}>
+        <div style={{fontSize:32,marginBottom:12}}>✦</div>
+        <div style={{color:C.acl,fontWeight:700,fontSize:15,marginBottom:16}}>{t.bm_analyzing}</div>
+        {[1,2,3,4].map(i=><div key={i} style={{height:12,background:"rgba(255,255,255,0.06)",borderRadius:6,width:i===4?"50%":"100%",marginBottom:8}}/>)}
+      </div>}
+      {analysis&&!loading&&<>
+        <div style={{background:"rgba(99,102,241,0.06)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:12,padding:"16px",marginBottom:16}}>
+          <div style={{color:C.acl,fontSize:11,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",marginBottom:10}}>Analiza · {importedData?.title||importedData?.source}</div>
+          <MD2 text={analysis}/>
+        </div>
+        <div style={{display:"flex",gap:10}}>
+          <Btn onClick={()=>setAnalysis("")} sec>{sr?"← Nazad na podatke":"← Back to data"}</Btn>
+          <Btn onClick={clear} sec>{t.bm_clear}</Btn>
+        </div>
+      </>}
+    </div>
+  </div>;
+}
+
 // ── APP ──────────────────────────────────────────────────────────────────────
-const MODS=[
   {id:1,icon:"📊",col:"#6366F1",tk:"m1t",sk:"m1s"},
   {id:8,icon:"📄",col:"#F97316",tk:"m8t",sk:"m8s"},
   {id:9,icon:"🔗",col:"#00D4FF",tk:"m9t",sk:"m9s"},
@@ -1723,11 +1886,18 @@ function useWindowSize(){
 }
 
 export default function App(){
-  const [lang,setLang]=useState("sr");
-  const [mod,setMod]=useState(null);
+  const [lang,setLang]=useState(()=>localStorage.getItem("mat_lang")||"sr");
+  const [mod,setMod]=useState(()=>{
+    const params=new URLSearchParams(window.location.search);
+    const m=params.get("mod");
+    return m?parseInt(m):null;
+  });
   const t=T[lang];
   const w=useWindowSize();
   const isDesktop=w>=1024;
+
+  const MOD_COLORS=["#6366F1","#F97316","#00D4FF","#10B981","#06B6D4","#F59E0B","#EC4899","#8B5CF6","#34D399"];
+  const Comp=mod===1?HealthMod:mod===8?ReportMod:mod===9?BookmarkMod:mod===2?BudgetMod:mod===7?ScalingMod:mod===3?CopyMod:mod===4?AudMod:mod===5?RoasMod:mod===6?CheckMod:null;
 
   const ModCard=({m,i,large})=>(
     <button onClick={()=>setMod(m.id)} style={{
@@ -1746,16 +1916,6 @@ export default function App(){
       <div style={{color:MOD_COLORS[i],fontSize:12,fontWeight:700}}>Otvori →</div>
     </button>
   );
-
-  const Comp=mod===1?HealthMod:mod===8?ReportMod:mod===9?BookmarkMod:mod===2?BudgetMod:mod===7?ScalingMod:mod===3?CopyMod:mod===4?AudMod:mod===5?RoasMod:mod===6?CheckMod:null;
-  const MOD_COLORS=["#6366F1","#F97316","#00D4FF","#10B981","#06B6D4","#F59E0B","#EC4899","#8B5CF6","#34D399"];
-
-  // Handle mod from URL
-  useState(()=>{
-    const params=new URLSearchParams(window.location.search);
-    const modParam=params.get("mod");
-    if(modParam) setMod(parseInt(modParam));
-  });
 
   // ── MOBILE ─────────────────────────────────────────────────────────────────
   if(!isDesktop) return <div style={{minHeight:"100vh",background:C.bg,fontFamily:"'Plus Jakarta Sans',sans-serif",color:C.txt}}>
