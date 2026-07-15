@@ -1703,44 +1703,50 @@ For "better": true means Period B is better for that metric, false means worse. 
 }
 
 // ── BOOKMARKLET CODE ─────────────────────────────────────────────────────────
-const BOOKMARKLET_CODE="javascript:(function(){var url=window.location.href;var title=document.title;var dateRange='';"+
-"var dMatch=url.match(/date%3D([^%&]+)/);if(dMatch){dateRange=decodeURIComponent(dMatch[1]).replace(/_/g,' ').replace('%2C',' / ');}"+
-"if(!dateRange){var dEls=document.querySelectorAll('[class*=\"date\"],[class*=\"Date\"],[class*=\"DatePicker\"],[class*=\"dateRange\"],[aria-label*=\"date\"],[aria-label*=\"Date\"]');"+
-"for(var i=0;i<dEls.length;i++){var txt=dEls[i].innerText||dEls[i].getAttribute('aria-label')||'';"+
-"if(txt&&txt.match(/\\d{4}|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec/i)&&txt.length<100){dateRange=txt.trim();break;}}}"+
+const BOOKMARKLET_CODE="javascript:(function(){"+
+"function scrape(){"+
+"var url=window.location.href;var title=document.title;var dateRange='';"+
+"var dMatch=url.match(/date%3D([^%&]+)/);"+
+"if(dMatch){dateRange=decodeURIComponent(dMatch[1]).replace(/_/g,' ').replace(/%2C/g,' / ');}"+
 "var allData=[];var headers=[];var rows=[];"+
 "var headerEls=document.querySelectorAll('[role=\"columnheader\"]');"+
-"headerEls.forEach(function(h){var txt=h.innerText.trim();if(txt&&txt.length>0&&txt.length<50)headers.push(txt);});"+
+"headerEls.forEach(function(h){var txt=h.innerText.trim();if(txt&&txt.length>0&&txt.length<80)headers.push(txt);});"+
 "if(headers.length>0){"+
-"var rowEls=document.querySelectorAll('[role=\"row\"]');"+
-"rowEls.forEach(function(row){"+
-"var isHeader=row.querySelector('[role=\"columnheader\"]');if(isHeader)return;"+
+"document.querySelectorAll('[role=\"row\"]').forEach(function(row){"+
+"if(row.querySelector('[role=\"columnheader\"]'))return;"+
 "var cells=row.querySelectorAll('[role=\"cell\"]');"+
-"if(cells.length>0){var rd={};var hasData=false;"+
-"cells.forEach(function(cell,idx){"+
-"var txt=cell.innerText.trim().replace(/\\n/g,' ');"+
-"if(txt&&txt.length>0&&txt.length<200){rd[headers[idx]||'col'+idx]=txt;hasData=true;}"+
-"else{rd[headers[idx]||'col'+idx]=''}});"+
+"if(cells.length>1){var rd={};var hasData=false;"+
+"cells.forEach(function(cell,idx){var txt=cell.innerText.trim().replace(/\\n+/g,' ');"+
+"rd[headers[idx]||'col'+idx]=txt;if(txt)hasData=true;});"+
 "if(hasData)rows.push(rd);}});"+
 "if(rows.length>0)allData.push({headers:headers,rows:rows});}"+
 "if(allData.length===0){"+
-"var tbls=document.querySelectorAll('table');"+
-"tbls.forEach(function(tbl){var th=[];var tr=[];"+
-"tbl.querySelectorAll('th').forEach(function(c){th.push(c.innerText.trim());});"+
-"tbl.querySelectorAll('tbody tr').forEach(function(row){var cells=row.querySelectorAll('td');"+
+"document.querySelectorAll('table').forEach(function(tbl){"+
+"var th=[];var tr=[];"+
+"tbl.querySelectorAll('th,[role=\"columnheader\"]').forEach(function(c){th.push(c.innerText.trim());});"+
+"tbl.querySelectorAll('tbody tr,[role=\"row\"]').forEach(function(row){"+
+"var cells=row.querySelectorAll('td,[role=\"cell\"]');"+
 "if(cells.length>0){var rd={};cells.forEach(function(c,i){rd[th[i]||'col'+i]=c.innerText.trim();});"+
 "if(Object.values(rd).some(function(v){return v;}))tr.push(rd);}});"+
 "if(tr.length>0)allData.push({headers:th,rows:tr});});}"+
-"var payload={source:url,title:title,dateRange:dateRange,tables:allData,timestamp:new Date().toISOString()};"+
-"var encoded=encodeURIComponent(JSON.stringify(payload));"+
-"var appUrl='https://meta-ads-toolkit-a71e.vercel.app';"+
+"return{url:url,title:title,dateRange:dateRange,tables:allData};}"+
 "var fb=document.createElement('div');"+
 "fb.style.cssText='position:fixed;top:20px;right:20px;z-index:99999;background:linear-gradient(135deg,#6366F1,#8B5CF6);color:white;padding:14px 20px;border-radius:12px;font-family:sans-serif;font-size:14px;font-weight:600;box-shadow:0 8px 32px rgba(99,102,241,0.4)';"+
-"fb.textContent='Meta Ads Toolkit - Prikupljam podatke ('+(allData.length>0?allData[0].rows.length+' redova':'0 redova')+')...';"+
-"document.body.appendChild(fb);"+
+"fb.textContent='Meta Ads Toolkit - Čekam podatke (3s)...';document.body.appendChild(fb);"+
+"window.scrollTo(0,document.body.scrollHeight);"+
+"setTimeout(function(){window.scrollTo(0,0);},500);"+
+"setTimeout(function(){"+
+"var result=scrape();"+
+"var rowCount=result.tables.length>0?result.tables[0].rows.length:0;"+
+"fb.textContent='Meta Ads Toolkit - Pokupio '+rowCount+' redova!';"+
+"var payload={source:result.url,title:result.title,dateRange:result.dateRange,tables:result.tables,timestamp:new Date().toISOString()};"+
+"var encoded=encodeURIComponent(JSON.stringify(payload));"+
+"var appUrl='https://meta-ads-toolkit-a71e.vercel.app';"+
+"setTimeout(function(){"+
 "if(encoded.length<7000){window.open(appUrl+'?bmdata='+encoded+'&mod=9','_blank');}"+
 "else{try{sessionStorage.setItem('mat_import',JSON.stringify(payload));}catch(e){}window.open(appUrl+'?source=bookmarklet&mod=9','_blank');}"+
-"setTimeout(function(){fb.remove();},3000);})();";
+"fb.remove();},1000);"+
+"},3000);})();";
 
 // ── MODULE 9: BOOKMARK CONNECTOR ─────────────────────────────────────────────
 function BookmarkMod({t,lang}){
