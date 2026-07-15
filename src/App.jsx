@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 // ── COLORS ──────────────────────────────────────────────────────────────────
 const C = {
@@ -20,7 +20,7 @@ function gStatus(k,v){ const b=BM[k]; if(!b||v===""||isNaN(v)) return null; cons
 function gOverall(ss){ const vs=Object.values(ss).filter(Boolean); if(!vs.length) return null; const sc={poor:0,ok:1,good:2}; const avg=vs.reduce((a,s)=>a+sc[s],0)/vs.length; return avg<0.6?"poor":avg<1.4?"ok":"good"; }
 
 // ── RESPONSIVE HOOK ──────────────────────────────────────────────────────────
-function useIsMobile(){ const [m,setM]=useState(window.innerWidth<520); useState(()=>{ const h=()=>setM(window.innerWidth<520); window.addEventListener("resize",h); return()=>window.removeEventListener("resize",h); }); return m; }
+function useIsMobile(){ const [m,setM]=useState(window.innerWidth<520); useEffect(()=>{ const h=()=>setM(window.innerWidth<520); window.addEventListener("resize",h); return()=>window.removeEventListener("resize",h); },[]); return m; }
 
 // ── UI ATOMS ────────────────────────────────────────────────────────────────
 const Lbl=({c})=><div style={{color:C.mut,fontSize:11,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8}}>{c}</div>;
@@ -1881,7 +1881,7 @@ Be specific and professional. Use actual numbers from the data.`;
 // ── RESPONSIVE HOOK ──────────────────────────────────────────────────────────
 function useWindowSize(){
   const [w,setW]=useState(window.innerWidth);
-  useState(()=>{const h=()=>setW(window.innerWidth);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h);});
+  useEffect(()=>{const h=()=>setW(window.innerWidth);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h);},[]);
   return w;
 }
 
