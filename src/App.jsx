@@ -2280,11 +2280,11 @@ function TimeMachineMod({t,lang}){
 
       // Build prompt
       const summaryA=analysesA.map((a,i)=>
-        `Analiza ${i+1} (${a.period_from||"?"} → ${a.period_to||"?"}): ${a.analysis_text.substring(0,500)}`
+        `Analiza ${i+1} (${a.period_from||"?"} → ${a.period_to||"?"}): ${a.analysis_text.substring(0,2000)}`
       ).join("\n\n---\n\n");
 
       const summaryB=analysesB.map((a,i)=>
-        `Analiza ${i+1} (${a.period_from||"?"} → ${a.period_to||"?"}): ${a.analysis_text.substring(0,500)}`
+        `Analiza ${i+1} (${a.period_from||"?"} → ${a.period_to||"?"}): ${a.analysis_text.substring(0,2000)}`
       ).join("\n\n---\n\n");
 
       if(analysesA.length===0){
