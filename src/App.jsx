@@ -2196,6 +2196,22 @@ function MyClientsMod({t,lang,goMod}){
     return map[tool]||tool;
   };
 
+  const deleteAnalysis=async(id)=>{
+    if(!window.confirm(sr?"Obriši ovu analizu?":"Delete this analysis?")) return;
+    try{
+      await fetch(`/api/analyses?id=${id}`,{method:"DELETE"});
+      setAnalyses(prev=>prev.filter(a=>a.id!==id));
+    }catch(e){}
+  };
+
+  const deleteClient=async(id)=>{
+    if(!window.confirm(sr?"Obriši klijenta i sve njegove analize?":"Delete client and all their analyses?")) return;
+    try{
+      await fetch(`/api/clients?id=${id}`,{method:"DELETE"});
+      setClients(prev=>prev.filter(c=>c.id!==id));
+    }catch(e){}
+  };
+
   if(selected) return <div>
     <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
       <button onClick={()=>{setSelected(null);setAnalyses([]);}} style={{background:"none",border:"none",color:C.acl,cursor:"pointer",fontSize:13,fontWeight:600,padding:0}}>← {sr?"Svi klijenti":"All clients"}</button>
@@ -2213,15 +2229,20 @@ function MyClientsMod({t,lang,goMod}){
     </div>}
 
     {analyses.map((a,i)=><div key={a.id} style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,marginBottom:10,overflow:"hidden"}}>
-      <div onClick={()=>setExpanded(expanded===i?null:i)} style={{padding:"14px 16px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <div>
+      <div style={{padding:"14px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div onClick={()=>setExpanded(expanded===i?null:i)} style={{cursor:"pointer",flex:1}}>
           <div style={{color:C.txt,fontWeight:700,fontSize:13}}>{toolLabel(a.tool)}</div>
           <div style={{color:C.mut,fontSize:11,marginTop:3}}>
             {a.period_from&&a.period_to?`${a.period_from} → ${a.period_to}`:a.period_from||""}
             {" · "}{new Date(a.created_at).toLocaleDateString(sr?"sr-RS":"en-US")}
           </div>
         </div>
-        <span style={{color:C.mut,fontSize:12}}>{expanded===i?"▲":"▼"}</span>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <button onClick={()=>deleteAnalysis(a.id)} style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.2)",borderRadius:8,color:C.red,fontSize:11,fontWeight:600,padding:"4px 10px",cursor:"pointer"}}>
+            {sr?"Obriši":"Delete"}
+          </button>
+          <span onClick={()=>setExpanded(expanded===i?null:i)} style={{color:C.mut,fontSize:12,cursor:"pointer"}}>{expanded===i?"▲":"▼"}</span>
+        </div>
       </div>
       {expanded===i&&<div style={{padding:"0 16px 16px",borderTop:`1px solid ${C.brd}`}}>
         <div style={{color:"rgba(255,255,255,0.75)",fontSize:12,lineHeight:1.8,whiteSpace:"pre-wrap",paddingTop:12}}>{a.analysis_text}</div>
@@ -2248,17 +2269,20 @@ function MyClientsMod({t,lang,goMod}){
     </div>}
 
     {!loading&&clients.length>0&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
-      {clients.map(c=><button key={c.id} onClick={()=>loadAnalyses(c)} style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"16px",textAlign:"left",cursor:"pointer",transition:"all 0.15s",WebkitTapHighlightColor:"transparent"}}
-        onMouseEnter={e=>e.currentTarget.style.borderColor="rgba(99,102,241,0.4)"}
-        onMouseLeave={e=>e.currentTarget.style.borderColor=C.brd}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div>
-            <div style={{color:C.txt,fontWeight:700,fontSize:15,marginBottom:4}}>👤 {c.name}</div>
-            <div style={{color:C.mut,fontSize:12}}>{sr?"Klijent od":"Client since"}: {new Date(c.created_at).toLocaleDateString(sr?"sr-RS":"en-US")}</div>
-          </div>
-          <div style={{color:C.acl,fontSize:13,fontWeight:600}}>Otvori →</div>
+      {clients.map(c=><div key={c.id} style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"16px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div onClick={()=>loadAnalyses(c)} style={{cursor:"pointer",flex:1}}
+          onMouseEnter={e=>e.currentTarget.parentElement.style.borderColor="rgba(99,102,241,0.4)"}
+          onMouseLeave={e=>e.currentTarget.parentElement.style.borderColor=C.brd}>
+          <div style={{color:C.txt,fontWeight:700,fontSize:15,marginBottom:4}}>👤 {c.name}</div>
+          <div style={{color:C.mut,fontSize:12}}>{sr?"Klijent od":"Client since"}: {new Date(c.created_at).toLocaleDateString(sr?"sr-RS":"en-US")}</div>
         </div>
-      </button>)}
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div onClick={()=>loadAnalyses(c)} style={{color:C.acl,fontSize:13,fontWeight:600,cursor:"pointer"}}>Otvori →</div>
+          <button onClick={()=>deleteClient(c.id)} style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.2)",borderRadius:8,color:C.red,fontSize:11,fontWeight:600,padding:"4px 10px",cursor:"pointer"}}>
+            {sr?"Obriši":"Delete"}
+          </button>
+        </div>
+      </div>)}
     </div>}
   </div>;
 }
