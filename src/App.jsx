@@ -1555,11 +1555,19 @@ For "better": true means Period B is better, false means worse. Return ONLY JSON
       // Auto-save if client name provided
       if(client&&parsed.execSummary){
         const analysisText=`${parsed.execSummary}\n\n${(parsed.issues||[]).join("\n")}\n\n${(parsed.actions||[]).join("\n")}`;
+        let periodFrom=null, periodTo=null;
+        if(type==="compare"){
+          periodFrom=periodA||null;
+          periodTo=periodB||null;
+        } else {
+          periodFrom=period||null;
+          periodTo=periodB||null;
+        }
         saveAnalysis({
           clientName:client,
           tool:type==="compare"?"report_compare":"report_single",
-          periodFrom:periodA||period||null,
-          periodTo:periodB||null,
+          periodFrom,
+          periodTo,
           analysisText,
           metrics:parsed.metrics?Object.fromEntries(parsed.metrics.map(m=>[m.name,m.value])):null
         });
@@ -1770,10 +1778,18 @@ For "better": true means Period B is better, false means worse. Return ONLY JSON
     <Lbl c={t.rg_client}/>
     <div style={{marginBottom:14}}><TIn v={client} ch={setClient} ph={t.rg_clientPh}/></div>
 
-    {type==="single"&&<><Lbl c={t.rg_period}/><div style={{marginBottom:16}}><TIn v={period} ch={setPeriod} ph={t.rg_periodPh}/></div></>}
+    {type==="single"&&<div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
+      <div><Lbl c={sr?"Period od":"Period from"}/><DIn v={period} ch={setPeriod}/></div>
+      <div><Lbl c={sr?"Period do":"Period to"}/><DIn v={periodB} ch={setPeriodB}/></div>
+    </div>}
     {type==="compare"&&<div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:16}}>
-      <div><Lbl c={t.rg_periodA}/><TIn v={periodA} ch={setPeriodA} ph={t.rg_periodAPh}/></div>
-      <div><Lbl c={t.rg_periodB}/><TIn v={periodB} ch={setPeriodB} ph={t.rg_periodBPh}/></div>
+      <div style={{background:"rgba(99,102,241,0.06)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:12,padding:"14px"}}>
+        <div style={{color:C.acl,fontWeight:700,fontSize:12,marginBottom:10}}>Period A</div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          <div><Lbl c={sr?"Od":"From"}/><DIn v={periodA} ch={setPeriodA}/></div>
+          <div><Lbl c={sr?"Do":"To"}/><DIn v={periodB} ch={setPeriodB}/></div>
+        </div>
+      </div>
     </div>}
 
     {/* Input mode toggle */}
