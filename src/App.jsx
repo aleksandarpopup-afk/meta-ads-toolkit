@@ -620,9 +620,9 @@ function HealthMod({t,lang}){
     if(!screenshot) return;
     setDone(true); setAiLoading(true); setAiAnalysis("");
     try {
-      const res=await fetch("https://api.anthropic.com/v1/messages",{
+      const res=await fetch("/api/analyze",{
         method:"POST",
-        headers:{"Content-Type":"application/json","x-api-key":API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        headers:{"Content-Type":"application/json"},
         body:JSON.stringify({
           model:"claude-sonnet-4-5",
           max_tokens:2000,
@@ -952,19 +952,11 @@ function BudgetMod({t,lang}){
 }
 
 // ── AI HELPER ────────────────────────────────────────────────────────────────
-const API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY;
-
 async function callClaude(prompt, lang) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const res = await fetch("/api/analyze", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": API_KEY,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "claude-sonnet-4-5",
       max_tokens: 2000,
       messages: [{ role: "user", content: prompt }],
     }),
@@ -1539,9 +1531,9 @@ Compare these two periods and return JSON:
 }
 For "better": true means Period B is better, false means worse. Return ONLY JSON.`});
       }
-      const res=await fetch("https://api.anthropic.com/v1/messages",{
+      const res=await fetch("/api/analyze",{
         method:"POST",
-        headers:{"Content-Type":"application/json","x-api-key":API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        headers:{"Content-Type":"application/json"},
         body:JSON.stringify({model:"claude-sonnet-4-5",max_tokens:2500,messages:[{role:"user",content}]})
       });
       const data=await res.json();
@@ -1973,8 +1965,8 @@ function BookmarkMod({t,lang}){
     if(!importedData) return;
     setLoading(true); setAnalysis("");
     try{
-      const appUrl="https://api.anthropic.com/v1/messages";
-      const headers={"Content-Type":"application/json","x-api-key":API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"};
+      const appUrl="/api/analyze";
+      const headers={"Content-Type":"application/json"};
       
       let messages;
       
@@ -2386,9 +2378,9 @@ RECOMMENDATIONS FOR NEXT PERIOD
 
 Be specific, use numbers from the analyses.`;
 
-      const res=await fetch("https://api.anthropic.com/v1/messages",{
+      const res=await fetch("/api/analyze",{
         method:"POST",
-        headers:{"Content-Type":"application/json","x-api-key":API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        headers:{"Content-Type":"application/json"},
         body:JSON.stringify({model:"claude-sonnet-4-5",max_tokens:2000,messages:[{role:"user",content:prompt}]})
       });
       const data=await res.json();
