@@ -1836,6 +1836,39 @@ async function saveAnalysis({clientName,tool,periodFrom,periodTo,analysisText,me
     })});
   }catch(e){ console.log("Save analysis error:",e); }
 }
+
+// ── PUSH NOTIFICATIONS ────────────────────────────────────────────────────────
+const VAPID_PUBLIC_KEY="BNeZYihbfY4pd6cDVaD48xRthYXSfMN9CC-3-AjLLObt5RJYa6R5cqKI1OL8Fu2rZUg4B9rtryCpBAe-lxoHpJA";
+
+async function subscribeToPush(){
+  try{
+    if(!("serviceWorker" in navigator)||!("PushManager" in window)) return false;
+    const reg=await navigator.serviceWorker.ready;
+    const existing=await reg.pushManager.getSubscription();
+    if(existing) return true;
+    const sub=await reg.pushManager.subscribe({
+      userVisibleOnly:true,
+      applicationServerKey:VAPID_PUBLIC_KEY
+    });
+    const uid=await getOrCreateUser();
+    await fetch("/api/push-subscribe",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({user_id:uid,subscription:sub.toJSON()})
+    });
+    return true;
+  }catch(e){ console.log("Push subscribe error:",e); return false; }
+}
+
+async function requestNotificationPermission(){
+  if(!("Notification" in window)) return false;
+  if(Notification.permission==="granted"){ await subscribeToPush(); return true; }
+  if(Notification.permission==="denied") return false;
+  const perm=await Notification.requestPermission();
+  if(perm==="granted"){ await subscribeToPush(); return true; }
+  return false;
+}
+
 const BOOKMARKLET_CODE="javascript:(function(){"+
 "var appUrl='https://meta-ads-toolkit-a71e.vercel.app';"+
 "var apiUrl=appUrl+'/api/temp-upload';"+
@@ -2515,6 +2548,14 @@ export default function App(){
     return m?parseInt(m):null;
   });
   const [showQR,setShowQR]=useState(false);
+  const [notifStatus,setNotifStatus]=useState(()=>
+    typeof Notification!=="undefined"?Notification.permission:"default"
+  );
+
+  const handleEnableNotif=async()=>{
+    const ok=await requestNotificationPermission();
+    setNotifStatus(ok?"granted":"denied");
+  };
   const t=T[lang];
   const w=useWindowSize();
   const isDesktop=w>=1024;
@@ -2616,6 +2657,10 @@ export default function App(){
       <div style={{display:"flex",alignItems:"center",gap:6}}>
         {mod&&<button onClick={()=>goMod(null)} style={{background:"rgba(255,255,255,0.08)",border:"none",borderRadius:20,color:"#fff",fontSize:12,fontWeight:600,padding:"7px 14px",cursor:"pointer"}}>{t.back}</button>}
         <button onClick={()=>setShowQR(true)} style={{background:"rgba(99,102,241,0.2)",border:"none",borderRadius:20,color:C.acl,fontSize:12,fontWeight:600,padding:"7px 12px",cursor:"pointer"}} title="Poveži telefon">📱</button>
+        {notifStatus!=="granted"
+          ?<button onClick={handleEnableNotif} style={{background:"rgba(251,191,36,0.2)",border:"none",borderRadius:20,color:C.yel,fontSize:14,padding:"7px 10px",cursor:"pointer"}} title="Uključi notifikacije">🔔</button>
+          :<div style={{color:C.grn,fontSize:13,padding:"7px 6px"}}>🔔</div>
+        }
         {["sr","en"].map(l=><button key={l} onClick={()=>setLang(l)} style={{padding:"6px 12px",borderRadius:20,fontSize:12,fontWeight:700,cursor:"pointer",border:"none",background:lang===l?"rgba(99,102,241,0.3)":"rgba(255,255,255,0.07)",color:lang===l?"#A5B4FC":"rgba(255,255,255,0.4)"}}>{l.toUpperCase()}</button>)}
       </div>
     </div>
@@ -2661,6 +2706,10 @@ export default function App(){
           <button onClick={()=>setShowQR(true)} style={{background:"rgba(99,102,241,0.15)",border:"1px solid rgba(99,102,241,0.3)",borderRadius:10,color:C.acl,fontSize:12,fontWeight:600,padding:"7px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:6}} title="Poveži telefon">
             📱 {lang==="sr"?"Poveži telefon":"Connect Phone"}
           </button>
+          {notifStatus!=="granted"&&<button onClick={handleEnableNotif} style={{background:"rgba(251,191,36,0.15)",border:"1px solid rgba(251,191,36,0.3)",borderRadius:10,color:C.yel,fontSize:12,fontWeight:600,padding:"7px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:6}} title="Uključi notifikacije">
+            🔔 {lang==="sr"?"Notifikacije":"Notifications"}
+          </button>}
+          {notifStatus==="granted"&&<div style={{color:C.grn,fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4}}>🔔 ✓</div>}
           {["sr","en"].map(l=><button key={l} onClick={()=>setLang(l)} style={{padding:"7px 16px",borderRadius:20,fontSize:13,fontWeight:700,cursor:"pointer",border:"none",background:lang===l?"rgba(99,102,241,0.3)":"rgba(255,255,255,0.07)",color:lang===l?"#A5B4FC":"rgba(255,255,255,0.4)"}}>{l.toUpperCase()}</button>)}
         </div>
       </div>
