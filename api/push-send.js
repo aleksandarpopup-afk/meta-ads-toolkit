@@ -24,18 +24,31 @@ export default async function handler(req, res) {
       "Authorization": `Bearer ${SUPABASE_KEY}`
     };
 
-    // Get subscription
+    // Get ALL subscriptions for this user (all devices)
     const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/push_subscriptions?user_id=eq.${user_id}&select=subscription`,
+      `${SUPABASE_URL}/rest/v1/push_subscriptions?user_id=eq.${user_id}&select=id,subscription`,
       { headers }
     );
     const subs = await r.json();
     if (!subs.length) return res.status(404).json({ error: "No subscription found" });
 
     const payload = JSON.stringify({ title, body, url: url || "/" });
-    await webpush.sendNotification(subs[0].subscription, payload);
+    
+    // Send to ALL devices
+    const results = await Promise.allSettled(
+      subs.map(s => webpush.sendNotification(s.subscription, payload).catch(async err => {
+        // If subscription expired, delete it
+        if (err.statusCode === 410) {
+          await fetch(`${SUPABASE_URL}/rest/v1/push_subscriptions?id=eq.${s.id}`, {
+            method: "DELETE", headers
+          });
+        }
+        throw err;
+      }))
+    );
 
-    return res.status(200).json({ success: true });
+    const sent = results.filter(r => r.status === "fulfilled").length;
+    return res.status(200).json({ success: true, sent, total: subs.length });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
