@@ -19,17 +19,23 @@ export default async function handler(req, res) {
       "Prefer": "return=representation"
     };
 
-    // Check if subscription already exists
+    // Check if this exact endpoint already exists
+    const endpoint = subscription.endpoint || "";
+    const encodedEndpoint = encodeURIComponent(endpoint);
+    
     const check = await fetch(
-      `${SUPABASE_URL}/rest/v1/push_subscriptions?user_id=eq.${user_id}&select=id`,
+      `${SUPABASE_URL}/rest/v1/push_subscriptions?user_id=eq.${user_id}&select=id,subscription`,
       { headers }
     );
     const existing = await check.json();
-
-    if (existing.length > 0) {
+    
+    // Check if same endpoint already saved
+    const sameEndpoint = existing.find(s => s.subscription?.endpoint === endpoint);
+    
+    if (sameEndpoint) {
       // Update existing
       await fetch(
-        `${SUPABASE_URL}/rest/v1/push_subscriptions?user_id=eq.${user_id}`,
+        `${SUPABASE_URL}/rest/v1/push_subscriptions?id=eq.${sameEndpoint.id}`,
         {
           method: "PATCH",
           headers,
@@ -37,7 +43,7 @@ export default async function handler(req, res) {
         }
       );
     } else {
-      // Create new
+      // Add new subscription for this device
       await fetch(`${SUPABASE_URL}/rest/v1/push_subscriptions`, {
         method: "POST",
         headers,
