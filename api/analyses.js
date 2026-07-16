@@ -3,7 +3,7 @@ const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY;
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.status(200).end();
 
@@ -14,6 +14,12 @@ export default async function handler(req, res) {
   };
 
   try {
+    if (req.method === "DELETE") {
+      const { id } = req.query;
+      if (!id) return res.status(400).json({ error: "No id" });
+      await fetch(`${SUPABASE_URL}/rest/v1/analyses?id=eq.${id}`, { method: "DELETE", headers });
+      return res.status(200).json({ success: true });
+    }
     if (req.method === "POST") {
       const { client_id, user_id, tool, period_from, period_to, analysis_text, metrics } = req.body;
       if (!client_id || !user_id || !analysis_text) return res.status(400).json({ error: "Missing fields" });
