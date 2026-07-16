@@ -1870,31 +1870,41 @@ function urlBase64ToUint8Array(base64String){
 
 async function subscribeToPush(){
   try{
-    if(!("serviceWorker" in navigator)||!("PushManager" in window)) return false;
+    console.log("subscribeToPush called");
+    if(!("serviceWorker" in navigator)||!("PushManager" in window)){
+      console.log("No serviceWorker or PushManager support");
+      return false;
+    }
     const reg=await navigator.serviceWorker.ready;
+    console.log("ServiceWorker ready:", reg);
     const existing=await reg.pushManager.getSubscription();
+    console.log("Existing subscription:", existing);
     if(existing){
-      // Re-save existing subscription
       const uid=await getOrCreateUser();
-      await fetch("/api/push-subscribe",{
+      console.log("User ID:", uid);
+      const r=await fetch("/api/push-subscribe",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({user_id:uid,subscription:existing.toJSON()})
       });
+      const data=await r.json();
+      console.log("Push subscribe response:", data);
       return true;
     }
     const sub=await reg.pushManager.subscribe({
       userVisibleOnly:true,
       applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
     });
+    console.log("New subscription:", sub);
     const uid=await getOrCreateUser();
+    console.log("User ID:", uid);
     const r=await fetch("/api/push-subscribe",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({user_id:uid,subscription:sub.toJSON()})
     });
     const data=await r.json();
-    console.log("Push subscribe result:",data);
+    console.log("Push subscribe response:", data);
     return true;
   }catch(e){ console.log("Push subscribe error:",e); return false; }
 }
