@@ -5,7 +5,7 @@ export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).end();
 
-  const API_KEY = process.env.VITE_ANTHROPIC_API_KEY;
+  const API_KEY = process.env.ANTHROPIC_API_KEY || process.env.VITE_ANTHROPIC_API_KEY;
   if (!API_KEY) return res.status(500).json({ error: "API key not configured" });
 
   try {
@@ -20,14 +20,14 @@ export default async function handler(req, res) {
         "anthropic-version": "2023-06-01"
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-5",
+        model: "claude-sonnet-4-6",
         max_tokens,
         messages
       })
     });
 
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error?.message || "API error");
+    if (!response.ok) throw new Error(JSON.stringify(data.error));
     return res.status(200).json(data);
   } catch (err) {
     return res.status(500).json({ error: err.message });
