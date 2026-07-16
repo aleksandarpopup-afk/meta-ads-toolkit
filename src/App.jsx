@@ -624,7 +624,7 @@ function HealthMod({t,lang}){
         method:"POST",
         headers:{"Content-Type":"application/json","x-api-key":API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
         body:JSON.stringify({
-          model:"claude-sonnet-4-6",
+          model:"claude-sonnet-4-5",
           max_tokens:2000,
           messages:[{role:"user",content:[
             {type:"image",source:{type:"base64",media_type:"image/jpeg",data:screenshot}},
@@ -964,7 +964,7 @@ async function callClaude(prompt, lang) {
       "anthropic-dangerous-direct-browser-access": "true",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-6",
+      model: "claude-sonnet-4-5",
       max_tokens: 2000,
       messages: [{ role: "user", content: prompt }],
     }),
@@ -1542,7 +1542,7 @@ For "better": true means Period B is better, false means worse. Return ONLY JSON
       const res=await fetch("https://api.anthropic.com/v1/messages",{
         method:"POST",
         headers:{"Content-Type":"application/json","x-api-key":API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2500,messages:[{role:"user",content}]})
+        body:JSON.stringify({model:"claude-sonnet-4-5",max_tokens:2500,messages:[{role:"user",content}]})
       });
       const data=await res.json();
       const raw=data.content?.[0]?.text||"{}";
@@ -1840,22 +1840,42 @@ async function saveAnalysis({clientName,tool,periodFrom,periodTo,analysisText,me
 // ── PUSH NOTIFICATIONS ────────────────────────────────────────────────────────
 const VAPID_PUBLIC_KEY="BNeZYihbfY4pd6cDVaD48xRthYXSfMN9CC-3-AjLLObt5RJYa6R5cqKI1OL8Fu2rZUg4B9rtryCpBAe-lxoHpJA";
 
+function urlBase64ToUint8Array(base64String){
+  const padding="=".repeat((4-base64String.length%4)%4);
+  const base64=(base64String+padding).replace(/-/g,"+").replace(/_/g,"/");
+  const rawData=window.atob(base64);
+  const outputArray=new Uint8Array(rawData.length);
+  for(let i=0;i<rawData.length;++i){ outputArray[i]=rawData.charCodeAt(i); }
+  return outputArray;
+}
+
 async function subscribeToPush(){
   try{
     if(!("serviceWorker" in navigator)||!("PushManager" in window)) return false;
     const reg=await navigator.serviceWorker.ready;
     const existing=await reg.pushManager.getSubscription();
-    if(existing) return true;
+    if(existing){
+      // Re-save existing subscription
+      const uid=await getOrCreateUser();
+      await fetch("/api/push-subscribe",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({user_id:uid,subscription:existing.toJSON()})
+      });
+      return true;
+    }
     const sub=await reg.pushManager.subscribe({
       userVisibleOnly:true,
-      applicationServerKey:VAPID_PUBLIC_KEY
+      applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
     });
     const uid=await getOrCreateUser();
-    await fetch("/api/push-subscribe",{
+    const r=await fetch("/api/push-subscribe",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({user_id:uid,subscription:sub.toJSON()})
     });
+    const data=await r.json();
+    console.log("Push subscribe result:",data);
     return true;
   }catch(e){ console.log("Push subscribe error:",e); return false; }
 }
@@ -2010,7 +2030,7 @@ Be specific. Use actual numbers from the screenshot.`;
         messages=[{role:"user",content:prompt}];
       }
 
-      const res=await fetch(appUrl,{method:"POST",headers,body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,messages})});
+      const res=await fetch(appUrl,{method:"POST",headers,body:JSON.stringify({model:"claude-sonnet-4-5",max_tokens:2000,messages})});
       const data=await res.json();
       const result=data.content?.[0]?.text||"";
       setAnalysis(result);
@@ -2369,7 +2389,7 @@ Be specific, use numbers from the analyses.`;
       const res=await fetch("https://api.anthropic.com/v1/messages",{
         method:"POST",
         headers:{"Content-Type":"application/json","x-api-key":API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:prompt}]})
+        body:JSON.stringify({model:"claude-sonnet-4-5",max_tokens:2000,messages:[{role:"user",content:prompt}]})
       });
       const data=await res.json();
       setReport({text:data.content?.[0]?.text||"",client:selectedClient.name,from,to,fromB,toB,count:analysesA.length,countB:analysesB.length,mode});
