@@ -2514,9 +2514,54 @@ export default function App(){
     const m=params.get("mod");
     return m?parseInt(m):null;
   });
+  const [showQR,setShowQR]=useState(false);
   const t=T[lang];
   const w=useWindowSize();
   const isDesktop=w>=1024;
+
+  // Handle UUID from QR scan
+  useEffect(()=>{
+    const params=new URLSearchParams(window.location.search);
+    const uuid=params.get("uuid");
+    if(uuid){
+      localStorage.setItem("mat_user_id",uuid);
+      window.history.replaceState({},"",window.location.pathname);
+    }
+  },[]);
+
+  // Generate QR code when modal opens
+  useEffect(()=>{
+    if(!showQR) return;
+    setTimeout(()=>{
+      const el=document.getElementById("qr-container");
+      if(!el||el.children.length>0) return;
+      const uid=localStorage.getItem("mat_user_id")||"";
+      if(!uid) return;
+      const url=`${window.location.origin}?uuid=${uid}`;
+      try{
+        new window.QRCode(el,{
+          text:url,width:200,height:200,
+          colorDark:"#6366F1",colorLight:"#ffffff",
+          correctLevel:window.QRCode?.CorrectLevel?.H
+        });
+      }catch(e){ el.innerHTML=`<div style="color:#666;font-size:12px;padding:20px">QR nije dostupan.<br/>Link: <a href="${url}" style="color:#6366F1">${url}</a></div>`; }
+    },100);
+  },[showQR]);
+
+  // QR Modal
+  const QRModal=()=>{
+    const sr=lang==="sr";
+    return <div onClick={()=>setShowQR(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#13131f",border:"1px solid rgba(99,102,241,0.3)",borderRadius:20,padding:28,maxWidth:320,width:"100%",textAlign:"center"}}>
+        <div style={{fontSize:24,marginBottom:8}}>📱</div>
+        <div style={{color:"#fff",fontWeight:800,fontSize:16,marginBottom:6}}>{sr?"Poveži telefon":"Connect Phone"}</div>
+        <div style={{color:"rgba(255,255,255,0.5)",fontSize:13,marginBottom:20,lineHeight:1.5}}>{sr?"Skeniraj QR kod telefonom da vidiš iste klijente i analize":"Scan QR code with your phone to see the same clients and analyses"}</div>
+        <div id="qr-container" style={{display:"inline-block",padding:12,background:"#fff",borderRadius:12,marginBottom:16}}/>
+        <div style={{color:"rgba(255,255,255,0.4)",fontSize:11,marginBottom:20}}>{sr?"Nakon skeniranja, dodaj app na početni ekran":"After scanning, add app to home screen"}</div>
+        <button onClick={()=>setShowQR(false)} style={{background:"rgba(255,255,255,0.08)",border:"none",borderRadius:10,color:"rgba(255,255,255,0.6)",fontSize:13,fontWeight:600,padding:"10px 24px",cursor:"pointer",width:"100%"}}>{sr?"Zatvori":"Close"}</button>
+      </div>
+    </div>;
+  };
 
   // Sync mod to URL
   const goMod=(id)=>{
@@ -2562,6 +2607,7 @@ export default function App(){
 
   // ── MOBILE ─────────────────────────────────────────────────────────────────
   if(!isDesktop) return <div style={{minHeight:"100vh",background:C.bg,fontFamily:"'Plus Jakarta Sans',sans-serif",color:C.txt}}>
+    {showQR&&<QRModal/>}
     <div style={{background:"rgba(255,255,255,0.02)",borderBottom:`1px solid ${C.brd}`,padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:100,backdropFilter:"blur(10px)"}}>
       <div style={{display:"flex",alignItems:"center",gap:9,cursor:mod?"pointer":"default"}} onClick={()=>goMod(null)}>
         <div style={{width:32,height:32,borderRadius:9,background:"linear-gradient(135deg,#6366F1,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>📊</div>
@@ -2569,6 +2615,7 @@ export default function App(){
       </div>
       <div style={{display:"flex",alignItems:"center",gap:6}}>
         {mod&&<button onClick={()=>goMod(null)} style={{background:"rgba(255,255,255,0.08)",border:"none",borderRadius:20,color:"#fff",fontSize:12,fontWeight:600,padding:"7px 14px",cursor:"pointer"}}>{t.back}</button>}
+        <button onClick={()=>setShowQR(true)} style={{background:"rgba(99,102,241,0.2)",border:"none",borderRadius:20,color:C.acl,fontSize:12,fontWeight:600,padding:"7px 12px",cursor:"pointer"}} title="Poveži telefon">📱</button>
         {["sr","en"].map(l=><button key={l} onClick={()=>setLang(l)} style={{padding:"6px 12px",borderRadius:20,fontSize:12,fontWeight:700,cursor:"pointer",border:"none",background:lang===l?"rgba(99,102,241,0.3)":"rgba(255,255,255,0.07)",color:lang===l?"#A5B4FC":"rgba(255,255,255,0.4)"}}>{l.toUpperCase()}</button>)}
       </div>
     </div>
@@ -2590,6 +2637,7 @@ export default function App(){
 
   // ── DESKTOP ────────────────────────────────────────────────────────────────
   return <div style={{height:"100vh",background:C.bg,fontFamily:"'Plus Jakarta Sans',sans-serif",color:C.txt,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+    {showQR&&<QRModal/>}
 
     {/* TOP NAV */}
     <div style={{background:"rgba(255,255,255,0.02)",borderBottom:`1px solid ${C.brd}`,padding:"0 32px",display:"flex",justifyContent:"space-between",alignItems:"center",height:64,flexShrink:0,zIndex:100}}>
@@ -2609,7 +2657,10 @@ export default function App(){
             <span style={{color:"#fff",fontWeight:600}}>{t[MODS.find(m=>m.id===mod)?.tk]}</span>
           </div>
         </div>}
-        <div style={{display:"flex",gap:6}}>
+        <div style={{display:"flex",gap:6,alignItems:"center"}}>
+          <button onClick={()=>setShowQR(true)} style={{background:"rgba(99,102,241,0.15)",border:"1px solid rgba(99,102,241,0.3)",borderRadius:10,color:C.acl,fontSize:12,fontWeight:600,padding:"7px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:6}} title="Poveži telefon">
+            📱 {lang==="sr"?"Poveži telefon":"Connect Phone"}
+          </button>
           {["sr","en"].map(l=><button key={l} onClick={()=>setLang(l)} style={{padding:"7px 16px",borderRadius:20,fontSize:13,fontWeight:700,cursor:"pointer",border:"none",background:lang===l?"rgba(99,102,241,0.3)":"rgba(255,255,255,0.07)",color:lang===l?"#A5B4FC":"rgba(255,255,255,0.4)"}}>{l.toUpperCase()}</button>)}
         </div>
       </div>
