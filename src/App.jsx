@@ -54,6 +54,7 @@ const T={
     m5t:"ROAS & Break-Even", m5s:"Koliki ROAS ti treba za profitabilnost",
     m6t:"Launch Checklist", m6s:"Pixel, CAPI, eventi i sve pre lansiranja",
     m10t:"Moji klijenti", m10s:"Istorija analiza po klijentu",
+    m11t:"Time Machine", m11s:"Izveštaj i grafikon za period",
     analyze:"Analiziraj →", gen:"Generiši →", calc:"Izračunaj →",
     newA:"← Nova analiza", poor:"Kritično", ok:"Prosečno", good:"Odlično",
     nxt:"Dalje →", prv:"←", res:"Rezultati", s1:"Osnove", s2:"Metrike", s3:"Targeting & Kreativa",
@@ -208,6 +209,7 @@ const T={
     m5t:"ROAS & Break-Even", m5s:"Calculate the ROAS you need to be profitable",
     m6t:"Launch Checklist", m6s:"Pixel, CAPI, events and everything before launch",
     m10t:"My Clients", m10s:"Analysis history by client",
+    m11t:"Time Machine", m11s:"Report and chart for any period",
     analyze:"Analyze →", gen:"Generate →", calc:"Calculate →",
     newA:"← New Analysis", poor:"Critical", ok:"Average", good:"Excellent",
     nxt:"Next →", prv:"←", res:"Results", s1:"Basics", s2:"Metrics", s3:"Targeting & Creative",
@@ -2189,16 +2191,312 @@ function MyClientsMod({t,lang,goMod}){
   </div>;
 }
 
+// ── MODULE 11: TIME MACHINE ───────────────────────────────────────────────────
+function TimeMachineMod({t,lang}){
+  const sr=lang==="sr";
+  const [mode,setMode]=useState(null); // null=izbor, "period", "compare"
+  const [clients,setClients]=useState([]);
+  const [selectedClient,setSelectedClient]=useState(null);
+  const [period,setPeriod]=useState("7");
+  const [customFrom,setCustomFrom]=useState("");
+  const [customTo,setCustomTo]=useState("");
+  const [periodA,setPeriodA]=useState({from:"",to:""});
+  const [periodB,setPeriodB]=useState({from:"",to:""});
+  const [loading,setLoading]=useState(false);
+  const [report,setReport]=useState(null);
+  const [chartData,setChartData]=useState([]);
+
+  useEffect(()=>{
+    const uid=localStorage.getItem("mat_user_id");
+    if(!uid) return;
+    fetch(`/api/clients?user_id=${uid}`)
+      .then(r=>r.json())
+      .then(data=>setClients(Array.isArray(data)?data:[]))
+      .catch(()=>{});
+  },[]);
+
+  const getDateRange=(p)=>{
+    const to=new Date();
+    const from=new Date();
+    from.setDate(from.getDate()-parseInt(p));
+    return{
+      from:from.toISOString().split("T")[0],
+      to:to.toISOString().split("T")[0]
+    };
+  };
+
+  const extractMetrics=(analysisText)=>{
+    const metrics={};
+    const patterns=[
+      {key:"roas",regex:/ROAS[:\s]+([0-9.,]+)/i},
+      {key:"revenue",regex:/revenue[:\s]+[€$]?([0-9.,]+)/i},
+      {key:"spend",regex:/spend[:\s]+[€$]?([0-9.,]+)|potrošnja[:\s]+[€$]?([0-9.,]+)/i},
+      {key:"cpa",regex:/CPA[:\s]+[€$]?([0-9.,]+)/i},
+    ];
+    patterns.forEach(({key,regex})=>{
+      const m=analysisText.match(regex);
+      if(m){
+        const val=parseFloat((m[1]||m[2]||"0").replace(",","."));
+        if(!isNaN(val)) metrics[key]=val;
+      }
+    });
+    return metrics;
+  };
+
+  const generate=async()=>{
+    if(!selectedClient) return;
+    setLoading(true); setReport(null); setChartData([]);
+    try{
+      let from,to,fromB,toB;
+      if(mode==="period"){
+        if(period==="custom"){ from=customFrom; to=customTo; }
+        else{ const r=getDateRange(period); from=r.from; to=r.to; }
+      } else {
+        from=periodA.from; to=periodA.to;
+        fromB=periodB.from; toB=periodB.to;
+      }
+
+      // Fetch analyses
+      const urlA=`/api/analyses?client_id=${selectedClient.id}&from=${from}&to=${to}&limit=50`;
+      const resA=await fetch(urlA);
+      const analysesA=await resA.json();
+
+      let analysesB=[];
+      if(mode==="compare"&&fromB&&toB){
+        const urlB=`/api/analyses?client_id=${selectedClient.id}&from=${fromB}&to=${toB}&limit=50`;
+        const resB=await fetch(urlB);
+        analysesB=await resB.json();
+      }
+
+      // Build chart data
+      const chartPoints=analysesA
+        .filter(a=>a.period_from)
+        .map(a=>{
+          const m=extractMetrics(a.analysis_text);
+          return{date:a.period_from,...m,label:a.period_from};
+        })
+        .sort((a,b)=>new Date(a.date)-new Date(b.date));
+      setChartData(chartPoints);
+
+      // Build prompt
+      const summaryA=analysesA.map((a,i)=>
+        `Analiza ${i+1} (${a.period_from||"?"} → ${a.period_to||"?"}): ${a.analysis_text.substring(0,500)}`
+      ).join("\n\n---\n\n");
+
+      const summaryB=analysesB.map((a,i)=>
+        `Analiza ${i+1} (${a.period_from||"?"} → ${a.period_to||"?"}): ${a.analysis_text.substring(0,500)}`
+      ).join("\n\n---\n\n");
+
+      if(analysesA.length===0){
+        setReport({error:true,msg:sr?`Nema analiza za ${selectedClient.name} u ovom periodu. Dodaj analize prvo u Bookmark Connector-u ili Report Generator-u.`:`No analyses for ${selectedClient.name} in this period. Add analyses first in Bookmark Connector or Report Generator.`});
+        setLoading(false); return;
+      }
+
+      const prompt=sr
+        ?`Ti si senior marketing analitičar. Napravi sintetizovani izveštaj za klijenta "${selectedClient.name}".
+
+${mode==="compare"
+  ?`PERIOD A (${from} → ${to}) – ${analysesA.length} analiza:\n${summaryA}\n\nPERIOD B (${fromB} → ${toB}) – ${analysesB.length} analiza:\n${summaryB}`
+  :`PERIOD (${from} → ${to}) – ${analysesA.length} analiza:\n${summaryA}`}
+
+Piši isključivo na srpskom jeziku, ekavski. NE koristi Markdown.
+
+${mode==="compare"?"POREĐENJE PERIODA\n(Šta se promenilo između perioda A i B, koje metrike su porasle/pale)\n\n":""}EXECUTIVE SUMMARY
+(2-3 rečenice – opšta ocena perioda)
+
+KLJUČNI TRENDOVI
+(Šta se dešavalo tokom perioda – da li performanse rastu, padaju ili su stabilne)
+
+PROBLEMI
+(Šta nije radilo dobro)
+
+ŠTA RADI DOBRO
+(Pozitivni trendovi)
+
+PREPORUKE ZA SLEDEĆI PERIOD
+(3-5 konkretnih akcija)
+
+Budi konkretan, koristi brojke iz analiza.`
+        :`You are a senior marketing analyst. Create a synthesized report for client "${selectedClient.name}".
+
+${mode==="compare"
+  ?`PERIOD A (${from} → ${to}) – ${analysesA.length} analyses:\n${summaryA}\n\nPERIOD B (${fromB} → ${toB}) – ${analysesB.length} analyses:\n${summaryB}`
+  :`PERIOD (${from} → ${to}) – ${analysesA.length} analyses:\n${summaryA}`}
+
+Do NOT use Markdown. Plain text only.
+
+${mode==="compare"?"PERIOD COMPARISON\n(What changed between periods A and B)\n\n":""}EXECUTIVE SUMMARY
+KEY TRENDS
+ISSUES
+WHAT'S WORKING
+RECOMMENDATIONS FOR NEXT PERIOD
+
+Be specific, use numbers from the analyses.`;
+
+      const res=await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",
+        headers:{"Content-Type":"application/json","x-api-key":API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:prompt}]})
+      });
+      const data=await res.json();
+      setReport({text:data.content?.[0]?.text||"",client:selectedClient.name,from,to,fromB,toB,count:analysesA.length,countB:analysesB.length,mode});
+    }catch(e){ setReport({error:true,msg:sr?"Greška pri generisanju.":"Error generating report."}); }
+    setLoading(false);
+  };
+
+  // Simple line chart component
+  const LineChart=({data,metric,color,label})=>{
+    if(!data||data.length<2) return null;
+    const vals=data.map(d=>d[metric]).filter(v=>v!=null&&!isNaN(v));
+    if(vals.length<2) return null;
+    const min=Math.min(...vals);
+    const max=Math.max(...vals);
+    const range=max-min||1;
+    const w=300; const h=80; const pad=10;
+    const pts=vals.map((v,i)=>{
+      const x=pad+(i/(vals.length-1))*(w-pad*2);
+      const y=h-pad-((v-min)/range)*(h-pad*2);
+      return`${x},${y}`;
+    }).join(" ");
+    return <div style={{marginBottom:16}}>
+      <div style={{color:C.mut,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:6}}>{label}</div>
+      <svg viewBox={`0 0 ${w} ${h}`} style={{width:"100%",height:80,display:"block"}}>
+        <polyline points={pts} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"/>
+        {vals.map((v,i)=>{
+          const x=pad+(i/(vals.length-1))*(w-pad*2);
+          const y=h-pad-((v-min)/range)*(h-pad*2);
+          return <g key={i}>
+            <circle cx={x} cy={y} r="4" fill={color}/>
+            <text x={x} y={y-8} textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize="9">{v}</text>
+          </g>;
+        })}
+      </svg>
+      <div style={{display:"flex",justifyContent:"space-between"}}>
+        {data.filter(d=>d[metric]!=null).map((d,i)=><div key={i} style={{color:C.dim,fontSize:10}}>{d.date}</div>)}
+      </div>
+    </div>;
+  };
+
+  const periods=[{v:"7",l:sr?"7 dana":"7 days"},{v:"14",l:sr?"14 dana":"14 days"},{v:"30",l:sr?"30 dana":"30 days"},{v:"custom",l:sr?"Custom":"Custom"}];
+
+  // REPORT
+  if(report) return <div>
+    <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 4px"}}>⏱️ Time Machine</h2>
+    <p style={{color:C.mut,fontSize:13,margin:"0 0 20px"}}>{report.client} · {report.from} → {report.to}</p>
+
+    {report.error&&<div style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:12,padding:"16px",color:C.red,fontSize:13,marginBottom:16}}>{report.msg}</div>}
+
+    {!report.error&&<>
+      {/* Charts */}
+      {chartData.length>=2&&<div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"16px",marginBottom:16}}>
+        <div style={{color:C.acl,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"1px",marginBottom:14}}>{sr?"Grafikon trendova":"Trend Charts"}</div>
+        <LineChart data={chartData} metric="roas" color="#6366F1" label="ROAS"/>
+        <LineChart data={chartData} metric="revenue" color="#34D399" label={sr?"Revenue (€)":"Revenue (€)"}/>
+        <LineChart data={chartData} metric="spend" color="#F97316" label={sr?"Potrošnja (€)":"Spend (€)"}/>
+        <LineChart data={chartData} metric="cpa" color="#F59E0B" label="CPA (€)"/>
+      </div>}
+
+      {chartData.length<2&&chartData.length>0&&<div style={{background:"rgba(251,191,36,0.08)",border:"1px solid rgba(251,191,36,0.2)",borderRadius:12,padding:"14px",marginBottom:16}}>
+        <div style={{color:C.yel,fontSize:12}}>⚠️ {sr?"Samo 1 analiza u periodu – grafikon zahteva 2+ analiza.":"Only 1 analysis in period – chart requires 2+ analyses."}</div>
+      </div>}
+
+      {/* Report text */}
+      <div style={{background:"rgba(99,102,241,0.06)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:12,padding:"16px",marginBottom:16}}>
+        <div style={{color:C.acl,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"1px",marginBottom:12}}>
+          {sr?`Sintetizovani izveštaj · ${report.count} analiza`:`Synthesized report · ${report.count} analyses`}
+        </div>
+        <MD2 text={report.text}/>
+      </div>
+    </>}
+
+    <Btn onClick={()=>{setReport(null);setChartData([]);}} sec>{sr?"← Novi izveštaj":"← New Report"}</Btn>
+  </div>;
+
+  // LOADING
+  if(loading) return <div style={{textAlign:"center",padding:"40px 0"}}>
+    <div style={{fontSize:36,marginBottom:16}}>⏱️</div>
+    <div style={{color:C.acl,fontWeight:700,fontSize:15,marginBottom:8}}>{sr?"Time Machine analizira...":"Time Machine analyzing..."}</div>
+    <div style={{color:C.mut,fontSize:13,marginBottom:20}}>{sr?"Sintetizujem sve analize iz perioda...":"Synthesizing all analyses from the period..."}</div>
+    {[1,2,3,4].map(i=><div key={i} style={{height:12,background:"rgba(255,255,255,0.06)",borderRadius:6,width:i===4?"50%":"100%",marginBottom:8,maxWidth:400,margin:"0 auto 8px"}}/>)}
+  </div>;
+
+  // FORM
+  return <div>
+    <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>⏱️ Time Machine</h2>
+    <p style={{color:C.mut,fontSize:13,margin:"0 0 24px"}}>{t.m11s}</p>
+
+    {/* Izbor klijenta */}
+    <div style={{marginBottom:20}}>
+      <Lbl c={sr?"Izaberi klijenta":"Select client"}/>
+      {clients.length===0
+        ?<div style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:12,padding:"16px",color:C.mut,fontSize:13,textAlign:"center"}}>
+          {sr?"Nema klijenata. Dodaj analize u Bookmark Connector-u ili Report Generator-u.":"No clients. Add analyses in Bookmark Connector or Report Generator."}
+        </div>
+        :<div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {clients.map(c=><button key={c.id} onClick={()=>setSelectedClient(c)} style={{background:selectedClient?.id===c.id?"rgba(99,102,241,0.2)":"rgba(255,255,255,0.03)",border:`1px solid ${selectedClient?.id===c.id?"rgba(99,102,241,0.5)":C.brd}`,borderRadius:10,padding:"12px 16px",textAlign:"left",cursor:"pointer",color:selectedClient?.id===c.id?C.acl:C.txt,fontWeight:600,fontSize:13}}>
+            👤 {c.name}
+          </button>)}
+        </div>
+      }
+    </div>
+
+    {selectedClient&&<>
+      {/* Izbor moda */}
+      <div style={{display:"flex",gap:8,marginBottom:20}}>
+        <button onClick={()=>setMode("period")} style={{flex:1,padding:"10px",borderRadius:10,border:`1px solid ${mode==="period"?"rgba(99,102,241,0.6)":C.brd}`,background:mode==="period"?"rgba(99,102,241,0.15)":"transparent",color:mode==="period"?C.acl:C.mut,fontSize:13,fontWeight:600,cursor:"pointer"}}>
+          📈 {sr?"Period Report":"Period Report"}
+        </button>
+        <button onClick={()=>setMode("compare")} style={{flex:1,padding:"10px",borderRadius:10,border:`1px solid ${mode==="compare"?"rgba(52,211,153,0.6)":C.brd}`,background:mode==="compare"?"rgba(52,211,153,0.15)":"transparent",color:mode==="compare"?C.grn:C.mut,fontSize:13,fontWeight:600,cursor:"pointer"}}>
+          📊 {sr?"Poređenje":"Comparison"}
+        </button>
+      </div>
+
+      {mode==="period"&&<>
+        <Lbl c={sr?"Period":"Period"}/>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}}>
+          {periods.map(p=><button key={p.v} onClick={()=>setPeriod(p.v)} style={{padding:"8px 16px",borderRadius:20,border:`1px solid ${period===p.v?"rgba(99,102,241,0.6)":C.brd}`,background:period===p.v?"rgba(99,102,241,0.2)":"transparent",color:period===p.v?C.acl:C.mut,fontSize:13,fontWeight:600,cursor:"pointer"}}>{p.l}</button>)}
+        </div>
+        {period==="custom"&&<div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
+          <div><Lbl c={sr?"Od":"From"}/><DIn v={customFrom} ch={setCustomFrom}/></div>
+          <div><Lbl c={sr?"Do":"To"}/><DIn v={customTo} ch={setCustomTo}/></div>
+        </div>}
+        <Btn onClick={generate} disabled={period==="custom"&&(!customFrom||!customTo)}>{sr?"⏱️ Generiši izveštaj →":"⏱️ Generate report →"}</Btn>
+      </>}
+
+      {mode==="compare"&&<>
+        <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:16}}>
+          <div style={{background:"rgba(99,102,241,0.06)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:12,padding:"14px"}}>
+            <div style={{color:C.acl,fontWeight:700,fontSize:12,marginBottom:10}}>Period A</div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              <div><Lbl c={sr?"Od":"From"}/><DIn v={periodA.from} ch={v=>setPeriodA(p=>({...p,from:v}))}/></div>
+              <div><Lbl c={sr?"Do":"To"}/><DIn v={periodA.to} ch={v=>setPeriodA(p=>({...p,to:v}))}/></div>
+            </div>
+          </div>
+          <div style={{background:"rgba(52,211,153,0.06)",border:"1px solid rgba(52,211,153,0.2)",borderRadius:12,padding:"14px"}}>
+            <div style={{color:C.grn,fontWeight:700,fontSize:12,marginBottom:10}}>Period B</div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              <div><Lbl c={sr?"Od":"From"}/><DIn v={periodB.from} ch={v=>setPeriodB(p=>({...p,from:v}))}/></div>
+              <div><Lbl c={sr?"Do":"To"}/><DIn v={periodB.to} ch={v=>setPeriodB(p=>({...p,to:v}))}/></div>
+            </div>
+          </div>
+        </div>
+        <Btn onClick={generate} disabled={!periodA.from||!periodA.to||!periodB.from||!periodB.to}>{sr?"⏱️ Uporedi periode →":"⏱️ Compare periods →"}</Btn>
+      </>}
+    </>}
+  </div>;
+}
+
 const MODS=[
   {id:1,icon:"📊",col:"#6366F1",tk:"m1t",sk:"m1s"},
   {id:8,icon:"📄",col:"#F97316",tk:"m8t",sk:"m8s"},
   {id:9,icon:"🔗",col:"#00D4FF",tk:"m9t",sk:"m9s"},
   {id:10,icon:"👥",col:"#A855F7",tk:"m10t",sk:"m10s"},
+  {id:11,icon:"⏱️",col:"#EC4899",tk:"m11t",sk:"m11s"},
   {id:2,icon:"💰",col:"#10B981",tk:"m2t",sk:"m2s"},
   {id:7,icon:"🚀",col:"#06B6D4",tk:"m7t",sk:"m7s"},
   {id:3,icon:"✍️",col:"#F59E0B",tk:"m3t",sk:"m3s"},
-  {id:4,icon:"🎯",col:"#EC4899",tk:"m4t",sk:"m4s"},
-  {id:5,icon:"📈",col:"#8B5CF6",tk:"m5t",sk:"m5s"},
+  {id:4,icon:"🎯",col:"#8B5CF6",tk:"m4t",sk:"m4s"},
+  {id:5,icon:"📈",col:"#34D399",tk:"m5t",sk:"m5s"},
   {id:6,icon:"✅",col:"#34D399",tk:"m6t",sk:"m6s"},
 ];
 
@@ -2241,8 +2539,8 @@ export default function App(){
   // Save lang preference
   useEffect(()=>{ localStorage.setItem("mat_lang",lang); },[lang]);
 
-  const MOD_COLORS=["#6366F1","#F97316","#00D4FF","#A855F7","#10B981","#06B6D4","#F59E0B","#EC4899","#8B5CF6","#34D399"];
-  const Comp=mod===1?HealthMod:mod===8?ReportMod:mod===9?BookmarkMod:mod===10?(props=><MyClientsMod {...props} goMod={goMod}/>):mod===2?BudgetMod:mod===7?ScalingMod:mod===3?CopyMod:mod===4?AudMod:mod===5?RoasMod:mod===6?CheckMod:null;
+  const MOD_COLORS=["#6366F1","#F97316","#00D4FF","#A855F7","#EC4899","#10B981","#06B6D4","#F59E0B","#8B5CF6","#34D399","#34D399"];
+  const Comp=mod===1?HealthMod:mod===8?ReportMod:mod===9?BookmarkMod:mod===10?(props=><MyClientsMod {...props} goMod={goMod}/>):mod===11?TimeMachineMod:mod===2?BudgetMod:mod===7?ScalingMod:mod===3?CopyMod:mod===4?AudMod:mod===5?RoasMod:mod===6?CheckMod:null;
 
   const ModCard=({m,i,large})=>(
     <button onClick={()=>goMod(m.id)} style={{
