@@ -3,7 +3,7 @@ const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY;
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.status(200).end();
 
@@ -14,6 +14,15 @@ export default async function handler(req, res) {
   };
 
   try {
+    if (req.method === "DELETE") {
+      const { id } = req.query;
+      if (!id) return res.status(400).json({ error: "No id" });
+      // First delete all analyses for this client
+      await fetch(`${SUPABASE_URL}/rest/v1/analyses?client_id=eq.${id}`, { method: "DELETE", headers });
+      // Then delete client
+      await fetch(`${SUPABASE_URL}/rest/v1/clients?id=eq.${id}`, { method: "DELETE", headers });
+      return res.status(200).json({ success: true });
+    }
     if (req.method === "GET") {
       const { user_id } = req.query;
       if (!user_id) return res.status(400).json({ error: "No user_id" });
