@@ -53,6 +53,7 @@ const T={
     m4t:"Audience Planner", m4s:"Struktura targetiranja i budžet split",
     m5t:"ROAS & Break-Even", m5s:"Koliki ROAS ti treba za profitabilnost",
     m6t:"Launch Checklist", m6s:"Pixel, CAPI, eventi i sve pre lansiranja",
+    m10t:"Moji klijenti", m10s:"Istorija analiza po klijentu",
     analyze:"Analiziraj →", gen:"Generiši →", calc:"Izračunaj →",
     newA:"← Nova analiza", poor:"Kritično", ok:"Prosečno", good:"Odlično",
     nxt:"Dalje →", prv:"←", res:"Rezultati", s1:"Osnove", s2:"Metrike", s3:"Targeting & Kreativa",
@@ -206,6 +207,7 @@ const T={
     m4t:"Audience Planner", m4s:"Targeting structure and budget split",
     m5t:"ROAS & Break-Even", m5s:"Calculate the ROAS you need to be profitable",
     m6t:"Launch Checklist", m6s:"Pixel, CAPI, events and everything before launch",
+    m10t:"My Clients", m10s:"Analysis history by client",
     analyze:"Analyze →", gen:"Generate →", calc:"Calculate →",
     newA:"← New Analysis", poor:"Critical", ok:"Average", good:"Excellent",
     nxt:"Next →", prv:"←", res:"Results", s1:"Basics", s2:"Metrics", s3:"Targeting & Creative",
@@ -2086,10 +2088,112 @@ Be specific. Use actual numbers from the screenshot.`;
 }
 
 // ── APP ──────────────────────────────────────────────────────────────────────
+// ── MODULE 10: MOJI KLIJENTI ─────────────────────────────────────────────────
+function MyClientsMod({t,lang,goMod}){
+  const sr=lang==="sr";
+  const [clients,setClients]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [selected,setSelected]=useState(null);
+  const [analyses,setAnalyses]=useState([]);
+  const [loadingA,setLoadingA]=useState(false);
+  const [expanded,setExpanded]=useState(null);
+
+  useEffect(()=>{
+    const uid=localStorage.getItem("mat_user_id");
+    if(!uid){ setLoading(false); return; }
+    fetch(`/api/clients?user_id=${uid}`)
+      .then(r=>r.json())
+      .then(data=>{ setClients(Array.isArray(data)?data:[]); setLoading(false); })
+      .catch(()=>setLoading(false));
+  },[]);
+
+  const loadAnalyses=(client)=>{
+    setSelected(client);
+    setLoadingA(true);
+    setAnalyses([]);
+    fetch(`/api/analyses?client_id=${client.id}&limit=20`)
+      .then(r=>r.json())
+      .then(data=>{ setAnalyses(Array.isArray(data)?data:[]); setLoadingA(false); })
+      .catch(()=>setLoadingA(false));
+  };
+
+  const toolLabel=(tool)=>{
+    const map={bookmark:"Bookmark Connector",report_single:"Report Generator",report_compare:"Report Generator (Comparison)"};
+    return map[tool]||tool;
+  };
+
+  if(selected) return <div>
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
+      <button onClick={()=>{setSelected(null);setAnalyses([]);}} style={{background:"none",border:"none",color:C.acl,cursor:"pointer",fontSize:13,fontWeight:600,padding:0}}>← {sr?"Svi klijenti":"All clients"}</button>
+    </div>
+    <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 4px"}}>{selected.name}</h2>
+    <p style={{color:C.mut,fontSize:13,margin:"0 0 20px"}}>{sr?"Istorija analiza":"Analysis history"}</p>
+
+    {loadingA&&<div style={{textAlign:"center",padding:"24px 0"}}>
+      <div style={{color:C.acl,fontSize:14}}>✦ {sr?"Učitavam...":"Loading..."}</div>
+    </div>}
+
+    {!loadingA&&analyses.length===0&&<div style={{textAlign:"center",padding:"32px 0"}}>
+      <div style={{fontSize:32,marginBottom:10}}>📭</div>
+      <div style={{color:C.mut,fontSize:14}}>{sr?"Nema analiza za ovog klijenta.":"No analyses for this client."}</div>
+    </div>}
+
+    {analyses.map((a,i)=><div key={a.id} style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,marginBottom:10,overflow:"hidden"}}>
+      <div onClick={()=>setExpanded(expanded===i?null:i)} style={{padding:"14px 16px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div>
+          <div style={{color:C.txt,fontWeight:700,fontSize:13}}>{toolLabel(a.tool)}</div>
+          <div style={{color:C.mut,fontSize:11,marginTop:3}}>
+            {a.period_from&&a.period_to?`${a.period_from} → ${a.period_to}`:a.period_from||""}
+            {" · "}{new Date(a.created_at).toLocaleDateString(sr?"sr-RS":"en-US")}
+          </div>
+        </div>
+        <span style={{color:C.mut,fontSize:12}}>{expanded===i?"▲":"▼"}</span>
+      </div>
+      {expanded===i&&<div style={{padding:"0 16px 16px",borderTop:`1px solid ${C.brd}`}}>
+        <div style={{color:"rgba(255,255,255,0.75)",fontSize:12,lineHeight:1.8,whiteSpace:"pre-wrap",paddingTop:12}}>{a.analysis_text}</div>
+      </div>}
+    </div>)}
+  </div>;
+
+  return <div>
+    <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>{t.m10t}</h2>
+    <p style={{color:C.mut,fontSize:13,margin:"0 0 24px"}}>{t.m10s}</p>
+
+    {loading&&<div style={{textAlign:"center",padding:"32px 0"}}>
+      <div style={{color:C.acl,fontSize:14}}>✦ {sr?"Učitavam klijente...":"Loading clients..."}</div>
+    </div>}
+
+    {!loading&&clients.length===0&&<div style={{textAlign:"center",padding:"32px 0"}}>
+      <div style={{fontSize:40,marginBottom:12}}>👥</div>
+      <div style={{color:C.txt,fontWeight:700,fontSize:15,marginBottom:8}}>{sr?"Još nema klijenata":"No clients yet"}</div>
+      <div style={{color:C.mut,fontSize:13,marginBottom:20}}>{sr?"Kada uradiš analizu u Bookmark Connector-u ili Report Generator-u sa imenom klijenta, ona će se automatski sačuvati ovde.":"When you analyze in Bookmark Connector or Report Generator with a client name, it will automatically be saved here."}</div>
+      <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap"}}>
+        <button onClick={()=>goMod(9)} style={{background:"rgba(0,212,255,0.15)",border:"1px solid rgba(0,212,255,0.3)",borderRadius:10,color:"#00D4FF",fontSize:13,fontWeight:600,padding:"10px 18px",cursor:"pointer"}}>🔗 Bookmark Connector</button>
+        <button onClick={()=>goMod(8)} style={{background:"rgba(249,115,22,0.15)",border:"1px solid rgba(249,115,22,0.3)",borderRadius:10,color:"#F97316",fontSize:13,fontWeight:600,padding:"10px 18px",cursor:"pointer"}}>📄 Report Generator</button>
+      </div>
+    </div>}
+
+    {!loading&&clients.length>0&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
+      {clients.map(c=><button key={c.id} onClick={()=>loadAnalyses(c)} style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"16px",textAlign:"left",cursor:"pointer",transition:"all 0.15s",WebkitTapHighlightColor:"transparent"}}
+        onMouseEnter={e=>e.currentTarget.style.borderColor="rgba(99,102,241,0.4)"}
+        onMouseLeave={e=>e.currentTarget.style.borderColor=C.brd}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <div style={{color:C.txt,fontWeight:700,fontSize:15,marginBottom:4}}>👤 {c.name}</div>
+            <div style={{color:C.mut,fontSize:12}}>{sr?"Klijent od":"Client since"}: {new Date(c.created_at).toLocaleDateString(sr?"sr-RS":"en-US")}</div>
+          </div>
+          <div style={{color:C.acl,fontSize:13,fontWeight:600}}>Otvori →</div>
+        </div>
+      </button>)}
+    </div>}
+  </div>;
+}
+
 const MODS=[
   {id:1,icon:"📊",col:"#6366F1",tk:"m1t",sk:"m1s"},
   {id:8,icon:"📄",col:"#F97316",tk:"m8t",sk:"m8s"},
   {id:9,icon:"🔗",col:"#00D4FF",tk:"m9t",sk:"m9s"},
+  {id:10,icon:"👥",col:"#A855F7",tk:"m10t",sk:"m10s"},
   {id:2,icon:"💰",col:"#10B981",tk:"m2t",sk:"m2s"},
   {id:7,icon:"🚀",col:"#06B6D4",tk:"m7t",sk:"m7s"},
   {id:3,icon:"✍️",col:"#F59E0B",tk:"m3t",sk:"m3s"},
@@ -2137,8 +2241,8 @@ export default function App(){
   // Save lang preference
   useEffect(()=>{ localStorage.setItem("mat_lang",lang); },[lang]);
 
-  const MOD_COLORS=["#6366F1","#F97316","#00D4FF","#10B981","#06B6D4","#F59E0B","#EC4899","#8B5CF6","#34D399"];
-  const Comp=mod===1?HealthMod:mod===8?ReportMod:mod===9?BookmarkMod:mod===2?BudgetMod:mod===7?ScalingMod:mod===3?CopyMod:mod===4?AudMod:mod===5?RoasMod:mod===6?CheckMod:null;
+  const MOD_COLORS=["#6366F1","#F97316","#00D4FF","#A855F7","#10B981","#06B6D4","#F59E0B","#EC4899","#8B5CF6","#34D399"];
+  const Comp=mod===1?HealthMod:mod===8?ReportMod:mod===9?BookmarkMod:mod===10?(props=><MyClientsMod {...props} goMod={goMod}/>):mod===2?BudgetMod:mod===7?ScalingMod:mod===3?CopyMod:mod===4?AudMod:mod===5?RoasMod:mod===6?CheckMod:null;
 
   const ModCard=({m,i,large})=>(
     <button onClick={()=>goMod(m.id)} style={{
