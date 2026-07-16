@@ -1,5 +1,16 @@
 import { useState, useEffect } from "react";
 
+// ── IMAGE TYPE DETECTOR ───────────────────────────────────────────────────────
+function getImageMediaType(base64){
+  if(!base64) return "image/jpeg";
+  if(base64.startsWith("/9j/")) return "image/jpeg";
+  if(base64.startsWith("iVBORw")) return "image/png";
+  if(base64.startsWith("R0lGOD")) return "image/gif";
+  if(base64.startsWith("UklGR")) return "image/webp";
+  return "image/png"; // default to png for screenshots
+}
+
+
 // ── COLORS ──────────────────────────────────────────────────────────────────
 const C = {
   bg:"#08080f", sur:"rgba(255,255,255,0.04)", brd:"rgba(255,255,255,0.08)",
@@ -627,7 +638,7 @@ function HealthMod({t,lang}){
           model:"claude-sonnet-4-5",
           max_tokens:2000,
           messages:[{role:"user",content:[
-            {type:"image",source:{type:"base64",media_type:"image/jpeg",data:screenshot}},
+            {type:"image",source:{type:"base64",media_type:getImageMediaType(screenshot),data:screenshot}},
             {type:"text",text:sr
               ?`Ti si senior Meta Ads ekspert. Analiziraj ovaj screenshot iz marketing alata. Piši isključivo na srpskom jeziku, ekavski (ne koristiti reči kao "prosječan", "označen", "prikazati" – već "prosečan", "obeležen", "prikazati").
 
@@ -1462,7 +1473,7 @@ function ReportMod({t,lang}){
         const csvParsed=isCsv&&csvA?parseCSV(csvA):null;
         const csvSummary=csvParsed?`Kolone: ${csvParsed.headers.join(", ")}\n\nPodaci:\n${csvParsed.rows.slice(0,50).map(r=>Object.values(r).join(" | ")).join("\n")}`:"";
 
-        if(!isCsv&&imgA) content.push({type:"image",source:{type:"base64",media_type:"image/jpeg",data:imgA}});
+        if(!isCsv&&imgA) content.push({type:"image",source:{type:"base64",media_type:getImageMediaType(imgA),data:imgA}});
         content.push({type:"text",text:sr
           ?`Ti si senior marketing konsultant. Klijent: "${client||"Nije navedeno"}". Period: "${period||"Nije navedeno"}". Piši isključivo na srpskom jeziku, ekavski.
 
@@ -1499,9 +1510,9 @@ Return ONLY JSON, no text before or after.`});
         const csvSumB=csvParsedB?`Kolone: ${csvParsedB.headers.join(", ")}\nPodaci:\n${csvParsedB.rows.slice(0,30).map(r=>Object.values(r).join(" | ")).join("\n")}`:"";
 
         if(!isCsv){
-          content.push({type:"image",source:{type:"base64",media_type:"image/jpeg",data:imgA}});
+          content.push({type:"image",source:{type:"base64",media_type:getImageMediaType(imgA),data:imgA}});
           content.push({type:"text",text:sr?`Ovo je screenshot za Period A: ${periodA||"Period A"}`:`This is the screenshot for Period A: ${periodA||"Period A"}`});
-          content.push({type:"image",source:{type:"base64",media_type:"image/jpeg",data:imgB}});
+          content.push({type:"image",source:{type:"base64",media_type:getImageMediaType(imgB),data:imgB}});
         }
         content.push({type:"text",text:sr
           ?`${isCsv?`Ovo su CSV podaci za Period A (${periodA||"Period A"}):\n${csvSumA}\n\nOvo su CSV podaci za Period B (${periodB||"Period B"}):\n${csvSumB}`:`Ovo je screenshot za Period B: ${periodB||"Period B"}`}. Klijent: "${client||"Nije navedeno"}". Piši isključivo na srpskom jeziku, ekavski.
@@ -2008,7 +2019,7 @@ PRIORITY RECOMMENDATIONS
 Be specific. Use actual numbers from the screenshot.`;
 
         messages=[{role:"user",content:[
-          {type:"image",source:{type:"base64",media_type:"image/jpeg",data:importedData.screenshot}},
+          {type:"image",source:{type:"base64",media_type:getImageMediaType(importedData.screenshot),data:importedData.screenshot}},
           {type:"text",text:prompt}
         ]}];
       } else {
@@ -2100,7 +2111,7 @@ Be specific. Use actual numbers from the screenshot.`;
           </div>
         </div>
         {importedData.screenshot&&<div style={{marginBottom:16}}>
-          <img src={`data:image/jpeg;base64,${importedData.screenshot}`} alt="screenshot" style={{width:"100%",borderRadius:10,border:`1px solid ${C.brd}`}}/>
+          <img src={`data:${getImageMediaType(importedData.screenshot)};base64,${importedData.screenshot}`} alt="screenshot" style={{width:"100%",borderRadius:10,border:`1px solid ${C.brd}`}}/>
         </div>}
         <div style={{marginBottom:14}}>
           <Lbl c={sr?"Naziv klijenta (opciono)":"Client name (optional)"}/>
