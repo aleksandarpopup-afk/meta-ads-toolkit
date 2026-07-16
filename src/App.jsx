@@ -1543,7 +1543,20 @@ For "better": true means Period B is better, false means worse. Return ONLY JSON
       const data=await res.json();
       const raw=data.content?.[0]?.text||"{}";
       const clean=raw.replace(/```json|```/g,"").trim();
-      setReport({...JSON.parse(clean),client,period,periodA,periodB,type});
+      const parsed=JSON.parse(clean);
+      setReport({...parsed,client,period,periodA,periodB,type});
+      // Auto-save if client name provided
+      if(client&&parsed.execSummary){
+        const analysisText=`${parsed.execSummary}\n\n${(parsed.issues||[]).join("\n")}\n\n${(parsed.actions||[]).join("\n")}`;
+        saveAnalysis({
+          clientName:client,
+          tool:type==="compare"?"report_compare":"report_single",
+          periodFrom:periodA||period||null,
+          periodTo:periodB||null,
+          analysisText,
+          metrics:parsed.metrics?Object.fromEntries(parsed.metrics.map(m=>[m.name,m.value])):null
+        });
+      }
     } catch(e){ setReport({error:true}); }
     setLoading(false);
   };
@@ -1788,7 +1801,37 @@ For "better": true means Period B is better, false means worse. Return ONLY JSON
   </div>;
 }
 
-// ── BOOKMARKLET CODE ─────────────────────────────────────────────────────────
+// ── USER UUID ────────────────────────────────────────────────────────────────
+async function getOrCreateUser(){
+  let uid=localStorage.getItem("mat_user_id");
+  if(uid) return uid;
+  try{
+    const r=await fetch("/api/user",{method:"POST",headers:{"Content-Type":"application/json"}});
+    const data=await r.json();
+    if(data.id){ localStorage.setItem("mat_user_id",data.id); return data.id; }
+  }catch(e){}
+  // Fallback – generate local UUID
+  const local="local-"+Math.random().toString(36).substr(2,9);
+  localStorage.setItem("mat_user_id",local);
+  return local;
+}
+
+async function saveAnalysis({clientName,tool,periodFrom,periodTo,analysisText,metrics}){
+  try{
+    const userId=await getOrCreateUser();
+    if(!clientName||!analysisText) return;
+    // Get or create client
+    const cr=await fetch("/api/clients",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:userId,name:clientName})});
+    const client=await cr.json();
+    if(!client.id) return;
+    // Save analysis
+    await fetch("/api/analyses",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+      client_id:client.id,user_id:userId,tool,
+      period_from:periodFrom||null,period_to:periodTo||null,
+      analysis_text:analysisText,metrics:metrics||null
+    })});
+  }catch(e){ console.log("Save analysis error:",e); }
+}
 const BOOKMARKLET_CODE="javascript:(function(){"+
 "var appUrl='https://meta-ads-toolkit-a71e.vercel.app';"+
 "var apiUrl=appUrl+'/api/temp-upload';"+
@@ -1833,6 +1876,8 @@ function BookmarkMod({t,lang}){
   const sr=lang==="sr";
   const [importedData,setImportedData]=useState(null);
   const [clientName,setClientName]=useState("");
+  const [periodFrom,setPeriodFrom]=useState("");
+  const [periodTo,setPeriodTo]=useState("");
   const [analysis,setAnalysis]=useState("");
   const [loading,setLoading]=useState(false);
   const [fetchingData,setFetchingData]=useState(false);
@@ -1930,7 +1975,17 @@ Be specific. Use actual numbers from the screenshot.`;
 
       const res=await fetch(appUrl,{method:"POST",headers,body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,messages})});
       const data=await res.json();
-      setAnalysis(data.content?.[0]?.text||"");
+      const result=data.content?.[0]?.text||"";
+      setAnalysis(result);
+      // Auto-save if client name provided
+      if(clientName&&result){
+        saveAnalysis({
+          clientName,tool:"bookmark",
+          periodFrom:periodFrom||null,
+          periodTo:periodTo||null,
+          analysisText:result
+        });
+      }
     }catch(e){ setAnalysis(sr?"Greška pri analizi. Pokušaj ponovo.":"Error during analysis. Please try again."); }
     setLoading(false);
   };
@@ -2001,6 +2056,10 @@ Be specific. Use actual numbers from the screenshot.`;
         <div style={{marginBottom:14}}>
           <Lbl c={sr?"Naziv klijenta (opciono)":"Client name (optional)"}/>
           <TIn v={clientName} ch={setClientName} ph={sr?"npr. Sport Reality MNE":"e.g. Sport Reality MNE"}/>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:14}}>
+          <div><Lbl c={sr?"Period od":"Period from"}/><DIn v={periodFrom} ch={setPeriodFrom}/></div>
+          <div><Lbl c={sr?"Period do":"Period to"}/><DIn v={periodTo} ch={setPeriodTo}/></div>
         </div>
         <div style={{display:"flex",gap:10}}>
           <Btn onClick={analyze}>{t.bm_analyze}</Btn>
