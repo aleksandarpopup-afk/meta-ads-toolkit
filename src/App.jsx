@@ -2554,8 +2554,22 @@ export default function App(){
 
   const handleEnableNotif=async()=>{
     const ok=await requestNotificationPermission();
-    setNotifStatus(ok?"granted":"denied");
+    if(ok){
+      setNotifStatus("granted");
+    } else {
+      setNotifStatus(Notification.permission);
+    }
   };
+
+  // Check notification status on mount
+  useEffect(()=>{
+    if(typeof Notification!=="undefined"){
+      setNotifStatus(Notification.permission);
+      if(Notification.permission==="granted"){
+        subscribeToPush();
+      }
+    }
+  },[]);
   const t=T[lang];
   const w=useWindowSize();
   const isDesktop=w>=1024;
