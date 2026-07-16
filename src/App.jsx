@@ -2744,10 +2744,7 @@ export default function App(){
       <div style={{display:"flex",alignItems:"center",gap:6}}>
         {mod&&<button onClick={()=>goMod(null)} style={{background:"rgba(255,255,255,0.08)",border:"none",borderRadius:20,color:"#fff",fontSize:12,fontWeight:600,padding:"7px 14px",cursor:"pointer"}}>{t.back}</button>}
         <button onClick={()=>setShowQR(true)} style={{background:"rgba(99,102,241,0.2)",border:"none",borderRadius:20,color:C.acl,fontSize:12,fontWeight:600,padding:"7px 12px",cursor:"pointer"}} title="Poveži telefon">📱</button>
-        {notifStatus!=="granted"
-          ?<button onClick={handleEnableNotif} style={{background:"rgba(251,191,36,0.2)",border:"none",borderRadius:20,color:C.yel,fontSize:14,padding:"7px 10px",cursor:"pointer"}} title="Uključi notifikacije">🔔</button>
-          :<div style={{color:C.grn,fontSize:13,padding:"7px 6px"}}>🔔</div>
-        }
+        <button onClick={handleEnableNotif} style={{background:notifStatus==="granted"?"rgba(52,211,153,0.2)":"rgba(251,191,36,0.2)",border:"none",borderRadius:20,color:notifStatus==="granted"?C.grn:C.yel,fontSize:14,padding:"7px 10px",cursor:"pointer"}} title="Notifikacije">🔔</button>
         {["sr","en"].map(l=><button key={l} onClick={()=>setLang(l)} style={{padding:"6px 12px",borderRadius:20,fontSize:12,fontWeight:700,cursor:"pointer",border:"none",background:lang===l?"rgba(99,102,241,0.3)":"rgba(255,255,255,0.07)",color:lang===l?"#A5B4FC":"rgba(255,255,255,0.4)"}}>{l.toUpperCase()}</button>)}
       </div>
     </div>
