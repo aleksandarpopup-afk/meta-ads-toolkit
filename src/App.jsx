@@ -607,6 +607,8 @@ function HealthMod({t,lang}){
   const [screenshotPreview,setScreenshotPreview]=useState(null);
   const [screenshotName,setScreenshotName]=useState("");
   const [dragOver,setDragOver]=useState(false);
+  const [csv,setCsv]=useState(null);
+  const [csvName,setCsvName]=useState("");
   const set=(k,v)=>setF(x=>({...x,[k]:v}));
   const MK=["ROAS","CTR","CPC","CPA","ConversionRate","Revenue"];
   const ss={}; MK.forEach(k=>{ss[k]=gStatus(k,f[k]);});
@@ -625,6 +627,103 @@ function HealthMod({t,lang}){
       setScreenshotPreview(e.target.result);
     };
     reader.readAsDataURL(file);
+  };
+
+  const parseCSV=(text)=>{
+    const lines=text.split("\n").filter(l=>l.trim());
+    if(lines.length<2) return null;
+    const headers=lines[0].split(",").map(h=>h.replace(/"/g,"").trim());
+    const rows=lines.slice(1).map(line=>{
+      const vals=line.match(/(".*?"|[^,]+)/g)||[];
+      const row={};
+      headers.forEach((h,i)=>{ row[h]=(vals[i]||"").replace(/"/g,"").trim(); });
+      return row;
+    }).filter(r=>Object.values(r).some(v=>v));
+    return{headers,rows};
+  };
+
+  const handleCSV=(file)=>{
+    if(!file) return;
+    setCsvName(file.name);
+    const reader=new FileReader();
+    reader.onload=e=>setCsv(e.target.result);
+    reader.readAsText(file,"UTF-8");
+  };
+
+  const handleCSVAnalyze=async()=>{
+    if(!csv) return;
+    setDone(true); setAiLoading(true); setAiAnalysis("");
+    try{
+      const parsed=parseCSV(csv);
+      const csvSummary=parsed?`Kolone: ${parsed.headers.join(", ")}\nPodaci:\n${parsed.rows.slice(0,30).map(r=>Object.values(r).join(" | ")).join("\n")}`:csv.slice(0,3000);
+      const res=await fetch("/api/analyze",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          model:"claude-sonnet-4-5",
+          max_tokens:2000,
+          messages:[{role:"user",content:sr
+            ?`Ti si senior Meta Ads ekspert. Analiziraj ovaj CSV export iz marketing alata. Piši isključivo na srpskom jeziku, ekavski (ne koristiti reči kao "prosječan", "označen", "prikazati" – već "prosečan", "obeležen", "prikazati").
+
+CSV PODACI:
+${csvSummary}
+
+Pročitaj sve metrike i napiši analizu. NE koristi Markdown (##, **, ---, tabele). Koristi samo običan tekst:
+
+EXECUTIVE SUMMARY
+(2-3 rečenice – opšta ocena)
+
+METRIKE KOJE SAM UOČIO
+(Navedi sve metrike koje vidiš)
+
+KLJUČNI PROBLEMI
+(2-4 problema sa crticom)
+
+ŠTA RADI DOBRO
+(1-3 pozitivne stvari)
+
+PRIORITETNE AKCIJE
+(3-5 konkretnih akcija, numerisano)
+
+STRATEŠKE PREPORUKE
+(2-3 preporuke)
+
+Budi konkretan i profesionalan.`
+            :`You are a senior Meta Ads expert. Analyze this CSV export from a marketing tool.
+
+CSV DATA:
+${csvSummary}
+
+Read all metrics and write an analysis. Do NOT use Markdown (##, **, ---, tables). Use plain text only:
+
+EXECUTIVE SUMMARY
+(2-3 sentences – overall assessment)
+
+METRICS I IDENTIFIED
+(List all metrics you can see)
+
+KEY ISSUES
+(2-4 issues with dashes)
+
+WHAT'S WORKING
+(1-3 positive things)
+
+PRIORITY ACTIONS
+(3-5 concrete actions, numbered)
+
+STRATEGIC RECOMMENDATIONS
+(2-3 recommendations)
+
+Be specific and professional.`
+          }]
+        })
+      });
+      const data=await res.json();
+      setAiAnalysis(data.content?.[0]?.text||"");
+    }catch(e){
+      setAiAnalysis(sr?"Greška pri analizi CSV-a. Pokušaj ponovo.":"Error analyzing CSV. Please try again.");
+    }
+    setAiLoading(false);
   };
 
   const handleScreenshotAnalyze=async()=>{
@@ -777,7 +876,7 @@ Be specific, direct and professional. Use real Meta Ads benchmark values.`;
     setAiLoading(false);
   };
 
-  const reset=()=>{setSt(0);setDone(false);setAiAnalysis("");setMode(null);setScreenshot(null);setScreenshotPreview(null);setScreenshotName("");setF({name:"",goal:"",per:"",bud:"",sp:"",ROAS:"",CTR:"",CPC:"",CPA:"",ConversionRate:"",Revenue:"",audT:"",audS:"",freq:"",crFs:[],crA:"",cpF:""});};
+  const reset=()=>{setSt(0);setDone(false);setAiAnalysis("");setMode(null);setScreenshot(null);setScreenshotPreview(null);setScreenshotName("");setCsv(null);setCsvName("");setF({name:"",goal:"",per:"",bud:"",sp:"",ROAS:"",CTR:"",CPC:"",CPA:"",ConversionRate:"",Revenue:"",audT:"",audS:"",freq:"",crFs:[],crA:"",cpF:""});};
   const ovc=ov?SC[ov]:null;
   const STEPS=[t.s1,t.s2,t.s3];
   const BudBar=()=>br!==null?<div style={{background:C.sur,borderRadius:10,padding:"12px 14px",marginTop:10}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><span style={{fontSize:12,color:C.mut}}>{t.hBudUse}</span><span style={{fontSize:12,fontWeight:700,color:br>0.9?C.grn:br>0.6?C.yel:C.red}}>{Math.round(br*100)}%</span></div><div style={{height:5,background:"rgba(255,255,255,0.08)",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:`${Math.min(br*100,100)}%`,background:"linear-gradient(90deg,#6366F1,#8B5CF6)",borderRadius:3}}/></div></div>:null;
@@ -786,6 +885,7 @@ Be specific, direct and professional. Use real Meta Ads benchmark values.`;
   if(done) return <div>
     <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 4px"}}>{t.res}</h2>
     {mode==="screenshot"&&screenshotName&&<p style={{color:C.mut,fontSize:12,margin:"0 0 20px"}}>📸 {screenshotName}</p>}
+    {mode==="csv"&&csvName&&<p style={{color:C.mut,fontSize:12,margin:"0 0 20px"}}>📊 {csvName}</p>}
     {mode==="manual"&&<p style={{color:C.mut,fontSize:12,margin:"0 0 20px"}}>{fl} {t.hMsub} · Meta Ads</p>}
 
     {mode==="manual"&&ovc&&<div style={{background:ovc.b,border:`1px solid ${ovc.r}`,borderRadius:14,padding:"20px",marginBottom:20,textAlign:"center"}}><div style={{fontSize:32,marginBottom:8}}>{ov==="poor"?"🚨":ov==="ok"?"⚡":"🏆"}</div><div style={{color:ovc.c,fontSize:17,fontWeight:800,marginBottom:4}}>{t.hOvr}: {t[ov]}</div>{f.goal&&<div style={{color:C.mut,fontSize:12}}>{t.hGl}: {f.goal}</div>}</div>}
@@ -828,6 +928,12 @@ Be specific, direct and professional. Use real Meta Ads benchmark values.`;
         <div style={{color:C.mut,fontSize:13,lineHeight:1.5}}>{sr?"Uploaduj screenshot iz Meta Ads Managera, Looker Studia ili bilo kog alata. AI sam čita i analizira sve što vidi na slici.":"Upload a screenshot from Meta Ads Manager, Looker Studio or any tool. AI reads and analyzes everything it sees in the image."}</div>
         <div style={{marginTop:12,color:C.acl,fontSize:12,fontWeight:700}}>{sr?"Analizira automatski":"Analyzes automatically"} →</div>
       </button>
+      <button onClick={()=>setMode("csv")} style={{background:"linear-gradient(135deg,rgba(0,212,255,0.15),rgba(0,212,255,0.05))",border:"1px solid rgba(0,212,255,0.3)",borderRadius:16,padding:"20px",textAlign:"left",cursor:"pointer",WebkitTapHighlightColor:"transparent"}}>
+        <div style={{fontSize:28,marginBottom:10}}>📊</div>
+        <div style={{color:C.txt,fontWeight:700,fontSize:15,marginBottom:6}}>{sr?"Upload CSV":"Upload CSV"}</div>
+        <div style={{color:C.mut,fontSize:13,lineHeight:1.5}}>{sr?"Uploaduj CSV export iz Meta Ads Managera, Looker Studia, Google Ads-a ili GA4. AI čita podatke direktno iz tabele.":"Upload a CSV export from Meta Ads Manager, Looker Studio, Google Ads or GA4. AI reads the data directly from the table."}</div>
+        <div style={{marginTop:12,color:"#00D4FF",fontSize:12,fontWeight:700}}>{sr?"Analizira automatski":"Analyzes automatically"} →</div>
+      </button>
       <button onClick={()=>setMode("manual")} style={{background:"linear-gradient(135deg,rgba(16,185,129,0.15),rgba(16,185,129,0.05))",border:"1px solid rgba(16,185,129,0.3)",borderRadius:16,padding:"20px",textAlign:"left",cursor:"pointer",WebkitTapHighlightColor:"transparent"}}>
         <div style={{fontSize:28,marginBottom:10}}>✏️</div>
         <div style={{color:C.txt,fontWeight:700,fontSize:15,marginBottom:6}}>{sr?"Ručni unos metrika":"Manual Metrics Entry"}</div>
@@ -866,6 +972,33 @@ Be specific, direct and professional. Use real Meta Ads benchmark values.`;
     </div>}
 
     <Btn onClick={handleScreenshotAnalyze} disabled={!screenshot}>{sr?"Analiziraj screenshot →":"Analyze screenshot →"}</Btn>
+  </div>;
+
+  // ── CSV MOD ──
+  if(mode==="csv"&&!done) return <div>
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
+      <button onClick={()=>setMode(null)} style={{background:"none",border:"none",color:C.mut,cursor:"pointer",fontSize:13,fontWeight:600,padding:0}}>{t.prv}</button>
+      <h2 style={{fontSize:20,fontWeight:800,margin:0}}>📊 {sr?"Upload CSV":"Upload CSV"}</h2>
+    </div>
+    <p style={{color:C.mut,fontSize:13,margin:"0 0 20px",lineHeight:1.5}}>{sr?"Uploaduj CSV export iz Meta Ads Managera, Looker Studia, Google Ads-a ili GA4. AI će pročitati sve redove i kolone.":"Upload a CSV export from Meta Ads Manager, Looker Studio, Google Ads or GA4. AI will read all rows and columns."}</p>
+
+    {!csv&&<div onClick={()=>document.getElementById("hcCsvUpload").click()}
+      style={{border:"2px dashed rgba(255,255,255,0.15)",borderRadius:16,padding:"40px 20px",textAlign:"center",cursor:"pointer",background:"rgba(255,255,255,0.02)",transition:"all 0.2s",marginBottom:20}}
+      onMouseEnter={e=>e.currentTarget.style.borderColor="#00D4FF"}
+      onMouseLeave={e=>e.currentTarget.style.borderColor="rgba(255,255,255,0.15)"}>
+      <div style={{fontSize:40,marginBottom:12}}>📂</div>
+      <div style={{color:C.txt,fontWeight:700,fontSize:15,marginBottom:6}}>{sr?"Klikni da odabereš CSV fajl":"Click to select CSV file"}</div>
+      <div style={{color:C.mut,fontSize:13}}>{sr?"Export table data → CSV":"Export table data → CSV"}</div>
+      <div style={{color:C.dim,fontSize:11,marginTop:8}}>.CSV</div>
+    </div>}
+    <input id="hcCsvUpload" type="file" accept=".csv,text/csv" style={{display:"none"}} onChange={e=>handleCSV(e.target.files[0])}/>
+
+    {csv&&<div style={{background:"rgba(52,211,153,0.08)",border:"1px solid rgba(52,211,153,0.2)",borderRadius:12,padding:"14px",marginBottom:20,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      <div><div style={{color:C.grn,fontWeight:700,fontSize:13}}>✅ {csvName}</div><div style={{color:C.mut,fontSize:11,marginTop:4}}>{sr?"CSV učitan":"CSV loaded"}</div></div>
+      <button onClick={()=>{setCsv(null);setCsvName("");}} style={{background:"none",border:`1px solid ${C.brd}`,borderRadius:8,color:C.mut,fontSize:12,padding:"6px 12px",cursor:"pointer"}}>{sr?"Promeni":"Change"}</button>
+    </div>}
+
+    <Btn onClick={handleCSVAnalyze} disabled={!csv}>{sr?"Analiziraj CSV →":"Analyze CSV →"}</Btn>
   </div>;
 
   return <div>
