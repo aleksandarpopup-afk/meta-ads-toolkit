@@ -660,7 +660,7 @@ function HealthMod({t,lang}){
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({
-          model:"claude-sonnet-4-5",
+          model:"claude-sonnet-4-6",
           max_tokens:2000,
           messages:[{role:"user",content:sr
             ?`Ti si senior Meta Ads ekspert. Analiziraj ovaj CSV export iz marketing alata. Piši isključivo na srpskom jeziku, ekavski (ne koristiti reči kao "prosječan", "označen", "prikazati" – već "prosečan", "obeležen", "prikazati").
@@ -734,7 +734,7 @@ Be specific and professional.`
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({
-          model:"claude-sonnet-4-5",
+          model:"claude-sonnet-4-6",
           max_tokens:2000,
           messages:[{role:"user",content:[
             {type:"image",source:{type:"base64",media_type:getImageMediaType(screenshot),data:screenshot}},
@@ -1678,7 +1678,7 @@ For "better": true means Period B is better, false means worse. Return ONLY JSON
       const res=await fetch("/api/analyze",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({model:"claude-sonnet-4-5",max_tokens:2500,messages:[{role:"user",content}]})
+        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2500,messages:[{role:"user",content}]})
       });
       const data=await res.json();
       const raw=data.content?.[0]?.text||"{}";
@@ -2229,7 +2229,7 @@ Be specific. Use actual numbers from the screenshot.`;
         messages=[{role:"user",content:prompt}];
       }
 
-      const res=await fetch(appUrl,{method:"POST",headers,body:JSON.stringify({model:"claude-sonnet-4-5",max_tokens:2000,messages})});
+      const res=await fetch(appUrl,{method:"POST",headers,body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,messages})});
       const data=await res.json();
       const result=data.content?.[0]?.text||"";
       setAnalysis(result);
@@ -2616,7 +2616,7 @@ Be specific, use numbers from the analyses.`;
       const res=await fetch("/api/analyze",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({model:"claude-sonnet-4-5",max_tokens:2000,messages:[{role:"user",content:prompt}]})
+        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:prompt}]})
       });
       const data=await res.json();
       setReport({text:data.content?.[0]?.text||"",client:selectedClient.name,from,to,fromB,toB,count:analysesA.length,countB:analysesB.length,mode});
