@@ -2116,27 +2116,17 @@ Be specific. Use actual numbers from the screenshot.`;
   const clear=()=>{ setImportedData(null); setAnalysis(""); localStorage.removeItem("mat_last_import"); };
   const sources=["Meta Ads Manager","Looker Studio","Google Ads","GA4","Whatagraph","Excel Online"];
 
-  return <div>
-    <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>{t.bm_title}</h2>
-    <p style={{color:C.mut,fontSize:13,margin:"0 0 24px",lineHeight:1.6}}>{t.bm_sub}</p>
-
-    {/* STEP 1 */}
-  // Ako fetchingData – prikaži fullscreen loading umesto normalnog sadržaja
   if(fetchingData) return <div style={{textAlign:"center",padding:"60px 20px"}}>
     <div style={{fontSize:48,marginBottom:20}}>📊</div>
     <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 12px",color:C.txt}}>{sr?"Prikupljam podatke...":"Collecting data..."}</h2>
     <p style={{color:C.mut,fontSize:14,margin:"0 0 32px",lineHeight:1.6}}>{sr?"Bookmark je pokrenuo snimanje ekrana. Sačekajte trenutak dok se podaci ne učitaju automatski.":"The bookmark is capturing your screen. Please wait a moment while data loads automatically."}</p>
     <div style={{maxWidth:300,margin:"0 auto"}}>
-      {[1,2,3,4].map(i=><div key={i} style={{height:10,background:"rgba(255,255,255,0.06)",borderRadius:6,marginBottom:10,width:i===4?"60%":"100%",animation:"pulse 1.5s infinite"}}/>)}
+      {[1,2,3,4].map(i=><div key={i} style={{height:10,background:"rgba(255,255,255,0.06)",borderRadius:6,marginBottom:10,width:i===4?"60%":"100%"}}/>)}
     </div>
     <p style={{color:C.dim,fontSize:12,marginTop:24}}>{sr?"Ovo može trajati 5-15 sekundi...":"This may take 5-15 seconds..."}</p>
   </div>;
 
   return <div>
-    <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>{t.bm_title}</h2>
-    <p style={{color:C.mut,fontSize:13,margin:"0 0 24px",lineHeight:1.6}}>{t.bm_sub}</p>
-
-    {/* STEP 1 */}
     <div style={{background:"rgba(99,102,241,0.06)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:14,padding:"20px",marginBottom:16}}>
       <div style={{color:C.acl,fontSize:11,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",marginBottom:10}}>{t.bm_step1}</div>
       <p style={{color:C.mut,fontSize:13,margin:"0 0 16px"}}>{t.bm_dragSub}</p>
