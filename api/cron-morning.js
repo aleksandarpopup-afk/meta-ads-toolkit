@@ -3,15 +3,20 @@ const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY;
 const APP_URL = "https://meta-ads-toolkit-a71e.vercel.app";
 
 export default async function handler(req, res) {
-  // Verify it's a cron request
   if (req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
   const now = new Date();
-  const dayOfWeek = now.getDay(); // 0=Sunday, 1=Monday, 5=Friday
+  const dayOfWeek = now.getDay(); // 0=Sunday, 1=Monday, 5=Friday, 6=Saturday
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
   const isMonday = dayOfWeek === 1;
   const isFriday = dayOfWeek === 5;
+
+  // Ne šalji vikendom
+  if (isWeekend) {
+    return res.status(200).json({ success: true, sent: 0, reason: "Weekend - skipped" });
+  }
 
   const headers = {
     "apikey": SUPABASE_KEY,
@@ -19,26 +24,28 @@ export default async function handler(req, res) {
   };
 
   try {
-    // Get all push subscriptions
+    // Uzmi jedinstvene korisnike (ne subscriptione) da ne šaljemo duplikate
     const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/push_subscriptions?select=user_id,subscription`,
+      `${SUPABASE_URL}/rest/v1/push_subscriptions?select=user_id`,
       { headers }
     );
-    const subscriptions = await r.json();
-
+    const allSubs = await r.json();
+    
+    // Deduplikuj user_id-eve
+    const uniqueUserIds = [...new Set(allSubs.map(s => s.user_id))];
+    
     let sent = 0;
 
-    for (const sub of subscriptions) {
+    for (const userId of uniqueUserIds) {
       let title, body, url;
 
       if (isMonday) {
-        // Check if user has analyses from last week
         const lastWeek = new Date();
         lastWeek.setDate(lastWeek.getDate() - 7);
         const fromDate = lastWeek.toISOString().split("T")[0];
 
         const ar = await fetch(
-          `${SUPABASE_URL}/rest/v1/analyses?user_id=eq.${sub.user_id}&period_from=gte.${fromDate}&select=id&limit=1`,
+          `${SUPABASE_URL}/rest/v1/analyses?user_id=eq.${userId}&period_from=gte.${fromDate}&select=id&limit=1`,
           { headers }
         );
         const analyses = await ar.json();
@@ -53,15 +60,13 @@ export default async function handler(req, res) {
           url = `${APP_URL}?mod=9`;
         }
       } else if (isFriday) {
-        // Get latest analysis for spend calculation
         const ar = await fetch(
-          `${SUPABASE_URL}/rest/v1/analyses?user_id=eq.${sub.user_id}&order=created_at.desc&limit=5&select=analysis_text,client_id`,
+          `${SUPABASE_URL}/rest/v1/analyses?user_id=eq.${userId}&order=created_at.desc&limit=5&select=analysis_text,client_id`,
           { headers }
         );
         const analyses = await ar.json();
 
         if (analyses.length > 0) {
-          // Get client names
           const clientIds = [...new Set(analyses.map(a => a.client_id))];
           const cr = await fetch(
             `${SUPABASE_URL}/rest/v1/clients?id=in.(${clientIds.join(",")})&select=id,name`,
@@ -70,7 +75,6 @@ export default async function handler(req, res) {
           const clients = await cr.json();
           const clientMap = Object.fromEntries(clients.map(c => [c.id, c.name]));
 
-          // Extract spend from analysis text
           const spendParts = analyses.map(a => {
             const match = a.analysis_text.match(/spend[:\s]+[€$]?([0-9.,]+)|potrošnja[:\s]+[€$]?([0-9.,]+)/i);
             const dailySpend = match ? parseFloat((match[1] || match[2] || "0").replace(",", ".")) / 7 : 0;
@@ -94,24 +98,22 @@ export default async function handler(req, res) {
           url = `${APP_URL}?mod=9`;
         }
       } else {
-        // Regular morning reminder
         title = "📊 Dobro jutro!";
         body = "Vreme je da proveriš kampanje. Klikni bookmark i ubaci nove rezultate.";
         url = `${APP_URL}?mod=9`;
       }
 
-      // Send push notification
       try {
         await fetch(`${APP_URL}/api/push-send`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_id: sub.user_id, title, body, url })
+          body: JSON.stringify({ user_id: userId, title, body, url })
         });
         sent++;
       } catch (e) {}
     }
 
-    return res.status(200).json({ success: true, sent });
+    return res.status(200).json({ success: true, sent, users: uniqueUserIds.length });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
