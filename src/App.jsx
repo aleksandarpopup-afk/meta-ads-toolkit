@@ -1924,7 +1924,7 @@ function generateBookmarkletCode(userId){
   "var appUrl='https://meta-ads-toolkit-a71e.vercel.app';"+
   "var apiUrl=appUrl+'/api/temp-upload';"+
   "var url=window.location.href;var title=document.title;var dateRange='';"+
-  "var dMatch=url.match(/date[=%3D]+([0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{4}-[0-9]{2}-[0-9]{2})/);"+
+  "var dMatch=url.match(/date[=%3D]+([0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9])/);"+
   "if(dMatch){dateRange=dMatch[1].replace('_',' – ');}"+
   "var fb=document.createElement('div');"+
   "fb.style.cssText='position:fixed;top:20px;right:20px;z-index:99999;background:linear-gradient(135deg,#6366F1,#8B5CF6);color:white;padding:14px 20px;border-radius:12px;font-family:sans-serif;font-size:14px;font-weight:600;box-shadow:0 8px 32px rgba(99,102,241,0.4)';"+
@@ -2223,7 +2223,6 @@ Be specific. Use actual numbers from the screenshot.`;
   </div>;
 }
 
-// ── APP ──────────────────────────────────────────────────────────────────────
 // ── MODULE 10: MOJI KLIJENTI ─────────────────────────────────────────────────
 function MyClientsMod({t,lang,goMod}){
   const sr=lang==="sr";
