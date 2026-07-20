@@ -1988,8 +1988,44 @@ function BookmarkMod({t,lang}){
         })
         .catch(()=>setFetchingData(false));
     } else if(source==="loading"){
-      // Waiting for redirect with import_id
+      // Waiting for redirect with import_id - start polling
+      setFetchingData(true);
       window.history.replaceState({},"",window.location.pathname+"?mod=9");
+      // Poll every 2 seconds for up to 30 seconds
+      let attempts=0;
+      const maxAttempts=15;
+      const pollInterval=setInterval(async()=>{
+        attempts++;
+        // Check if URL has been updated with import_id
+        const currentParams=new URLSearchParams(window.location.search);
+        const newImportId=currentParams.get("import_id");
+        if(newImportId){
+          clearInterval(pollInterval);
+          try{
+            const r=await fetch(`/api/temp-fetch?id=${newImportId}`);
+            const result=await r.json();
+            if(result.data) setImportedData(result.data);
+          }catch(e){}
+          setFetchingData(false);
+          return;
+        }
+        // Also check sessionStorage
+        const stored=sessionStorage.getItem("mat_import");
+        if(stored){
+          clearInterval(pollInterval);
+          try{
+            const p=JSON.parse(stored);
+            sessionStorage.removeItem("mat_import");
+            setImportedData(p);
+          }catch(e){}
+          setFetchingData(false);
+          return;
+        }
+        if(attempts>=maxAttempts){
+          clearInterval(pollInterval);
+          setFetchingData(false);
+        }
+      },2000);
     } else {
       // Check localStorage for previous import
       try{
@@ -2085,6 +2121,22 @@ Be specific. Use actual numbers from the screenshot.`;
     <p style={{color:C.mut,fontSize:13,margin:"0 0 24px",lineHeight:1.6}}>{t.bm_sub}</p>
 
     {/* STEP 1 */}
+  // Ako fetchingData – prikaži fullscreen loading umesto normalnog sadržaja
+  if(fetchingData) return <div style={{textAlign:"center",padding:"60px 20px"}}>
+    <div style={{fontSize:48,marginBottom:20}}>📊</div>
+    <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 12px",color:C.txt}}>{sr?"Prikupljam podatke...":"Collecting data..."}</h2>
+    <p style={{color:C.mut,fontSize:14,margin:"0 0 32px",lineHeight:1.6}}>{sr?"Bookmark je pokrenuo snimanje ekrana. Sačekajte trenutak dok se podaci ne učitaju automatski.":"The bookmark is capturing your screen. Please wait a moment while data loads automatically."}</p>
+    <div style={{maxWidth:300,margin:"0 auto"}}>
+      {[1,2,3,4].map(i=><div key={i} style={{height:10,background:"rgba(255,255,255,0.06)",borderRadius:6,marginBottom:10,width:i===4?"60%":"100%",animation:"pulse 1.5s infinite"}}/>)}
+    </div>
+    <p style={{color:C.dim,fontSize:12,marginTop:24}}>{sr?"Ovo može trajati 5-15 sekundi...":"This may take 5-15 seconds..."}</p>
+  </div>;
+
+  return <div>
+    <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>{t.bm_title}</h2>
+    <p style={{color:C.mut,fontSize:13,margin:"0 0 24px",lineHeight:1.6}}>{t.bm_sub}</p>
+
+    {/* STEP 1 */}
     <div style={{background:"rgba(99,102,241,0.06)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:14,padding:"20px",marginBottom:16}}>
       <div style={{color:C.acl,fontSize:11,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",marginBottom:10}}>{t.bm_step1}</div>
       <p style={{color:C.mut,fontSize:13,margin:"0 0 16px"}}>{t.bm_dragSub}</p>
@@ -2115,14 +2167,9 @@ Be specific. Use actual numbers from the screenshot.`;
       ))}
     </div>
 
-    {/* STEP 3 – Data */}
+    {/* STEP 3 */}
     <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:14,padding:"20px"}}>
       <div style={{color:C.mut,fontSize:11,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",marginBottom:14}}>{t.bm_step3}</div>
-      {fetchingData&&<div style={{textAlign:"center",padding:"24px 0"}}>
-        <div style={{fontSize:32,marginBottom:12}}>✦</div>
-        <div style={{color:C.acl,fontWeight:700,fontSize:15,marginBottom:8}}>{sr?"Učitavam podatke iz bookmarklet-a...":"Loading data from bookmarklet..."}</div>
-        {[1,2,3].map(i=><div key={i} style={{height:12,background:"rgba(255,255,255,0.06)",borderRadius:6,width:i===3?"50%":"100%",marginBottom:8}}/>)}
-      </div>}
       {!importedData&&!loading&&!fetchingData&&<div style={{textAlign:"center",padding:"24px 0"}}>
         <div style={{fontSize:36,marginBottom:10}}>📭</div>
         <div style={{color:C.txt,fontWeight:600,fontSize:14,marginBottom:6}}>{t.bm_noData}</div>
