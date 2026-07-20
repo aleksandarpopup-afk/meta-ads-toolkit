@@ -1918,44 +1918,45 @@ async function requestNotificationPermission(){
   return false;
 }
 
-const BOOKMARKLET_CODE="javascript:(function(){"+
-"var appUrl='https://meta-ads-toolkit-a71e.vercel.app';"+
-"var apiUrl=appUrl+'/api/temp-upload';"+
-"var url=window.location.href;var title=document.title;var dateRange='';"+
-"var dMatch=url.match(/date[=%3D]+([0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{4}-[0-9]{2}-[0-9]{2})/);"+
-"if(dMatch){dateRange=dMatch[1].replace('_',' – ');}"+
-"var fb=document.createElement('div');"+
-"fb.style.cssText='position:fixed;top:20px;right:20px;z-index:99999;background:linear-gradient(135deg,#6366F1,#8B5CF6);color:white;padding:14px 20px;border-radius:12px;font-family:sans-serif;font-size:14px;font-weight:600;box-shadow:0 8px 32px rgba(99,102,241,0.4)';"+
-"fb.textContent='Meta Ads Toolkit – Otvaram app...';document.body.appendChild(fb);"+
-"var newTab=window.open(appUrl+'?source=loading&mod=9','_blank');"+
-"var payload={source:url,title:title,dateRange:dateRange,screenshot:null,tables:[],timestamp:new Date().toISOString()};"+
-"function sendToApi(p){"+
-"fetch(apiUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data:p})})"+
-".then(function(r){return r.json();})"+
-".then(function(result){"+
-"if(result.id){"+
-"fb.textContent='Meta Ads Toolkit – Gotovo!';"+
-"if(newTab){newTab.location.href=appUrl+'?import_id='+result.id+'&mod=9';}"+
-"}else{fb.textContent='Greška pri slanju podataka.';}"+
-"setTimeout(function(){fb.remove();},2000);"+
-"}).catch(function(){"+
-"fb.textContent='Greška pri konekciji.';"+
-"setTimeout(function(){fb.remove();},2000);"+
-"});}"+
-"var script=document.createElement('script');"+
-"script.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';"+
-"script.onload=function(){"+
-"fb.textContent='Meta Ads Toolkit – Pravim screenshot...';"+
-"html2canvas(document.body,{scale:0.6,useCORS:true,allowTaint:true,logging:false,height:Math.min(window.innerHeight,1600)})"+
-".then(function(canvas){"+
-"payload.screenshot=canvas.toDataURL('image/jpeg',0.6).split(',')[1];"+
-"fb.textContent='Meta Ads Toolkit – Šaljem...';"+
-"sendToApi(payload);"+
-"}).catch(function(){sendToApi(payload);});"+
-"};"+
-"script.onerror=function(){sendToApi(payload);};"+
-"document.head.appendChild(script);"+
-"})();";
+function generateBookmarkletCode(userId){
+  return "javascript:(function(){"+
+  "var USER_ID='"+userId+"';"+
+  "var appUrl='https://meta-ads-toolkit-a71e.vercel.app';"+
+  "var apiUrl=appUrl+'/api/temp-upload';"+
+  "var url=window.location.href;var title=document.title;var dateRange='';"+
+  "var dMatch=url.match(/date[=%3D]+([0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{4}-[0-9]{2}-[0-9]{2})/);"+
+  "if(dMatch){dateRange=dMatch[1].replace('_',' – ');}"+
+  "var fb=document.createElement('div');"+
+  "fb.style.cssText='position:fixed;top:20px;right:20px;z-index:99999;background:linear-gradient(135deg,#6366F1,#8B5CF6);color:white;padding:14px 20px;border-radius:12px;font-family:sans-serif;font-size:14px;font-weight:600;box-shadow:0 8px 32px rgba(99,102,241,0.4)';"+
+  "fb.textContent='Meta Ads Toolkit – Otvaram app...';document.body.appendChild(fb);"+
+  "var newTab=window.open(appUrl+'?source=loading&mod=9&uid='+USER_ID,'_blank');"+
+  "var payload={source:url,title:title,dateRange:dateRange,screenshot:null,tables:[],timestamp:new Date().toISOString(),user_id:USER_ID};"+
+  "function sendToApi(p){"+
+  "fetch(apiUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data:p})})"+
+  ".then(function(r){return r.json();})"+
+  ".then(function(result){"+
+  "if(result.id){"+
+  "fb.textContent='Meta Ads Toolkit – Gotovo!';"+
+  "if(newTab){newTab.location.href=appUrl+'?import_id='+result.id+'&mod=9&uid='+USER_ID;}"+
+  "}else{fb.textContent='Greška pri slanju podataka.';}"+
+  "setTimeout(function(){fb.remove();},2000);"+
+  "}).catch(function(){"+
+  "fb.textContent='Greška pri konekciji.';"+
+  "setTimeout(function(){fb.remove();},2000);"+
+  "});}"+
+  "var script=document.createElement('script');"+
+  "script.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';"+
+  "script.onload=function(){"+
+  "html2canvas(document.body,{scale:0.6,useCORS:true,allowTaint:true,logging:false,height:Math.min(window.innerHeight,1600)})"+
+  ".then(function(canvas){"+
+  "payload.screenshot=canvas.toDataURL('image/jpeg',0.6).split(',')[1];"+
+  "fb.textContent='Meta Ads Toolkit – Šaljem...';"+
+  "sendToApi(payload);"+
+  "}).catch(function(){sendToApi(payload);});"+
+  "};"+
+  "script.onerror=function(){sendToApi(payload);};"+
+  "document.head.appendChild(script);"+
+  "})();";}
 
 // ── MODULE 9: BOOKMARK CONNECTOR ─────────────────────────────────────────────
 function BookmarkMod({t,lang}){
@@ -2087,12 +2088,16 @@ Be specific. Use actual numbers from the screenshot.`;
     <div style={{background:"rgba(99,102,241,0.06)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:14,padding:"20px",marginBottom:16}}>
       <div style={{color:C.acl,fontSize:11,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",marginBottom:10}}>{t.bm_step1}</div>
       <p style={{color:C.mut,fontSize:13,margin:"0 0 16px"}}>{t.bm_dragSub}</p>
-      <div style={{display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
-        <a href={BOOKMARKLET_CODE} draggable="true" onClick={e=>e.preventDefault()} style={{display:"inline-flex",alignItems:"center",gap:8,background:"linear-gradient(135deg,#6366F1,#8B5CF6)",color:"#fff",padding:"12px 20px",borderRadius:12,fontWeight:700,fontSize:14,textDecoration:"none",boxShadow:"0 4px 20px rgba(99,102,241,0.4)",cursor:"grab",userSelect:"none",flexShrink:0}}>
-          📊 Meta Ads Toolkit
-        </a>
-        <div style={{color:C.mut,fontSize:13}}>← {t.bm_drag}</div>
-      </div>
+      {(()=>{
+        const userId=localStorage.getItem("mat_user_id")||"";
+        const bmCode=generateBookmarkletCode(userId);
+        return <div style={{display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
+          <a href={bmCode} draggable="true" onClick={e=>e.preventDefault()} style={{display:"inline-flex",alignItems:"center",gap:8,background:"linear-gradient(135deg,#6366F1,#8B5CF6)",color:"#fff",padding:"12px 20px",borderRadius:12,fontWeight:700,fontSize:14,textDecoration:"none",boxShadow:"0 4px 20px rgba(99,102,241,0.4)",cursor:"grab",userSelect:"none",flexShrink:0}}>
+            📊 Meta Ads Toolkit
+          </a>
+          <div style={{color:C.mut,fontSize:13}}>← {t.bm_drag}</div>
+        </div>;
+      })()}
       <div style={{marginTop:14,background:"rgba(255,255,255,0.03)",borderRadius:10,padding:"12px 14px"}}>
         <div style={{color:C.dim,fontSize:11,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8}}>{t.bm_works}</div>
         <div style={{display:"flex",flexWrap:"wrap",gap:8}}>{sources.map(s=><span key={s} style={{background:"rgba(255,255,255,0.06)",border:`1px solid ${C.brd}`,borderRadius:20,color:C.mut,fontSize:11,fontWeight:600,padding:"4px 10px"}}>{s}</span>)}</div>
@@ -2647,13 +2652,26 @@ export default function App(){
   const w=useWindowSize();
   const isDesktop=w>=1024;
 
-  // Handle UUID from QR scan
+  // Handle UUID from QR scan OR token link OR bookmarklet uid
   useEffect(()=>{
     const params=new URLSearchParams(window.location.search);
-    const uuid=params.get("uuid");
-    if(uuid){
-      localStorage.setItem("mat_user_id",uuid);
+    const token=params.get("token");
+    const uid=params.get("uid");
+    if(token){
+      localStorage.setItem("mat_user_id",token);
       window.history.replaceState({},"",window.location.pathname);
+    } else if(uid){
+      // UUID from bookmarklet – restore if localStorage is empty
+      if(!localStorage.getItem("mat_user_id")){
+        localStorage.setItem("mat_user_id",uid);
+      }
+      window.history.replaceState({},"",window.location.pathname+"?source=loading&mod=9");
+    } else {
+      const uuidParam=params.get("uuid");
+      if(uuidParam){
+        localStorage.setItem("mat_user_id",uuidParam);
+        window.history.replaceState({},"",window.location.pathname);
+      }
     }
   },[]);
 
@@ -2823,6 +2841,17 @@ export default function App(){
           ))}
         </div>
         <div style={{paddingTop:20,borderTop:`1px solid ${C.brd}`,textAlign:"center"}}>
+          {/* Magic Link */}
+          <div style={{background:"rgba(99,102,241,0.08)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:10,padding:"12px",marginBottom:12,textAlign:"left"}}>
+            <div style={{color:C.acl,fontSize:11,fontWeight:700,marginBottom:6}}>🔐 {lang==="sr"?"Sačuvaj pristup":"Save Access"}</div>
+            <div style={{color:C.mut,fontSize:10,marginBottom:8,lineHeight:1.5}}>{lang==="sr"?"Sačuvaj link da ne izgubiš analize:":"Save link to keep your analyses:"}</div>
+            <div style={{display:"flex",gap:6}}>
+              <input readOnly value={`${window.location.origin}?token=${localStorage.getItem("mat_user_id")||""}`} style={{flex:1,background:"rgba(255,255,255,0.05)",border:`1px solid ${C.brd}`,borderRadius:6,color:C.txt,fontSize:9,padding:"5px 6px",cursor:"text"}} onClick={e=>e.target.select()}/>
+              <button onClick={()=>navigator.clipboard?.writeText(`${window.location.origin}?token=${localStorage.getItem("mat_user_id")||""}`)} style={{background:"rgba(99,102,241,0.3)",border:"none",borderRadius:6,color:C.acl,fontSize:10,fontWeight:700,padding:"5px 8px",cursor:"pointer",whiteSpace:"nowrap"}}>
+                {lang==="sr"?"Kopiraj":"Copy"}
+              </button>
+            </div>
+          </div>
           <div style={{color:"rgba(255,255,255,0.2)",fontSize:11}}>Meta Ads Toolkit · v1.0</div>
           <div style={{color:"rgba(255,255,255,0.15)",fontSize:10,marginTop:3}}>by aleksandarpopup</div>
         </div>
