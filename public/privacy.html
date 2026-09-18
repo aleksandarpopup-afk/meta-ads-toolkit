@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Politika privatnosti – Meta Ads Toolkit Connector</title>
+<style>
+  body {
+    background: #08080f;
+    color: #f5f5f7;
+    font-family: -apple-system, "Plus Jakarta Sans", Segoe UI, Roboto, sans-serif;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 50px 24px 100px;
+    line-height: 1.7;
+  }
+  h1 { font-size: 26px; font-weight: 800; margin-bottom: 4px; }
+  .updated { color: #9a9aa5; font-size: 13px; margin-bottom: 36px; }
+  h2 { font-size: 18px; font-weight: 700; margin-top: 36px; margin-bottom: 10px; color: #a5a8ff; }
+  p, li { font-size: 14px; color: #d5d5db; }
+  ul { padding-left: 20px; }
+  a { color: #00D4FF; }
+</style>
+</head>
+<body>
+  <h1>🔒 Politika privatnosti</h1>
+  <div class="updated">Meta Ads Toolkit Connector (Chrome ekstenzija) · Poslednje ažurirano: septembar 2026.</div>
+
+  <p>Ova stranica objašnjava koje podatke prikuplja Chrome ekstenzija <strong>Meta Ads Toolkit Connector</strong> i kako se ti podaci koriste.</p>
+
+  <h2>Šta ekstenzija radi</h2>
+  <p>Ekstenzija omogućava korisniku da jednim klikom uhvati snimak ekrana trenutno otvorene stranice (npr. Meta Ads Manager, Looker Studio, GA4 ili bilo koji drugi sajt) i pošalje ga u Meta Ads Toolkit aplikaciju radi AI analize. Ekstenzija ne radi ništa automatski u pozadini – aktivira se isključivo kada korisnik sam klikne dugme "Uhvati podatke".</p>
+
+  <h2>Koje podatke prikupljamo</h2>
+  <ul>
+    <li><strong>Identifikator naloga (UUID):</strong> korisnik ga sam unosi jednom, nalepljivanjem svog "Magic Link"-a iz Meta Ads Toolkit aplikacije. Ovaj identifikator se čuva lokalno u browseru (chrome.storage), ne na spoljnim serverima ekstenzije.</li>
+    <li><strong>Snimak ekrana:</strong> pravi se isključivo kada korisnik klikne "Uhvati podatke", i to samo za tab koji je u tom trenutku aktivan.</li>
+    <li><strong>Adresa i naslov stranice:</strong> URL i naslov taba u trenutku hvatanja, radi konteksta u analizi.</li>
+  </ul>
+  <p>Ekstenzija ne prati korisnika po drugim sajtovima, ne radi u pozadini, i ne prikuplja ništa bez eksplicitne akcije korisnika (klika na dugme).</p>
+
+  <h2>Kako se podaci koriste</h2>
+  <p>Uhvaćeni podaci se šalju direktno u Meta Ads Toolkit aplikaciju (na adresu meta-ads-toolkit-a71e.vercel.app), vezano za nalog korisnika, radi generisanja AI analize marketing kampanja. Podaci se ne prosleđuju trećim stranama, ne koriste se za oglašavanje, i ne prodaju se.</p>
+
+  <h2>Čuvanje podataka</h2>
+  <p>Snimak ekrana se privremeno čuva na serveru (Supabase baza) najviše 5 minuta, dok se ne prikaže korisniku u aplikaciji, nakon čega se automatski briše. Analize koje korisnik sačuva u okviru aplikacije čuvaju se trajno, vezano za njegov nalog, dok ih sam ne obriše.</p>
+
+  <h2>Kontrola korisnika</h2>
+  <p>Korisnik u svakom trenutku može da:</p>
+  <ul>
+    <li>Ukloni ekstenziju iz Chrome-a (chrome://extensions), čime se briše sačuvani identifikator naloga sa tog uređaja</li>
+    <li>Obriše svoje klijente i analize direktno u aplikaciji, u sekciji "Moji klijenti"</li>
+  </ul>
+
+  <h2>Kontakt</h2>
+  <p>Za pitanja u vezi sa ovom politikom privatnosti, kontaktirajte nas preko GitHub repozitorijuma projekta.</p>
+</body>
+</html>
