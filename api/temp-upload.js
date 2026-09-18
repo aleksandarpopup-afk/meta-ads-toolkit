@@ -1,5 +1,5 @@
-const SUPABASE_URL = "https://zlscpdejnkjgcsbohkxy.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpsc2NwZGVqbmtqZ2NzYm9oa3h5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMjIwOTUsImV4cCI6MjA5OTY5ODA5NX0.42ccU4Mly6mTVE-sSG1j7-tO5hZaxS5LMxclkv8Oy78";
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
