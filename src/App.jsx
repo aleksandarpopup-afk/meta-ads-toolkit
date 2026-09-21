@@ -2413,7 +2413,7 @@ function MyClientsMod({t,lang,goMod}){
 
   const connectGA4=()=>{
     const uid=localStorage.getItem("mat_user_id");
-    window.location.href=`/api/ga4-oauth?client_id=${selected.id}&uid=${uid}`;
+    window.location.href=`/api/ga4-auth?client_id=${selected.id}&uid=${uid}`;
   };
 
   const disconnectGA4=async()=>{
