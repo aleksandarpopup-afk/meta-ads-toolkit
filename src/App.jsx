@@ -2355,6 +2355,11 @@ function MyClientsMod({t,lang,goMod}){
   const [analyses,setAnalyses]=useState([]);
   const [loadingA,setLoadingA]=useState(false);
   const [expanded,setExpanded]=useState(null);
+  const [ga4,setGa4]=useState(null);
+  const [ga4Loading,setGa4Loading]=useState(false);
+  const [ga4Setup,setGa4Setup]=useState(null);
+  const [ga4Error,setGa4Error]=useState("");
+  const [ga4Saving,setGa4Saving]=useState(false);
 
   useEffect(()=>{
     const uid=localStorage.getItem("mat_user_id");
@@ -2369,10 +2374,69 @@ function MyClientsMod({t,lang,goMod}){
     setSelected(client);
     setLoadingA(true);
     setAnalyses([]);
+    setGa4(null);
+    setGa4Loading(true);
     fetch(`/api/analyses?client_id=${client.id}&limit=20`)
       .then(r=>r.json())
       .then(data=>{ setAnalyses(Array.isArray(data)?data:[]); setLoadingA(false); })
       .catch(()=>setLoadingA(false));
+    fetch(`/api/ga4-connect?client_id=${client.id}`)
+      .then(r=>r.json())
+      .then(data=>{ setGa4(Array.isArray(data)&&data.length>0?data[0]:null); setGa4Loading(false); })
+      .catch(()=>setGa4Loading(false));
+  };
+
+  // Prepoznaj povratak sa Google OAuth ekrana (?ga4_setup= ili ?ga4_error=)
+  useEffect(()=>{
+    const params=new URLSearchParams(window.location.search);
+    const setupId=params.get("ga4_setup");
+    const err=params.get("ga4_error");
+    if(err){
+      setGa4Error(err);
+      window.history.replaceState({},"",window.location.pathname+"?mod=10");
+    }
+    if(setupId){
+      fetch(`/api/temp-fetch?id=${setupId}`)
+        .then(r=>r.json())
+        .then(res=>{ if(res.data) setGa4Setup(res.data); window.history.replaceState({},"",window.location.pathname+"?mod=10"); })
+        .catch(()=>window.history.replaceState({},"",window.location.pathname+"?mod=10"));
+    }
+  },[]);
+
+  // Kad se klijenti učitaju i imamo GA4 setup na čekanju, automatski otvori tog klijenta
+  useEffect(()=>{
+    if(ga4Setup&&clients.length>0){
+      const c=clients.find(cl=>String(cl.id)===String(ga4Setup.client_id));
+      if(c) loadAnalyses(c);
+    }
+  },[clients,ga4Setup]);
+
+  const connectGA4=()=>{
+    const uid=localStorage.getItem("mat_user_id");
+    window.location.href=`/api/ga4-auth?client_id=${selected.id}&uid=${uid}`;
+  };
+
+  const disconnectGA4=async()=>{
+    if(!window.confirm(sr?"Otkači GA4 vezu za ovog klijenta?":"Disconnect GA4 for this client?")) return;
+    try{
+      await fetch(`/api/ga4-connect?client_id=${selected.id}`,{method:"DELETE"});
+      setGa4(null);
+    }catch(e){}
+  };
+
+  const savePropertySelection=async(prop)=>{
+    setGa4Saving(true);
+    const uid=localStorage.getItem("mat_user_id");
+    try{
+      await fetch("/api/ga4-connect",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({user_id:uid,client_id:ga4Setup.client_id,property_id:prop.property_id,property_name:prop.property_name,refresh_token:ga4Setup.refresh_token})
+      });
+      setGa4({property_id:prop.property_id,property_name:prop.property_name});
+      setGa4Setup(null);
+    }catch(e){}
+    setGa4Saving(false);
   };
 
   const toolLabel=(tool)=>{
@@ -2401,7 +2465,36 @@ function MyClientsMod({t,lang,goMod}){
       <button onClick={()=>{setSelected(null);setAnalyses([]);}} style={{background:"none",border:"none",color:C.acl,cursor:"pointer",fontSize:13,fontWeight:600,padding:0}}>← {sr?"Svi klijenti":"All clients"}</button>
     </div>
     <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 4px"}}>{selected.name}</h2>
-    <p style={{color:C.mut,fontSize:13,margin:"0 0 20px"}}>{sr?"Istorija analiza":"Analysis history"}</p>
+    <p style={{color:C.mut,fontSize:13,margin:"0 0 16px"}}>{sr?"Istorija analiza":"Analysis history"}</p>
+
+    <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px 16px",marginBottom:20}}>
+      {ga4Loading&&<div style={{color:C.mut,fontSize:12}}>{sr?"Proveravam GA4 status...":"Checking GA4 status..."}</div>}
+
+      {!ga4Loading&&ga4&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+        <div>
+          <div style={{color:C.grn,fontWeight:700,fontSize:13}}>✅ {sr?"GA4 povezan":"GA4 connected"}</div>
+          <div style={{color:C.mut,fontSize:11,marginTop:2}}>{ga4.property_name}</div>
+        </div>
+        <button onClick={disconnectGA4} style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.2)",borderRadius:8,color:C.red,fontSize:11,fontWeight:600,padding:"6px 12px",cursor:"pointer",whiteSpace:"nowrap"}}>{sr?"Otkači":"Disconnect"}</button>
+      </div>}
+
+      {!ga4Loading&&!ga4&&!(ga4Setup&&String(ga4Setup.client_id)===String(selected.id))&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+        <div style={{color:C.mut,fontSize:12}}>{sr?"GA4 nije povezan za ovog klijenta":"GA4 is not connected for this client"}</div>
+        <button onClick={connectGA4} style={{background:"rgba(0,212,255,0.15)",border:"1px solid rgba(0,212,255,0.3)",borderRadius:8,color:"#00D4FF",fontSize:12,fontWeight:700,padding:"8px 14px",cursor:"pointer",whiteSpace:"nowrap"}}>🔗 {sr?"Poveži GA4":"Connect GA4"}</button>
+      </div>}
+
+      {ga4Setup&&String(ga4Setup.client_id)===String(selected.id)&&<div>
+        <div style={{color:C.txt,fontWeight:700,fontSize:13,marginBottom:10}}>{sr?"Izaberi GA4 nalog za ovog klijenta:":"Choose a GA4 account for this client:"}</div>
+        {ga4Setup.properties.length===0&&<div style={{color:C.mut,fontSize:12}}>{sr?"Nije pronađen nijedan GA4 nalog na ovom Google nalogu.":"No GA4 accounts found on this Google account."}</div>}
+        {ga4Setup.properties.map(p=><div key={p.property_id} onClick={()=>!ga4Saving&&savePropertySelection(p)}
+          style={{padding:"10px 12px",background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:8,marginBottom:6,cursor:ga4Saving?"default":"pointer",opacity:ga4Saving?0.6:1}}>
+          <div style={{color:C.txt,fontSize:13,fontWeight:600}}>{p.property_name}</div>
+          <div style={{color:C.mut,fontSize:11}}>{p.account_name}</div>
+        </div>)}
+      </div>}
+    </div>
+
+    {ga4Error&&<div style={{color:C.red,fontSize:12,marginBottom:16}}>⚠️ {sr?"Greška pri povezivanju GA4":"GA4 connection error"}: {ga4Error}</div>}
 
     {loadingA&&<div style={{textAlign:"center",padding:"24px 0"}}>
       <div style={{color:C.acl,fontSize:14}}>✦ {sr?"Učitavam...":"Loading..."}</div>
