@@ -1875,7 +1875,7 @@ For "better": true means Period B is better, false means worse. Return ONLY JSON
   if(loading) return <div style={{textAlign:"center",padding:"40px 0"}}>
     <div style={{fontSize:36,marginBottom:16}}>✦</div>
     <div style={{color:C.acl,fontWeight:700,fontSize:15,marginBottom:8}}>{t.rg_generating}</div>
-    <div style={{color:C.mut,fontSize:13}}>{sr?"Ovo može trajati 20-40 sekundi...":"This may take 20-40 seconds..."}}</div>
+    <div style={{color:C.mut,fontSize:13}}>{sr?"Ovo može trajati 20-40 sekundi...":"This may take 20-40 seconds..."}</div>
     <div style={{marginTop:20,display:"flex",flexDirection:"column",gap:8}}>
       {[1,2,3,4,5].map(i=><div key={i} style={{height:12,background:"rgba(255,255,255,0.06)",borderRadius:6,width:i===5?"50%":i===4?"75%":"100%"}}/>)}
     </div>
@@ -2413,7 +2413,7 @@ function MyClientsMod({t,lang,goMod}){
 
   const connectGA4=()=>{
     const uid=localStorage.getItem("mat_user_id");
-    window.location.href=`/api/ga4-auth?client_id=${selected.id}&uid=${uid}`;
+    window.location.href=`/api/ga4-oauth?client_id=${selected.id}&uid=${uid}`;
   };
 
   const disconnectGA4=async()=>{
