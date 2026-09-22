@@ -3205,7 +3205,7 @@ ${summary}`;
       </div>
 
       <div style={{color:C.mut,fontSize:12,marginBottom:14}}>
-        {data.totalProducts.toLocaleString()} {sr?"proizvoda ukupno":"products total"} · €{data.totalRevenue.toFixed(0)} {sr?"ukupan prihod za period":"total revenue for period"}
+        €{(Object.values(data.sourceTotals.paid).reduce((a,b)=>a+b,0)+Object.values(data.sourceTotals.organic).reduce((a,b)=>a+b,0)).toFixed(0)} {sr?"ukupan prihod za period":"total revenue for period"}
       </div>
 
       <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
