@@ -2872,7 +2872,9 @@ function ProductIntelligenceMod({t,lang}){
   const [loading,setLoading]=useState(false);
   const [data,setData]=useState(null);
   const [filter,setFilter]=useState("all");
-  const [sourceBucket,setSourceBucket]=useState(null);
+  const [measure,setMeasure]=useState("viewed");
+  const [paidOrganic,setPaidOrganic]=useState(null);
+  const [sourcePlatform,setSourcePlatform]=useState(null);
   const [aiBrief,setAiBrief]=useState("");
   const [aiLoading,setAiLoading]=useState(false);
   const [err,setErr]=useState("");
@@ -2890,9 +2892,13 @@ function ProductIntelligenceMod({t,lang}){
   const generateBrief=async(d)=>{
     setAiLoading(true);
     try{
-      const summary=`Best-selleri: ${d.bestsellers.slice(0,5).map(b=>`${b.name} (€${b.revenue.toFixed(0)}, ${b.purchased} kupovina)`).join("; ")||"nema"}.
-Skokovi: ${d.spikes.slice(0,5).map(s=>`${s.name} (+${s.viewedChangePct.toFixed(0)}% pregleda, izvor: ${s.topSource})`).join("; ")||"nema"}.
-Napuštene korpe: ${d.abandoned.slice(0,5).map(a=>`${a.name} (${a.addedToCart} u korpi, ${a.conversionRate.toFixed(1)}% konverzija)`).join("; ")||"nema"}.`;
+      const bestsellers=[...d.catalog].sort((a,b)=>b.revenue-a.revenue).slice(0,5);
+      const spikes=d.catalog.filter(i=>i.viewed>=20&&i.viewedChangePct>=50).sort((a,b)=>b.viewedChangePct-a.viewedChangePct).slice(0,5);
+      const abandoned=d.catalog.filter(i=>i.addedToCart>=10&&i.conversionRate<5).sort((a,b)=>b.addedToCart-a.addedToCart).slice(0,5);
+
+      const summary=`Best-selleri: ${bestsellers.map(b=>`${b.name} (€${b.revenue.toFixed(0)}, ${b.purchased} kupovina)`).join("; ")||"nema"}.
+Skokovi u pregledima: ${spikes.map(s=>`${s.name} (+${s.viewedChangePct.toFixed(0)}%)`).join("; ")||"nema"}.
+Napuštene korpe: ${abandoned.map(a=>`${a.name} (${a.addedToCart} u korpi, ${a.conversionRate.toFixed(1)}% konverzija)`).join("; ")||"nema"}.`;
 
       const prompt=sr
         ?`Ti si e-commerce analitičar. Na osnovu ovih GA4 podataka o proizvodima za poslednjih ${d.periodDays} dana, napiši KRATAK uvid (maksimalno 3 rečenice, srpski jezik, ekavica, bez markdown formatiranja) sa najvažnijim zapažanjem i konkretnim predlogom akcije.\n\n${summary}`
@@ -2909,8 +2915,14 @@ Napuštene korpe: ${d.abandoned.slice(0,5).map(a=>`${a.name} (${a.addedToCart} u
     setAiLoading(false);
   };
 
+  // Ponovo generiši AI uvid ako korisnik promeni jezik dok su podaci već učitani
+  useEffect(()=>{
+    if(data) generateBrief(data);
+  },[lang]);
+
   const load=async(client,params)=>{
-    setLoading(true); setErr(""); setData(null); setAiBrief(""); setFilter("all"); setSourceBucket(null);
+    setLoading(true); setErr(""); setData(null); setAiBrief(""); setFilter("all");
+    setPaidOrganic(null); setSourcePlatform(null); setMeasure("viewed");
     setSearch(""); setSortKey("revenue"); setSortDir("desc"); setVisibleCount(50);
     try{
       const qs=params.from&&params.to?`from=${params.from}&to=${params.to}`:`days=${params.days}`;
@@ -2934,39 +2946,49 @@ Napuštene korpe: ${d.abandoned.slice(0,5).map(a=>`${a.name} (${a.addedToCart} u
   const periods=[{v:"7",l:sr?"7 dana":"7 days"},{v:"30",l:sr?"30 dana":"30 days"},{v:"90",l:sr?"90 dana":"90 days"},{v:"custom",l:sr?"Prilagođeno":"Custom"}];
   const filters=[
     {v:"all",l:sr?"Ceo katalog":"Full catalog"},
-    {v:"bestsellers",l:sr?"🏆 Best-selleri":"🏆 Bestsellers"},
-    {v:"spikes",l:sr?"🔥 Skokovi":"🔥 Spikes"},
+    {v:"bestsellers",l:sr?"Best-selleri":"Bestsellers"},
+    {v:"spikes",l:sr?"Skokovi":"Spikes"},
+    {v:"drops",l:sr?"Padovi":"Drops"},
     {v:"abandoned",l:sr?"Napuštene korpe":"Abandoned carts"},
-    {v:"sources",l:sr?"🌐 Izvori":"🌐 Sources"}
+    {v:"sources",l:sr?"Izvori":"Sources"}
   ];
-  const sourceBuckets=[
-    {v:"meta",l:"Meta"},{v:"google",l:"Google"},{v:"tiktok",l:"TikTok"},
-    {v:"organic",l:sr?"Organik":"Organic"},{v:"direct",l:sr?"Direktan":"Direct"},{v:"other",l:sr?"Ostalo":"Other"}
-  ];
+  const measures={
+    viewed:{min:20,label:sr?"Pregledi":"Viewed",field:"viewed",changeField:"viewedChangePct"},
+    addedToCart:{min:10,label:sr?"Korpa":"Cart",field:"addedToCart",changeField:"cartChangePct"},
+    purchased:{min:5,label:sr?"Kupljeno":"Purchased",field:"purchased",changeField:"purchasedChangePct"}
+  };
+  const platformLabels={meta:"Meta",google:"Google",tiktok:"TikTok",direct:sr?"Direktan":"Direct",other:sr?"Ostalo":"Other"};
 
   const sortRows=(arr)=>{
-    const sorted=[...arr].sort((a,b)=>{
-      const av=a[sortKey], bv=b[sortKey];
+    return [...arr].sort((a,b)=>{
+      const av=a[sortKey],bv=b[sortKey];
+      if(typeof av==="string") return sortDir==="desc"?bv.localeCompare(av):av.localeCompare(bv);
       return sortDir==="desc"?bv-av:av-bv;
     });
-    return sorted;
   };
-
   const toggleSort=(key)=>{
     if(sortKey===key) setSortDir(d=>d==="desc"?"asc":"desc");
     else { setSortKey(key); setSortDir("desc"); }
   };
 
-  // Redovi tabele - zavisi od izabranog filtera
-  const isExplorable=filter==="all"||(filter==="sources"&&sourceBucket);
+  const isExplorable=filter==="all"||(filter==="sources"&&paidOrganic&&sourcePlatform);
+
   const rawRows=()=>{
     if(!data) return [];
-    if(filter==="bestsellers") return data.bestsellers;
-    if(filter==="spikes") return data.spikes;
-    if(filter==="abandoned") return data.abandoned;
-    if(filter==="sources") return sourceBucket?(data.sourceCatalog[sourceBucket]||[]):[];
+    if(filter==="bestsellers") return [...data.catalog].sort((a,b)=>b.revenue-a.revenue).slice(0,10);
+    if(filter==="spikes"){
+      const cfg=measures[measure];
+      return data.catalog.filter(i=>i[cfg.field]>=cfg.min&&i[cfg.changeField]>=50).sort((a,b)=>b[cfg.changeField]-a[cfg.changeField]).slice(0,10);
+    }
+    if(filter==="drops"){
+      const cfg=measures[measure];
+      return data.catalog.filter(i=>i[cfg.field]>=cfg.min&&i[cfg.changeField]<=-50).sort((a,b)=>a[cfg.changeField]-b[cfg.changeField]).slice(0,10);
+    }
+    if(filter==="abandoned") return [...data.catalog].filter(i=>i.addedToCart>=10&&i.conversionRate<5).sort((a,b)=>b.addedToCart-a.addedToCart).slice(0,10);
+    if(filter==="sources") return (paidOrganic&&sourcePlatform)?(data.sourceCatalog[paidOrganic][sourcePlatform]||[]):[];
     return data.catalog;
   };
+
   const filteredRows=()=>{
     let r=rawRows();
     if(isExplorable){
@@ -2998,6 +3020,8 @@ Napuštene korpe: ${d.abandoned.slice(0,5).map(a=>`${a.name} (${a.addedToCart} u
 
   const rows=filteredRows();
   const visibleRows=isExplorable?rows.slice(0,visibleCount):rows;
+  const showTrendCol=filter==="spikes"||filter==="drops";
+  const trendCfg=measures[measure];
 
   // KONTROLNA TABLA
   return <div>
@@ -3038,22 +3062,37 @@ Napuštene korpe: ${d.abandoned.slice(0,5).map(a=>`${a.name} (${a.addedToCart} u
       </div>
 
       <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
-        {filters.map(f=><button key={f.v} onClick={()=>{setFilter(f.v);setSourceBucket(null);setSearch("");setVisibleCount(50);}} style={{padding:"6px 12px",borderRadius:20,border:`1px solid ${filter===f.v?"rgba(99,102,241,0.6)":C.brd}`,background:filter===f.v?"rgba(99,102,241,0.2)":"transparent",color:filter===f.v?C.acl:C.mut,fontSize:12,fontWeight:600,cursor:"pointer"}}>{f.l}</button>)}
+        {filters.map(f=><button key={f.v} onClick={()=>{setFilter(f.v);setPaidOrganic(null);setSourcePlatform(null);setSearch("");setVisibleCount(50);}} style={{padding:"6px 12px",borderRadius:20,border:`1px solid ${filter===f.v?"rgba(99,102,241,0.6)":C.brd}`,background:filter===f.v?"rgba(99,102,241,0.2)":"transparent",color:filter===f.v?C.acl:C.mut,fontSize:12,fontWeight:600,cursor:"pointer"}}>{f.l}</button>)}
       </div>
 
+      {(filter==="spikes"||filter==="drops")&&<div style={{marginBottom:14}}>
+        <Lbl c={sr?"Meri po":"Measure by"}/>
+        <div style={{display:"flex",gap:6}}>
+          {Object.keys(measures).map(k=><button key={k} onClick={()=>setMeasure(k)} style={{padding:"6px 14px",borderRadius:8,border:`1px solid ${measure===k?"rgba(99,102,241,0.6)":C.brd}`,background:measure===k?"rgba(99,102,241,0.2)":"transparent",color:measure===k?C.acl:C.mut,fontSize:12,fontWeight:600,cursor:"pointer"}}>{measures[k].label}</button>)}
+        </div>
+      </div>}
+
       {filter==="sources"&&<div style={{marginBottom:16}}>
-        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
-          {sourceBuckets.map(b=><button key={b.v} onClick={()=>{setSourceBucket(b.v);setSearch("");setVisibleCount(50);}} style={{flex:"1 1 100px",padding:"10px",borderRadius:10,border:`1px solid ${sourceBucket===b.v?"rgba(0,212,255,0.6)":C.brd}`,background:sourceBucket===b.v?"rgba(0,212,255,0.15)":"rgba(255,255,255,0.03)",cursor:"pointer",textAlign:"left"}}>
-            <div style={{color:C.mut,fontSize:11,fontWeight:700,marginBottom:2}}>{b.l}</div>
-            <div style={{color:sourceBucket===b.v?"#00D4FF":C.txt,fontSize:14,fontWeight:700}}>€{(data.sourceTotals[b.v]||0).toFixed(0)}</div>
+        <Lbl c={sr?"💰 Plaćeno":"💰 Paid"}/>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
+          {["meta","google","tiktok"].map(p=><button key={p} onClick={()=>{setPaidOrganic("paid");setSourcePlatform(p);setSearch("");setVisibleCount(50);}} style={{flex:"1 1 100px",padding:"10px",borderRadius:10,border:`1px solid ${paidOrganic==="paid"&&sourcePlatform===p?"rgba(0,212,255,0.6)":C.brd}`,background:paidOrganic==="paid"&&sourcePlatform===p?"rgba(0,212,255,0.15)":"rgba(255,255,255,0.03)",cursor:"pointer",textAlign:"left"}}>
+            <div style={{color:C.mut,fontSize:11,fontWeight:700,marginBottom:2}}>{platformLabels[p]}</div>
+            <div style={{color:paidOrganic==="paid"&&sourcePlatform===p?"#00D4FF":C.txt,fontSize:14,fontWeight:700}}>€{(data.sourceTotals.paid[p]||0).toFixed(0)}</div>
           </button>)}
         </div>
-        {!sourceBucket&&<div style={{color:C.mut,fontSize:12,textAlign:"center",padding:"10px 0"}}>{sr?"Izaberi kanal iznad da vidiš proizvode":"Pick a channel above to see products"}</div>}
+        <Lbl c={sr?"🌱 Organsko":"🌱 Organic"}/>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
+          {["meta","google","tiktok","direct","other"].map(p=><button key={p} onClick={()=>{setPaidOrganic("organic");setSourcePlatform(p);setSearch("");setVisibleCount(50);}} style={{flex:"1 1 100px",padding:"10px",borderRadius:10,border:`1px solid ${paidOrganic==="organic"&&sourcePlatform===p?"rgba(52,211,153,0.6)":C.brd}`,background:paidOrganic==="organic"&&sourcePlatform===p?"rgba(52,211,153,0.15)":"rgba(255,255,255,0.03)",cursor:"pointer",textAlign:"left"}}>
+            <div style={{color:C.mut,fontSize:11,fontWeight:700,marginBottom:2}}>{platformLabels[p]}</div>
+            <div style={{color:paidOrganic==="organic"&&sourcePlatform===p?C.grn:C.txt,fontSize:14,fontWeight:700}}>€{(data.sourceTotals.organic[p]||0).toFixed(0)}</div>
+          </button>)}
+        </div>
+        {!(paidOrganic&&sourcePlatform)&&<div style={{color:C.mut,fontSize:12,textAlign:"center",padding:"10px 0"}}>{sr?"Izaberi kanal iznad da vidiš proizvode":"Pick a channel above to see products"}</div>}
       </div>}
 
       {isExplorable&&<input value={search} onChange={e=>{setSearch(e.target.value);setVisibleCount(50);}} placeholder={sr?"🔍 Pretraži proizvod po nazivu...":"🔍 Search product by name..."} style={{width:"100%",padding:"10px 14px",borderRadius:10,border:`1px solid ${C.brd}`,background:"rgba(255,255,255,0.03)",color:C.txt,fontSize:13,marginBottom:14,boxSizing:"border-box"}}/>}
 
-      {rows.length===0&&(filter!=="sources"||sourceBucket)&&<div style={{color:C.mut,fontSize:13,textAlign:"center",padding:"20px 0"}}>{sr?"Nema proizvoda u ovoj kategoriji za izabrani period.":"No products in this category for the selected period."}</div>}
+      {rows.length===0&&(filter!=="sources"||(paidOrganic&&sourcePlatform))&&<div style={{color:C.mut,fontSize:13,textAlign:"center",padding:"20px 0"}}>{sr?"Nema proizvoda u ovoj kategoriji za izabrani period.":"No products in this category for the selected period."}</div>}
 
       {visibleRows.length>0&&<div style={{overflowX:"auto"}}>
         <table style={{width:"100%",fontSize:12,borderCollapse:"collapse"}}>
@@ -3065,8 +3104,7 @@ Napuštene korpe: ${d.abandoned.slice(0,5).map(a=>`${a.name} (${a.addedToCart} u
               <SortTh k="purchased" label={sr?"Kupljeno":"Purchased"}/>
               <SortTh k="revenue" label={sr?"Prihod":"Revenue"}/>
               <SortTh k="conversionRate" label={sr?"Konverzija":"Conversion"}/>
-              {filter==="spikes"&&<th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Rast":"Change"}</th>}
-              {filter==="spikes"&&<th style={{padding:"6px 4px",fontWeight:600,textAlign:"left"}}>{sr?"Izvor":"Source"}</th>}
+              {showTrendCol&&<th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Promena":"Change"}</th>}
             </tr>
           </thead>
           <tbody>
@@ -3077,8 +3115,7 @@ Napuštene korpe: ${d.abandoned.slice(0,5).map(a=>`${a.name} (${a.addedToCart} u
               <td style={{padding:"8px 4px",textAlign:"right",fontWeight:600,color:C.txt}}>{r.purchased.toLocaleString()}</td>
               <td style={{padding:"8px 4px",textAlign:"right",color:C.grn}}>€{r.revenue.toFixed(0)}</td>
               <td style={{padding:"8px 4px",textAlign:"right",color:C.yel}}>{r.conversionRate.toFixed(1)}%</td>
-              {filter==="spikes"&&<td style={{padding:"8px 4px",textAlign:"right",color:C.grn,fontWeight:700}}>+{r.viewedChangePct.toFixed(0)}%</td>}
-              {filter==="spikes"&&<td style={{padding:"8px 4px",color:C.mut}}>{r.topSource}</td>}
+              {showTrendCol&&<td style={{padding:"8px 4px",textAlign:"right",fontWeight:700,color:filter==="spikes"?C.grn:C.red}}>{r[trendCfg.changeField]>=0?"+":""}{r[trendCfg.changeField].toFixed(0)}%</td>}
             </tr>)}
           </tbody>
         </table>
@@ -3093,6 +3130,7 @@ Napuštene korpe: ${d.abandoned.slice(0,5).map(a=>`${a.name} (${a.addedToCart} u
 
 const MODS=[
   {id:1,icon:"📊",col:"#6366F1",tk:"m1t",sk:"m1s"},
+  {id:12,icon:"🛍️",col:"#F43F5E",tk:"m12t",sk:"m12s"},
   {id:8,icon:"📄",col:"#F97316",tk:"m8t",sk:"m8s"},
   {id:9,icon:"🔗",col:"#00D4FF",tk:"m9t",sk:"m9s"},
   {id:10,icon:"👥",col:"#A855F7",tk:"m10t",sk:"m10s"},
@@ -3103,7 +3141,6 @@ const MODS=[
   {id:4,icon:"🎯",col:"#8B5CF6",tk:"m4t",sk:"m4s"},
   {id:5,icon:"📈",col:"#34D399",tk:"m5t",sk:"m5s"},
   {id:6,icon:"✅",col:"#34D399",tk:"m6t",sk:"m6s"},
-  {id:12,icon:"🛍️",col:"#F43F5E",tk:"m12t",sk:"m12s"},
 ];
 
 // ── RESPONSIVE HOOK ──────────────────────────────────────────────────────────
@@ -3225,24 +3262,23 @@ export default function App(){
   // Save lang preference
   useEffect(()=>{ localStorage.setItem("mat_lang",lang); },[lang]);
 
-  const MOD_COLORS=["#6366F1","#F97316","#00D4FF","#A855F7","#EC4899","#10B981","#06B6D4","#F59E0B","#8B5CF6","#34D399","#34D399","#F43F5E"];
   const Comp=mod===1?HealthMod:mod===8?ReportMod:mod===9?BookmarkMod:mod===10?(props=><MyClientsMod {...props} goMod={goMod}/>):mod===11?TimeMachineMod:mod===12?ProductIntelligenceMod:mod===2?BudgetMod:mod===7?ScalingMod:mod===3?CopyMod:mod===4?AudMod:mod===5?RoasMod:mod===6?CheckMod:null;
 
   const ModCard=({m,i,large})=>(
     <button onClick={()=>goMod(m.id)} style={{
-      background:`linear-gradient(145deg,${MOD_COLORS[i]}22,${MOD_COLORS[i]}08 60%,#0d0d1a)`,
-      border:`1px solid ${MOD_COLORS[i]}45`,borderTop:`1px solid ${MOD_COLORS[i]}70`,
+      background:`linear-gradient(145deg,${m.col}22,${m.col}08 60%,#0d0d1a)`,
+      border:`1px solid ${m.col}45`,borderTop:`1px solid ${m.col}70`,
       borderRadius:16,padding:large?"22px 18px":"18px 15px",textAlign:"left",
       cursor:"pointer",display:"block",transition:"all 0.2s",
       WebkitTapHighlightColor:"transparent",
-      boxShadow:`0 4px 24px ${MOD_COLORS[i]}20`,
+      boxShadow:`0 4px 24px ${m.col}20`,
     }}
-    onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow=`0 12px 40px ${MOD_COLORS[i]}35`;}}
-    onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow=`0 4px 24px ${MOD_COLORS[i]}20`;}}>
-      <div style={{width:large?48:40,height:large?48:40,borderRadius:12,background:`linear-gradient(135deg,${MOD_COLORS[i]}40,${MOD_COLORS[i]}20)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:large?24:20,marginBottom:large?14:12}}>{m.icon}</div>
+    onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow=`0 12px 40px ${m.col}35`;}}
+    onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow=`0 4px 24px ${m.col}20`;}}>
+      <div style={{width:large?48:40,height:large?48:40,borderRadius:12,background:`linear-gradient(135deg,${m.col}40,${m.col}20)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:large?24:20,marginBottom:large?14:12}}>{m.icon}</div>
       <div style={{color:"#fff",fontWeight:700,fontSize:large?15:13,marginBottom:4,lineHeight:1.3}}>{t[m.tk]}</div>
       <div style={{color:"rgba(255,255,255,0.45)",fontSize:large?12:11,lineHeight:1.5,marginBottom:large?14:12}}>{t[m.sk]}</div>
-      <div style={{color:MOD_COLORS[i],fontSize:12,fontWeight:700}}>Otvori →</div>
+      <div style={{color:m.col,fontSize:12,fontWeight:700}}>Otvori →</div>
     </button>
   );
 
@@ -3322,16 +3358,16 @@ export default function App(){
             <button key={m.id} onClick={()=>goMod(m.id)} style={{
               width:"100%",padding:"10px 12px",borderRadius:10,textAlign:"left",cursor:"pointer",
               border:"none",marginBottom:3,display:"flex",alignItems:"center",gap:10,transition:"all 0.15s",
-              background:mod===m.id?`${MOD_COLORS[i]}18`:"transparent",
+              background:mod===m.id?`${m.col}18`:"transparent",
             }}
             onMouseEnter={e=>{if(mod!==m.id)e.currentTarget.style.background="rgba(255,255,255,0.05)";}}
             onMouseLeave={e=>{if(mod!==m.id)e.currentTarget.style.background="transparent";}}>
-              <div style={{width:34,height:34,borderRadius:9,background:`linear-gradient(135deg,${MOD_COLORS[i]}40,${MOD_COLORS[i]}20)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>{m.icon}</div>
+              <div style={{width:34,height:34,borderRadius:9,background:`linear-gradient(135deg,${m.col}40,${m.col}20)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>{m.icon}</div>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{color:mod===m.id?"#fff":"rgba(255,255,255,0.65)",fontWeight:mod===m.id?700:500,fontSize:13,lineHeight:1.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t[m.tk]}</div>
                 <div style={{color:"rgba(255,255,255,0.25)",fontSize:11,marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t[m.sk]}</div>
               </div>
-              {mod===m.id&&<div style={{width:3,height:20,borderRadius:2,background:MOD_COLORS[i],flexShrink:0}}/>}
+              {mod===m.id&&<div style={{width:3,height:20,borderRadius:2,background:m.col,flexShrink:0}}/>}
             </button>
           ))}
         </div>
