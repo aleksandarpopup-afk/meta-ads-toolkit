@@ -43,9 +43,11 @@ function detectPlatform(source) {
   return "other";
 }
 
-// Plaćeno ili organsko, na osnovu GA4-ovog sopstvenog channel group-a (pouzdanije od pogađanja po medium tekstu)
+// Plaćeno ili organsko, na osnovu GA4-ovog sopstvenog channel group-a.
+// Cross-network (Performance Max i slične kampanje) je TAKOĐE plaćeno, samo ne počinje rečju "Paid".
 function isPaid(channelGroup) {
-  return (channelGroup || "").toLowerCase().startsWith("paid");
+  const cg = (channelGroup || "").toLowerCase();
+  return cg.startsWith("paid") || cg === "cross-network";
 }
 
 function dateStr(d) {
@@ -94,10 +96,10 @@ export default async function handler(req, res) {
     const { property_id, refresh_token } = connData[0];
     const accessToken = await refreshAccessToken(refresh_token);
 
-    // 1. Glavni izveštaj - ceo katalog, trenutni + prethodni period odjednom
+    // 1. Glavni izveštaj - ceo katalog, grupisano po itemId (ne po nazivu - varijante se ne mešaju!)
     const report = await ga4Fetch(property_id, accessToken, {
       dateRanges: [currentRange, previousRange],
-      dimensions: [{ name: "itemName" }],
+      dimensions: [{ name: "itemId" }, { name: "itemName" }],
       metrics: [
         { name: "itemsViewed" },
         { name: "itemsAddedToCart" },
@@ -110,28 +112,33 @@ export default async function handler(req, res) {
 
     const byItem = {};
     for (const row of report.rows || []) {
-      const name = row.dimensionValues[0].value;
-      const rangeIdx = row.dimensionValues[1].value;
+      const id = row.dimensionValues[0].value;
+      const name = row.dimensionValues[1].value;
+      const rangeIdx = row.dimensionValues[2].value;
       const metrics = {
         viewed: parseInt(row.metricValues[0].value) || 0,
         addedToCart: parseInt(row.metricValues[1].value) || 0,
         purchased: parseInt(row.metricValues[2].value) || 0,
         revenue: parseFloat(row.metricValues[3].value) || 0
       };
-      if (!byItem[name]) byItem[name] = { name, current: null, previous: null };
-      if (rangeIdx === "date_range_0") byItem[name].current = metrics;
-      else byItem[name].previous = metrics;
+      if (!byItem[id]) byItem[id] = { id, name, current: null, previous: null };
+      if (rangeIdx === "date_range_0") byItem[id].current = metrics;
+      else byItem[id].previous = metrics;
     }
 
     const pctChange = (cur, prev) => (prev > 0 ? ((cur - prev) / prev) * 100 : (cur > 0 ? 100 : 0));
+    const safeRate = (num, denom) => (denom > 0 ? (num / denom) * 100 : 0);
 
     const catalog = Object.values(byItem).map((item) => {
       const cur = item.current || { viewed: 0, addedToCart: 0, purchased: 0, revenue: 0 };
       const prev = item.previous || { viewed: 0, addedToCart: 0, purchased: 0, revenue: 0 };
       return {
+        id: item.id,
         name: item.name,
         ...cur,
-        conversionRate: cur.viewed > 0 ? (cur.purchased / cur.viewed) * 100 : 0,
+        viewToCartRate: safeRate(cur.addedToCart, cur.viewed),
+        cartToPurchaseRate: safeRate(cur.purchased, cur.addedToCart),
+        conversionRate: safeRate(cur.purchased, cur.viewed),
         viewedChangePct: pctChange(cur.viewed, prev.viewed),
         cartChangePct: pctChange(cur.addedToCart, prev.addedToCart),
         purchasedChangePct: pctChange(cur.purchased, prev.purchased)
@@ -140,10 +147,39 @@ export default async function handler(req, res) {
 
     const totalRevenue = catalog.reduce((s, i) => s + i.revenue, 0);
 
-    // 2. Izvori - platforma x plaćeno/organsko, po proizvodu
+    // 2. Izvori - PRAVI ukupni prihod po kanalu (totalRevenue, isti nivo merenja kao GA4-ov sopstveni izveštaj).
+    // Ovo je NAMERNO odvojeno od proizvod-nivo podataka ispod - itemRevenue zna da bude manji od totalRevenue
+    // kad transakcija nema potpune podatke o proizvodu (GA4-ovo poznato ograničenje, ne naša greška).
+    const totalsReport = await ga4Fetch(property_id, accessToken, {
+      dateRanges: [currentRange],
+      dimensions: [{ name: "sessionSource" }, { name: "sessionDefaultChannelGroup" }],
+      metrics: [{ name: "totalRevenue" }],
+      limit: 500
+    });
+
+    const sourceTotals = {
+      paid: { meta: 0, google: 0, tiktok: 0 },
+      organic: { meta: 0, google: 0, tiktok: 0, direct: 0, other: 0 }
+    };
+    for (const row of totalsReport.rows || []) {
+      const src = row.dimensionValues[0].value;
+      const channelGroup = row.dimensionValues[1].value;
+      const platform = detectPlatform(src);
+      const paid = (platform === "direct" || platform === "other") ? false : isPaid(channelGroup);
+      const bucket = paid ? "paid" : "organic";
+      const revenue = parseFloat(row.metricValues[0].value) || 0;
+      sourceTotals[bucket][platform] += revenue;
+    }
+
+    // 3. Izvori - proizvod-nivo raščlanjavanje PO kanalu (za tabelu kad klikneš na kanal)
     const sourceReport = await ga4Fetch(property_id, accessToken, {
       dateRanges: [currentRange],
-      dimensions: [{ name: "sessionSource" }, { name: "sessionDefaultChannelGroup" }, { name: "itemName" }],
+      dimensions: [
+        { name: "sessionSource" },
+        { name: "sessionDefaultChannelGroup" },
+        { name: "itemId" },
+        { name: "itemName" }
+      ],
       metrics: [
         { name: "itemsViewed" },
         { name: "itemsAddedToCart" },
@@ -154,10 +190,6 @@ export default async function handler(req, res) {
       limit: 5000
     });
 
-    const sourceTotals = {
-      paid: { meta: 0, google: 0, tiktok: 0 },
-      organic: { meta: 0, google: 0, tiktok: 0, direct: 0, other: 0 }
-    };
     const sourceCatalogMap = {
       paid: { meta: {}, google: {}, tiktok: {} },
       organic: { meta: {}, google: {}, tiktok: {}, direct: {}, other: {} }
@@ -166,9 +198,9 @@ export default async function handler(req, res) {
     for (const row of sourceReport.rows || []) {
       const src = row.dimensionValues[0].value;
       const channelGroup = row.dimensionValues[1].value;
-      const itemName = row.dimensionValues[2].value;
+      const itemId = row.dimensionValues[2].value;
+      const itemName = row.dimensionValues[3].value;
       const platform = detectPlatform(src);
-      // direct i other postoje samo kao organski (nema "plaćen direktan pristup")
       const paid = (platform === "direct" || platform === "other") ? false : isPaid(channelGroup);
       const bucket = paid ? "paid" : "organic";
 
@@ -179,11 +211,10 @@ export default async function handler(req, res) {
         revenue: parseFloat(row.metricValues[3].value) || 0
       };
 
-      sourceTotals[bucket][platform] += m.revenue;
-      if (!sourceCatalogMap[bucket][platform][itemName]) {
-        sourceCatalogMap[bucket][platform][itemName] = { name: itemName, viewed: 0, addedToCart: 0, purchased: 0, revenue: 0 };
+      if (!sourceCatalogMap[bucket][platform][itemId]) {
+        sourceCatalogMap[bucket][platform][itemId] = { id: itemId, name: itemName, viewed: 0, addedToCart: 0, purchased: 0, revenue: 0 };
       }
-      const t = sourceCatalogMap[bucket][platform][itemName];
+      const t = sourceCatalogMap[bucket][platform][itemId];
       t.viewed += m.viewed;
       t.addedToCart += m.addedToCart;
       t.purchased += m.purchased;
@@ -194,7 +225,12 @@ export default async function handler(req, res) {
     for (const bucket of ["paid", "organic"]) {
       for (const platform of Object.keys(sourceCatalogMap[bucket])) {
         sourceCatalog[bucket][platform] = Object.values(sourceCatalogMap[bucket][platform])
-          .map((i) => ({ ...i, conversionRate: i.viewed > 0 ? (i.purchased / i.viewed) * 100 : 0 }))
+          .map((i) => ({
+            ...i,
+            viewToCartRate: safeRate(i.addedToCart, i.viewed),
+            cartToPurchaseRate: safeRate(i.purchased, i.addedToCart),
+            conversionRate: safeRate(i.purchased, i.viewed)
+          }))
           .sort((a, b) => b.revenue - a.revenue)
           .slice(0, 200);
       }
