@@ -33,20 +33,54 @@ async function ga4Fetch(propertyId, accessToken, body) {
   return data;
 }
 
+// Razvrstavanje sirovog GA4 izvora u jednu od naših 6 kategorija.
+// Koristimo i medium (ne samo source) da izbegnemo mešanje slučajeva
+// kao "(direct)/(none)" sa nečim drugim.
+function bucketSource(source, medium) {
+  const s = (source || "").toLowerCase();
+  const m = (medium || "").toLowerCase();
+  if (s.includes("facebook") || s.includes("instagram") || s === "fb") return "meta";
+  if (s.includes("google")) return "google";
+  if (s.includes("tiktok")) return "tiktok";
+  if (s === "(direct)" && (m === "(none)" || m === "")) return "direct";
+  if (["bing", "yahoo", "duckduckgo", "yandex"].some((e) => s.includes(e))) return "organic";
+  return "other";
+}
+
+function dateStr(d) {
+  return d.toISOString().split("T")[0];
+}
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   if (req.method === "OPTIONS") return res.status(200).end();
 
-  const { client_id, days } = req.query;
-  const periodDays = parseInt(days) || 30;
-
+  const { client_id, days, from, to } = req.query;
   if (!client_id) return res.status(400).json({ error: "No client_id" });
 
-  const supaHeaders = {
-    apikey: SUPABASE_KEY,
-    Authorization: `Bearer ${SUPABASE_KEY}`
-  };
+  // Trenutni i prethodni period (prethodni = isti broj dana, odmah pre trenutnog)
+  let currentRange, previousRange, periodLabel;
+  if (from && to) {
+    const fromD = new Date(from);
+    const toD = new Date(to);
+    const lengthMs = toD - fromD;
+    if (isNaN(lengthMs) || lengthMs < 0) {
+      return res.status(400).json({ error: "Neispravan period (od/do)" });
+    }
+    const prevTo = new Date(fromD.getTime() - 24 * 60 * 60 * 1000);
+    const prevFrom = new Date(prevTo.getTime() - lengthMs);
+    currentRange = { startDate: from, endDate: to };
+    previousRange = { startDate: dateStr(prevFrom), endDate: dateStr(prevTo) };
+    periodLabel = Math.round(lengthMs / (24 * 60 * 60 * 1000)) + 1;
+  } else {
+    const periodDays = parseInt(days) || 30;
+    currentRange = { startDate: `${periodDays}daysAgo`, endDate: "yesterday" };
+    previousRange = { startDate: `${periodDays * 2}daysAgo`, endDate: `${periodDays + 1}daysAgo` };
+    periodLabel = periodDays;
+  }
+
+  const supaHeaders = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 
   try {
     // 1. Nađi GA4 konekciju za ovog klijenta
@@ -59,15 +93,11 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: "GA4 nije povezan za ovog klijenta" });
     }
     const { property_id, refresh_token } = connData[0];
-
     const accessToken = await refreshAccessToken(refresh_token);
 
-    // 2. Jedan poziv, dva perioda odjednom (trenutni + prethodni, za poređenje)
+    // 2. Glavni izveštaj - ceo katalog, trenutni + prethodni period odjednom
     const report = await ga4Fetch(property_id, accessToken, {
-      dateRanges: [
-        { startDate: `${periodDays}daysAgo`, endDate: "yesterday" },
-        { startDate: `${periodDays * 2}daysAgo`, endDate: `${periodDays + 1}daysAgo` }
-      ],
+      dateRanges: [currentRange, previousRange],
       dimensions: [{ name: "itemName" }],
       metrics: [
         { name: "itemsViewed" },
@@ -76,14 +106,13 @@ export default async function handler(req, res) {
         { name: "itemRevenue" }
       ],
       orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }],
-      limit: 500
+      limit: 2000
     });
 
-    // 3. Spajamo trenutni i prethodni period po nazivu proizvoda
     const byItem = {};
     for (const row of report.rows || []) {
       const name = row.dimensionValues[0].value;
-      const rangeIdx = row.dimensionValues[1].value; // "date_range_0" (trenutni) ili "date_range_1" (prethodni)
+      const rangeIdx = row.dimensionValues[1].value;
       const metrics = {
         viewed: parseInt(row.metricValues[0].value) || 0,
         addedToCart: parseInt(row.metricValues[1].value) || 0,
@@ -103,52 +132,101 @@ export default async function handler(req, res) {
       return { name: item.name, ...cur, viewedChangePct, conversionRate };
     });
 
-    // 4. Best-selleri - top 10 po prihodu
+    const totalRevenue = catalog.reduce((s, i) => s + i.revenue, 0);
+
+    // 3. Best-selleri - top 10 po prihodu
     const bestsellers = [...catalog].sort((a, b) => b.revenue - a.revenue).slice(0, 10);
 
-    // 5. Skokovi - min 20 pregleda u tekućem periodu, i rast preko 50%
+    // 4. Skokovi - min 20 pregleda, rast preko 50%
     const spikes = catalog
       .filter((i) => i.viewed >= 20 && i.viewedChangePct >= 50)
       .sort((a, b) => b.viewedChangePct - a.viewedChangePct)
       .slice(0, 10);
 
-    // 6. Napuštene korpe - dosta dodavanja u korpu, mala stopa konverzije
+    // 5. Napuštene korpe
     const abandoned = catalog
       .filter((i) => i.addedToCart >= 10 && i.conversionRate < 5)
       .sort((a, b) => b.addedToCart - a.addedToCart)
       .slice(0, 10);
 
-    // 7. Izvor saobraćaja - samo za proizvode iz "Skokovi" liste (štedimo pozive)
+    // 6. Izvor saobraćaja za Skokove (samo ti proizvodi, da štedimo pozive)
     let spikeSources = {};
     if (spikes.length > 0) {
-      const sourceReport = await ga4Fetch(property_id, accessToken, {
-        dateRanges: [{ startDate: `${periodDays}daysAgo`, endDate: "yesterday" }],
+      const sourceReportSpikes = await ga4Fetch(property_id, accessToken, {
+        dateRanges: [currentRange],
         dimensions: [{ name: "itemName" }, { name: "sessionSource" }],
         metrics: [{ name: "itemsViewed" }],
         dimensionFilter: {
-          filter: {
-            fieldName: "itemName",
-            inListFilter: { values: spikes.map((s) => s.name) }
-          }
+          filter: { fieldName: "itemName", inListFilter: { values: spikes.map((s) => s.name) } }
         },
         orderBys: [{ metric: { metricName: "itemsViewed" }, desc: true }],
         limit: 100
       });
-      for (const row of sourceReport.rows || []) {
+      for (const row of sourceReportSpikes.rows || []) {
         const name = row.dimensionValues[0].value;
         const source = row.dimensionValues[1].value;
-        if (!spikeSources[name]) spikeSources[name] = source; // uzimamo samo top (prvi) izvor po proizvodu
+        if (!spikeSources[name]) spikeSources[name] = source;
       }
     }
     const spikesWithSource = spikes.map((s) => ({ ...s, topSource: spikeSources[s.name] || "N/A" }));
 
+    // 7. Izvori kartica - svi proizvodi grupisani po kanalu (Meta/Google/TikTok/Direct/Organic/Ostalo)
+    const sourceReport = await ga4Fetch(property_id, accessToken, {
+      dateRanges: [currentRange],
+      dimensions: [{ name: "sessionSource" }, { name: "sessionMedium" }, { name: "itemName" }],
+      metrics: [
+        { name: "itemsViewed" },
+        { name: "itemsAddedToCart" },
+        { name: "itemsPurchased" },
+        { name: "itemRevenue" }
+      ],
+      orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }],
+      limit: 5000
+    });
+
+    const sourceTotals = { meta: 0, google: 0, tiktok: 0, direct: 0, organic: 0, other: 0 };
+    const sourceCatalogMap = { meta: {}, google: {}, tiktok: {}, direct: {}, organic: {}, other: {} };
+
+    for (const row of sourceReport.rows || []) {
+      const src = row.dimensionValues[0].value;
+      const med = row.dimensionValues[1].value;
+      const itemName = row.dimensionValues[2].value;
+      const bucket = bucketSource(src, med);
+      const m = {
+        viewed: parseInt(row.metricValues[0].value) || 0,
+        addedToCart: parseInt(row.metricValues[1].value) || 0,
+        purchased: parseInt(row.metricValues[2].value) || 0,
+        revenue: parseFloat(row.metricValues[3].value) || 0
+      };
+      sourceTotals[bucket] += m.revenue;
+      if (!sourceCatalogMap[bucket][itemName]) {
+        sourceCatalogMap[bucket][itemName] = { name: itemName, viewed: 0, addedToCart: 0, purchased: 0, revenue: 0 };
+      }
+      const t = sourceCatalogMap[bucket][itemName];
+      t.viewed += m.viewed;
+      t.addedToCart += m.addedToCart;
+      t.purchased += m.purchased;
+      t.revenue += m.revenue;
+    }
+
+    const sourceCatalog = {};
+    for (const bucket of Object.keys(sourceCatalogMap)) {
+      sourceCatalog[bucket] = Object.values(sourceCatalogMap[bucket])
+        .map((i) => ({ ...i, conversionRate: i.viewed > 0 ? (i.purchased / i.viewed) * 100 : 0 }))
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 200);
+    }
+
     return res.status(200).json({
-      periodDays,
+      periodDays: periodLabel,
       totalProducts: catalog.length,
+      totalRevenue,
       catalog,
       bestsellers,
       spikes: spikesWithSource,
-      abandoned
+      abandoned,
+      sourceTotals,
+      sourceCatalog
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });
