@@ -141,7 +141,10 @@ export default async function handler(req, res) {
         conversionRate: safeRate(cur.purchased, cur.viewed),
         viewedChangePct: pctChange(cur.viewed, prev.viewed),
         cartChangePct: pctChange(cur.addedToCart, prev.addedToCart),
-        purchasedChangePct: pctChange(cur.purchased, prev.purchased)
+        purchasedChangePct: pctChange(cur.purchased, prev.purchased),
+        previousViewed: prev.viewed,
+        previousAddedToCart: prev.addedToCart,
+        previousPurchased: prev.purchased
       };
     });
 
