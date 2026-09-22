@@ -2867,12 +2867,19 @@ function ProductIntelligenceMod({t,lang}){
   const [clients,setClients]=useState([]);
   const [selectedClient,setSelectedClient]=useState(null);
   const [period,setPeriod]=useState("30");
+  const [customFrom,setCustomFrom]=useState("");
+  const [customTo,setCustomTo]=useState("");
   const [loading,setLoading]=useState(false);
   const [data,setData]=useState(null);
   const [filter,setFilter]=useState("all");
+  const [sourceBucket,setSourceBucket]=useState(null);
   const [aiBrief,setAiBrief]=useState("");
   const [aiLoading,setAiLoading]=useState(false);
   const [err,setErr]=useState("");
+  const [search,setSearch]=useState("");
+  const [sortKey,setSortKey]=useState("revenue");
+  const [sortDir,setSortDir]=useState("desc");
+  const [visibleCount,setVisibleCount]=useState(50);
 
   useEffect(()=>{
     const uid=localStorage.getItem("mat_user_id");
@@ -2902,10 +2909,12 @@ Napuštene korpe: ${d.abandoned.slice(0,5).map(a=>`${a.name} (${a.addedToCart} u
     setAiLoading(false);
   };
 
-  const load=async(client,p)=>{
-    setLoading(true); setErr(""); setData(null); setAiBrief(""); setFilter("all");
+  const load=async(client,params)=>{
+    setLoading(true); setErr(""); setData(null); setAiBrief(""); setFilter("all"); setSourceBucket(null);
+    setSearch(""); setSortKey("revenue"); setSortDir("desc"); setVisibleCount(50);
     try{
-      const res=await fetch(`/api/product-intelligence?client_id=${client.id}&days=${p}`);
+      const qs=params.from&&params.to?`from=${params.from}&to=${params.to}`:`days=${params.days}`;
+      const res=await fetch(`/api/product-intelligence?client_id=${client.id}&${qs}`);
       const d=await res.json();
       if(!res.ok) throw new Error(d.error||(sr?"Greška pri učitavanju":"Loading error"));
       setData(d);
@@ -2914,21 +2923,62 @@ Napuštene korpe: ${d.abandoned.slice(0,5).map(a=>`${a.name} (${a.addedToCart} u
     setLoading(false);
   };
 
-  const periods=[{v:"7",l:sr?"7 dana":"7 days"},{v:"30",l:sr?"30 dana":"30 days"},{v:"90",l:sr?"90 dana":"90 days"}];
+  const applyPeriod=(p)=>{
+    setPeriod(p);
+    if(p!=="custom"&&selectedClient) load(selectedClient,{days:p});
+  };
+  const applyCustom=()=>{
+    if(selectedClient&&customFrom&&customTo) load(selectedClient,{from:customFrom,to:customTo});
+  };
+
+  const periods=[{v:"7",l:sr?"7 dana":"7 days"},{v:"30",l:sr?"30 dana":"30 days"},{v:"90",l:sr?"90 dana":"90 days"},{v:"custom",l:sr?"Prilagođeno":"Custom"}];
   const filters=[
-    {v:"all",l:sr?"Svi":"All"},
+    {v:"all",l:sr?"Ceo katalog":"Full catalog"},
     {v:"bestsellers",l:sr?"🏆 Best-selleri":"🏆 Bestsellers"},
     {v:"spikes",l:sr?"🔥 Skokovi":"🔥 Spikes"},
-    {v:"abandoned",l:sr?"Napuštene korpe":"Abandoned carts"}
+    {v:"abandoned",l:sr?"Napuštene korpe":"Abandoned carts"},
+    {v:"sources",l:sr?"🌐 Izvori":"🌐 Sources"}
+  ];
+  const sourceBuckets=[
+    {v:"meta",l:"Meta"},{v:"google",l:"Google"},{v:"tiktok",l:"TikTok"},
+    {v:"organic",l:sr?"Organik":"Organic"},{v:"direct",l:sr?"Direktan":"Direct"},{v:"other",l:sr?"Ostalo":"Other"}
   ];
 
-  const rows=()=>{
+  const sortRows=(arr)=>{
+    const sorted=[...arr].sort((a,b)=>{
+      const av=a[sortKey], bv=b[sortKey];
+      return sortDir==="desc"?bv-av:av-bv;
+    });
+    return sorted;
+  };
+
+  const toggleSort=(key)=>{
+    if(sortKey===key) setSortDir(d=>d==="desc"?"asc":"desc");
+    else { setSortKey(key); setSortDir("desc"); }
+  };
+
+  // Redovi tabele - zavisi od izabranog filtera
+  const isExplorable=filter==="all"||(filter==="sources"&&sourceBucket);
+  const rawRows=()=>{
     if(!data) return [];
     if(filter==="bestsellers") return data.bestsellers;
     if(filter==="spikes") return data.spikes;
     if(filter==="abandoned") return data.abandoned;
-    return [...data.catalog].sort((a,b)=>b.revenue-a.revenue).slice(0,50);
+    if(filter==="sources") return sourceBucket?(data.sourceCatalog[sourceBucket]||[]):[];
+    return data.catalog;
   };
+  const filteredRows=()=>{
+    let r=rawRows();
+    if(isExplorable){
+      if(search.trim()) r=r.filter(i=>i.name.toLowerCase().includes(search.trim().toLowerCase()));
+      r=sortRows(r);
+    }
+    return r;
+  };
+
+  const SortTh=({k,label,align})=><th onClick={()=>isExplorable&&toggleSort(k)} style={{padding:"6px 4px",fontWeight:600,textAlign:align||"right",cursor:isExplorable?"pointer":"default",userSelect:"none",whiteSpace:"nowrap"}}>
+    {label}{isExplorable&&sortKey===k?(sortDir==="desc"?" ▼":" ▲"):""}
+  </th>;
 
   // IZBOR KLIJENTA
   if(!selectedClient) return <div>
@@ -2939,12 +2989,15 @@ Napuštene korpe: ${d.abandoned.slice(0,5).map(a=>`${a.name} (${a.addedToCart} u
         {sr?"Nema klijenata. Dodaj klijenta u 'Moji klijenti' i poveži GA4.":"No clients. Add a client in 'My Clients' and connect GA4."}
       </div>
       :<div style={{display:"flex",flexDirection:"column",gap:8}}>
-        {clients.map(c=><button key={c.id} onClick={()=>{setSelectedClient(c);load(c,period);}} style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:10,padding:"12px 16px",textAlign:"left",cursor:"pointer",color:C.txt,fontWeight:600,fontSize:13}}>
+        {clients.map(c=><button key={c.id} onClick={()=>{setSelectedClient(c);load(c,{days:period});}} style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:10,padding:"12px 16px",textAlign:"left",cursor:"pointer",color:C.txt,fontWeight:600,fontSize:13}}>
           👤 {c.name}
         </button>)}
       </div>
     }
   </div>;
+
+  const rows=filteredRows();
+  const visibleRows=isExplorable?rows.slice(0,visibleCount):rows;
 
   // KONTROLNA TABLA
   return <div>
@@ -2953,10 +3006,16 @@ Napuštene korpe: ${d.abandoned.slice(0,5).map(a=>`${a.name} (${a.addedToCart} u
         <button onClick={()=>{setSelectedClient(null);setData(null);}} style={{background:"none",border:"none",color:C.mut,cursor:"pointer",fontSize:12,padding:0,marginBottom:4}}>{sr?"← Svi klijenti":"← All clients"}</button>
         <h2 style={{fontSize:18,fontWeight:800,margin:0}}>{selectedClient.name}</h2>
       </div>
-      <div style={{display:"flex",gap:6}}>
-        {periods.map(p=><button key={p.v} onClick={()=>{setPeriod(p.v);load(selectedClient,p.v);}} style={{padding:"6px 12px",borderRadius:8,border:`1px solid ${period===p.v?"rgba(99,102,241,0.6)":C.brd}`,background:period===p.v?"rgba(99,102,241,0.2)":"transparent",color:period===p.v?C.acl:C.mut,fontSize:12,fontWeight:600,cursor:"pointer"}}>{p.l}</button>)}
+      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        {periods.map(p=><button key={p.v} onClick={()=>applyPeriod(p.v)} style={{padding:"6px 12px",borderRadius:8,border:`1px solid ${period===p.v?"rgba(99,102,241,0.6)":C.brd}`,background:period===p.v?"rgba(99,102,241,0.2)":"transparent",color:period===p.v?C.acl:C.mut,fontSize:12,fontWeight:600,cursor:"pointer"}}>{p.l}</button>)}
       </div>
     </div>
+
+    {period==="custom"&&<div style={{display:"flex",gap:10,alignItems:"flex-end",marginBottom:16,flexWrap:"wrap",background:"rgba(255,255,255,0.02)",border:`1px solid ${C.brd}`,borderRadius:12,padding:"12px 14px"}}>
+      <div style={{flex:1,minWidth:140}}><Lbl c={sr?"Od":"From"}/><DIn v={customFrom} ch={setCustomFrom}/></div>
+      <div style={{flex:1,minWidth:140}}><Lbl c={sr?"Do":"To"}/><DIn v={customTo} ch={setCustomTo}/></div>
+      <button onClick={applyCustom} disabled={!customFrom||!customTo} style={{padding:"12px 18px",borderRadius:10,border:"none",background:!customFrom||!customTo?"rgba(99,102,241,0.3)":"linear-gradient(135deg,#6366F1,#4f46e5)",color:"#fff",fontSize:13,fontWeight:700,cursor:!customFrom||!customTo?"default":"pointer"}}>{sr?"Primeni":"Apply"}</button>
+    </div>}
 
     {loading&&<div style={{textAlign:"center",padding:"40px 0"}}>
       <div style={{fontSize:36,marginBottom:16}}>🛍️</div>
@@ -2974,36 +3033,60 @@ Napuštene korpe: ${d.abandoned.slice(0,5).map(a=>`${a.name} (${a.addedToCart} u
         }
       </div>
 
-      <div style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap"}}>
-        {filters.map(f=><button key={f.v} onClick={()=>setFilter(f.v)} style={{padding:"6px 12px",borderRadius:20,border:`1px solid ${filter===f.v?"rgba(99,102,241,0.6)":C.brd}`,background:filter===f.v?"rgba(99,102,241,0.2)":"transparent",color:filter===f.v?C.acl:C.mut,fontSize:12,fontWeight:600,cursor:"pointer"}}>{f.l}</button>)}
+      <div style={{color:C.mut,fontSize:12,marginBottom:14}}>
+        {data.totalProducts.toLocaleString()} {sr?"proizvoda ukupno":"products total"} · €{data.totalRevenue.toFixed(0)} {sr?"ukupan prihod za period":"total revenue for period"}
       </div>
 
-      {rows().length===0&&<div style={{color:C.mut,fontSize:13,textAlign:"center",padding:"20px 0"}}>{sr?"Nema proizvoda u ovoj kategoriji za izabrani period.":"No products in this category for the selected period."}</div>}
+      <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
+        {filters.map(f=><button key={f.v} onClick={()=>{setFilter(f.v);setSourceBucket(null);setSearch("");setVisibleCount(50);}} style={{padding:"6px 12px",borderRadius:20,border:`1px solid ${filter===f.v?"rgba(99,102,241,0.6)":C.brd}`,background:filter===f.v?"rgba(99,102,241,0.2)":"transparent",color:filter===f.v?C.acl:C.mut,fontSize:12,fontWeight:600,cursor:"pointer"}}>{f.l}</button>)}
+      </div>
 
-      {rows().length>0&&<div style={{overflowX:"auto"}}>
+      {filter==="sources"&&<div style={{marginBottom:16}}>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
+          {sourceBuckets.map(b=><button key={b.v} onClick={()=>{setSourceBucket(b.v);setSearch("");setVisibleCount(50);}} style={{flex:"1 1 100px",padding:"10px",borderRadius:10,border:`1px solid ${sourceBucket===b.v?"rgba(0,212,255,0.6)":C.brd}`,background:sourceBucket===b.v?"rgba(0,212,255,0.15)":"rgba(255,255,255,0.03)",cursor:"pointer",textAlign:"left"}}>
+            <div style={{color:C.mut,fontSize:11,fontWeight:700,marginBottom:2}}>{b.l}</div>
+            <div style={{color:sourceBucket===b.v?"#00D4FF":C.txt,fontSize:14,fontWeight:700}}>€{(data.sourceTotals[b.v]||0).toFixed(0)}</div>
+          </button>)}
+        </div>
+        {!sourceBucket&&<div style={{color:C.mut,fontSize:12,textAlign:"center",padding:"10px 0"}}>{sr?"Izaberi kanal iznad da vidiš proizvode":"Pick a channel above to see products"}</div>}
+      </div>}
+
+      {isExplorable&&<input value={search} onChange={e=>{setSearch(e.target.value);setVisibleCount(50);}} placeholder={sr?"🔍 Pretraži proizvod po nazivu...":"🔍 Search product by name..."} style={{width:"100%",padding:"10px 14px",borderRadius:10,border:`1px solid ${C.brd}`,background:"rgba(255,255,255,0.03)",color:C.txt,fontSize:13,marginBottom:14,boxSizing:"border-box"}}/>}
+
+      {rows.length===0&&(filter!=="sources"||sourceBucket)&&<div style={{color:C.mut,fontSize:13,textAlign:"center",padding:"20px 0"}}>{sr?"Nema proizvoda u ovoj kategoriji za izabrani period.":"No products in this category for the selected period."}</div>}
+
+      {visibleRows.length>0&&<div style={{overflowX:"auto"}}>
         <table style={{width:"100%",fontSize:12,borderCollapse:"collapse"}}>
           <thead>
             <tr style={{color:C.mut,textAlign:"left"}}>
-              <th style={{padding:"6px 4px",fontWeight:600}}>{sr?"Proizvod":"Product"}</th>
-              <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Pregledi":"Viewed"}</th>
-              <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Korpa":"Cart"}</th>
-              <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Kupljeno":"Purchased"}</th>
-              <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Prihod":"Revenue"}</th>
+              <SortTh k="name" label={sr?"Proizvod":"Product"} align="left"/>
+              <SortTh k="viewed" label={sr?"Pregledi":"Viewed"}/>
+              <SortTh k="addedToCart" label={sr?"Korpa":"Cart"}/>
+              <SortTh k="purchased" label={sr?"Kupljeno":"Purchased"}/>
+              <SortTh k="revenue" label={sr?"Prihod":"Revenue"}/>
+              <SortTh k="conversionRate" label={sr?"Konverzija":"Conversion"}/>
+              {filter==="spikes"&&<th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Rast":"Change"}</th>}
               {filter==="spikes"&&<th style={{padding:"6px 4px",fontWeight:600,textAlign:"left"}}>{sr?"Izvor":"Source"}</th>}
             </tr>
           </thead>
           <tbody>
-            {rows().map((r,i)=><tr key={i} style={{borderTop:`1px solid ${C.brd}`}}>
+            {visibleRows.map((r,i)=><tr key={i} style={{borderTop:`1px solid ${C.brd}`}}>
               <td style={{padding:"8px 4px",color:C.txt}}>{r.name}</td>
               <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{r.viewed.toLocaleString()}</td>
               <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{r.addedToCart.toLocaleString()}</td>
               <td style={{padding:"8px 4px",textAlign:"right",fontWeight:600,color:C.txt}}>{r.purchased.toLocaleString()}</td>
               <td style={{padding:"8px 4px",textAlign:"right",color:C.grn}}>€{r.revenue.toFixed(0)}</td>
+              <td style={{padding:"8px 4px",textAlign:"right",color:C.yel}}>{r.conversionRate.toFixed(1)}%</td>
+              {filter==="spikes"&&<td style={{padding:"8px 4px",textAlign:"right",color:C.grn,fontWeight:700}}>+{r.viewedChangePct.toFixed(0)}%</td>}
               {filter==="spikes"&&<td style={{padding:"8px 4px",color:C.mut}}>{r.topSource}</td>}
             </tr>)}
           </tbody>
         </table>
       </div>}
+
+      {isExplorable&&rows.length>visibleCount&&<button onClick={()=>setVisibleCount(v=>v+50)} style={{marginTop:14,width:"100%",padding:"10px",borderRadius:10,border:`1px solid ${C.brd}`,background:"rgba(255,255,255,0.03)",color:C.mut,fontSize:12,fontWeight:600,cursor:"pointer"}}>
+        {sr?`Prikaži još 50 (${visibleCount} / ${rows.length})`:`Show 50 more (${visibleCount} / ${rows.length})`}
+      </button>}
     </>}
   </div>;
 }
@@ -3014,13 +3097,13 @@ const MODS=[
   {id:9,icon:"🔗",col:"#00D4FF",tk:"m9t",sk:"m9s"},
   {id:10,icon:"👥",col:"#A855F7",tk:"m10t",sk:"m10s"},
   {id:11,icon:"⏱️",col:"#EC4899",tk:"m11t",sk:"m11s"},
-  {id:12,icon:"🛍️",col:"#F43F5E",tk:"m12t",sk:"m12s"},
   {id:2,icon:"💰",col:"#10B981",tk:"m2t",sk:"m2s"},
   {id:7,icon:"🚀",col:"#06B6D4",tk:"m7t",sk:"m7s"},
   {id:3,icon:"✍️",col:"#F59E0B",tk:"m3t",sk:"m3s"},
   {id:4,icon:"🎯",col:"#8B5CF6",tk:"m4t",sk:"m4s"},
   {id:5,icon:"📈",col:"#34D399",tk:"m5t",sk:"m5s"},
   {id:6,icon:"✅",col:"#34D399",tk:"m6t",sk:"m6s"},
+  {id:12,icon:"🛍️",col:"#F43F5E",tk:"m12t",sk:"m12s"},
 ];
 
 // ── RESPONSIVE HOOK ──────────────────────────────────────────────────────────
@@ -3142,7 +3225,7 @@ export default function App(){
   // Save lang preference
   useEffect(()=>{ localStorage.setItem("mat_lang",lang); },[lang]);
 
-  const MOD_COLORS=["#6366F1","#F97316","#00D4FF","#A855F7","#EC4899","#10B981","#06B6D4","#F59E0B","#8B5CF6","#34D399","#34D399"];
+  const MOD_COLORS=["#6366F1","#F97316","#00D4FF","#A855F7","#EC4899","#10B981","#06B6D4","#F59E0B","#8B5CF6","#34D399","#34D399","#F43F5E"];
   const Comp=mod===1?HealthMod:mod===8?ReportMod:mod===9?BookmarkMod:mod===10?(props=><MyClientsMod {...props} goMod={goMod}/>):mod===11?TimeMachineMod:mod===12?ProductIntelligenceMod:mod===2?BudgetMod:mod===7?ScalingMod:mod===3?CopyMod:mod===4?AudMod:mod===5?RoasMod:mod===6?CheckMod:null;
 
   const ModCard=({m,i,large})=>(
