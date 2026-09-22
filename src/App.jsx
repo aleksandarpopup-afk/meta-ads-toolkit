@@ -3107,13 +3107,11 @@ ${summary}`;
     if(filter==="bestsellers") return [...data.catalog].sort((a,b)=>b.revenue-a.revenue).slice(0,10);
     if(filter==="spikes"){
       const cfg=measures[measure];
-      return data.catalog.filter(i=>i[cfg.field]>=cfg.min&&i[cfg.changeField]>=50).sort((a,b)=>{
-        const aZero=a[cfg.prevField]===0, bZero=b[cfg.prevField]===0;
-        if(aZero&&!bZero) return -1;
-        if(!aZero&&bZero) return 1;
-        if(aZero&&bZero) return b[cfg.field]-a[cfg.field];
-        return b[cfg.changeField]-a[cfg.changeField];
-      }).slice(0,10);
+      const eligible=data.catalog.filter(i=>i[cfg.field]>=cfg.min&&i[cfg.changeField]>=50);
+      const fromZero=eligible.filter(i=>i[cfg.prevField]===0).sort((a,b)=>b[cfg.field]-a[cfg.field]).slice(0,5);
+      const fromZeroIds=new Set(fromZero.map(i=>i.id));
+      const percentSpikes=eligible.filter(i=>!fromZeroIds.has(i.id)).sort((a,b)=>b[cfg.changeField]-a[cfg.changeField]).slice(0,10-fromZero.length);
+      return [...fromZero,...percentSpikes];
     }
     if(filter==="drops"){
       const cfg=measures[measure];
