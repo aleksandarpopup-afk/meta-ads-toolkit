@@ -3,7 +3,7 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.status(200).end();
 
@@ -14,6 +14,19 @@ export default async function handler(req, res) {
   };
 
   try {
+    if (req.method === "PATCH") {
+      const { id } = req.query;
+      const { name } = req.body;
+      if (!id || !name || !name.trim()) return res.status(400).json({ error: "Missing id or name" });
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/clients?id=eq.${id}`, {
+        method: "PATCH",
+        headers: { ...headers, "Prefer": "return=representation" },
+        body: JSON.stringify({ name: name.trim() })
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(JSON.stringify(data));
+      return res.status(200).json(data[0]);
+    }
     if (req.method === "DELETE") {
       const { id } = req.query;
       if (!id) return res.status(400).json({ error: "No id" });
