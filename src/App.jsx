@@ -66,6 +66,7 @@ const T={
     m6t:"Launch Checklist", m6s:"Pixel, CAPI, eventi i sve pre lansiranja",
     m10t:"Moji klijenti", m10s:"Istorija analiza po klijentu",
     m11t:"Time Machine", m11s:"Izveštaj i grafikon za period",
+    m12t:"Product Intelligence", m12s:"Analiza proizvoda i sajta iz GA4 podataka",
     analyze:"Analiziraj →", gen:"Generiši →", calc:"Izračunaj →",
     newA:"← Nova analiza", poor:"Kritično", ok:"Prosečno", good:"Odlično",
     nxt:"Dalje →", prv:"←", res:"Rezultati", s1:"Osnove", s2:"Metrike", s3:"Targeting & Kreativa",
@@ -221,6 +222,7 @@ const T={
     m6t:"Launch Checklist", m6s:"Pixel, CAPI, events and everything before launch",
     m10t:"My Clients", m10s:"Analysis history by client",
     m11t:"Time Machine", m11s:"Report and chart for any period",
+    m12t:"Product Intelligence", m12s:"Product and site analysis from GA4 data",
     analyze:"Analyze →", gen:"Generate →", calc:"Calculate →",
     newA:"← New Analysis", poor:"Critical", ok:"Average", good:"Excellent",
     nxt:"Next →", prv:"←", res:"Results", s1:"Basics", s2:"Metrics", s3:"Targeting & Creative",
@@ -2860,12 +2862,159 @@ Be specific, use numbers from the analyses.`;
   </div>;
 }
 
+function ProductIntelligenceMod({t,lang}){
+  const sr=lang==="sr";
+  const [clients,setClients]=useState([]);
+  const [selectedClient,setSelectedClient]=useState(null);
+  const [period,setPeriod]=useState("30");
+  const [loading,setLoading]=useState(false);
+  const [data,setData]=useState(null);
+  const [filter,setFilter]=useState("all");
+  const [aiBrief,setAiBrief]=useState("");
+  const [aiLoading,setAiLoading]=useState(false);
+  const [err,setErr]=useState("");
+
+  useEffect(()=>{
+    const uid=localStorage.getItem("mat_user_id");
+    if(!uid) return;
+    fetch(`/api/clients?user_id=${uid}`).then(r=>r.json()).then(d=>setClients(Array.isArray(d)?d:[])).catch(()=>{});
+  },[]);
+
+  const generateBrief=async(d)=>{
+    setAiLoading(true);
+    try{
+      const summary=`Best-selleri: ${d.bestsellers.slice(0,5).map(b=>`${b.name} (€${b.revenue.toFixed(0)}, ${b.purchased} kupovina)`).join("; ")||"nema"}.
+Skokovi: ${d.spikes.slice(0,5).map(s=>`${s.name} (+${s.viewedChangePct.toFixed(0)}% pregleda, izvor: ${s.topSource})`).join("; ")||"nema"}.
+Napuštene korpe: ${d.abandoned.slice(0,5).map(a=>`${a.name} (${a.addedToCart} u korpi, ${a.conversionRate.toFixed(1)}% konverzija)`).join("; ")||"nema"}.`;
+
+      const prompt=sr
+        ?`Ti si e-commerce analitičar. Na osnovu ovih GA4 podataka o proizvodima za poslednjih ${d.periodDays} dana, napiši KRATAK uvid (maksimalno 3 rečenice, srpski jezik, ekavica, bez markdown formatiranja) sa najvažnijim zapažanjem i konkretnim predlogom akcije.\n\n${summary}`
+        :`You are an e-commerce analyst. Based on this GA4 product data for the last ${d.periodDays} days, write a SHORT insight (max 3 sentences, no markdown) with the key observation and a concrete action suggestion.\n\n${summary}`;
+
+      const res=await fetch("/api/analyze",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:300,messages:[{role:"user",content:prompt}]})
+      });
+      const rd=await res.json();
+      setAiBrief(rd.content?.[0]?.text||"");
+    }catch(e){}
+    setAiLoading(false);
+  };
+
+  const load=async(client,p)=>{
+    setLoading(true); setErr(""); setData(null); setAiBrief(""); setFilter("all");
+    try{
+      const res=await fetch(`/api/product-intelligence?client_id=${client.id}&days=${p}`);
+      const d=await res.json();
+      if(!res.ok) throw new Error(d.error||(sr?"Greška pri učitavanju":"Loading error"));
+      setData(d);
+      generateBrief(d);
+    }catch(e){ setErr(e.message); }
+    setLoading(false);
+  };
+
+  const periods=[{v:"7",l:sr?"7 dana":"7 days"},{v:"30",l:sr?"30 dana":"30 days"},{v:"90",l:sr?"90 dana":"90 days"}];
+  const filters=[
+    {v:"all",l:sr?"Svi":"All"},
+    {v:"bestsellers",l:sr?"🏆 Best-selleri":"🏆 Bestsellers"},
+    {v:"spikes",l:sr?"🔥 Skokovi":"🔥 Spikes"},
+    {v:"abandoned",l:sr?"Napuštene korpe":"Abandoned carts"}
+  ];
+
+  const rows=()=>{
+    if(!data) return [];
+    if(filter==="bestsellers") return data.bestsellers;
+    if(filter==="spikes") return data.spikes;
+    if(filter==="abandoned") return data.abandoned;
+    return [...data.catalog].sort((a,b)=>b.revenue-a.revenue).slice(0,50);
+  };
+
+  // IZBOR KLIJENTA
+  if(!selectedClient) return <div>
+    <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>🛍️ Product Intelligence</h2>
+    <p style={{color:C.mut,fontSize:13,margin:"0 0 24px"}}>{t.m12s}</p>
+    {clients.length===0
+      ?<div style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:12,padding:"16px",color:C.mut,fontSize:13,textAlign:"center"}}>
+        {sr?"Nema klijenata. Dodaj klijenta u 'Moji klijenti' i poveži GA4.":"No clients. Add a client in 'My Clients' and connect GA4."}
+      </div>
+      :<div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {clients.map(c=><button key={c.id} onClick={()=>{setSelectedClient(c);load(c,period);}} style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:10,padding:"12px 16px",textAlign:"left",cursor:"pointer",color:C.txt,fontWeight:600,fontSize:13}}>
+          👤 {c.name}
+        </button>)}
+      </div>
+    }
+  </div>;
+
+  // KONTROLNA TABLA
+  return <div>
+    <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:10}}>
+      <div>
+        <button onClick={()=>{setSelectedClient(null);setData(null);}} style={{background:"none",border:"none",color:C.mut,cursor:"pointer",fontSize:12,padding:0,marginBottom:4}}>{sr?"← Svi klijenti":"← All clients"}</button>
+        <h2 style={{fontSize:18,fontWeight:800,margin:0}}>{selectedClient.name}</h2>
+      </div>
+      <div style={{display:"flex",gap:6}}>
+        {periods.map(p=><button key={p.v} onClick={()=>{setPeriod(p.v);load(selectedClient,p.v);}} style={{padding:"6px 12px",borderRadius:8,border:`1px solid ${period===p.v?"rgba(99,102,241,0.6)":C.brd}`,background:period===p.v?"rgba(99,102,241,0.2)":"transparent",color:period===p.v?C.acl:C.mut,fontSize:12,fontWeight:600,cursor:"pointer"}}>{p.l}</button>)}
+      </div>
+    </div>
+
+    {loading&&<div style={{textAlign:"center",padding:"40px 0"}}>
+      <div style={{fontSize:36,marginBottom:16}}>🛍️</div>
+      <div style={{color:C.acl,fontWeight:700,fontSize:15}}>{sr?"Učitavam GA4 podatke...":"Loading GA4 data..."}</div>
+    </div>}
+
+    {err&&!loading&&<div style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:12,padding:"16px",color:C.red,fontSize:13,marginBottom:16}}>⚠️ {err}</div>}
+
+    {data&&!loading&&<>
+      <div style={{background:"rgba(99,102,241,0.06)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:12,padding:"14px 16px",marginBottom:16}}>
+        <div style={{color:C.acl,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"1px",marginBottom:8}}>{sr?"AI Uvid":"AI Insight"}</div>
+        {aiLoading
+          ?<div style={{color:C.mut,fontSize:13}}>{sr?"Analiziram...":"Analyzing..."}</div>
+          :<div style={{color:C.txt,fontSize:13,lineHeight:1.6}}>{aiBrief}</div>
+        }
+      </div>
+
+      <div style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap"}}>
+        {filters.map(f=><button key={f.v} onClick={()=>setFilter(f.v)} style={{padding:"6px 12px",borderRadius:20,border:`1px solid ${filter===f.v?"rgba(99,102,241,0.6)":C.brd}`,background:filter===f.v?"rgba(99,102,241,0.2)":"transparent",color:filter===f.v?C.acl:C.mut,fontSize:12,fontWeight:600,cursor:"pointer"}}>{f.l}</button>)}
+      </div>
+
+      {rows().length===0&&<div style={{color:C.mut,fontSize:13,textAlign:"center",padding:"20px 0"}}>{sr?"Nema proizvoda u ovoj kategoriji za izabrani period.":"No products in this category for the selected period."}</div>}
+
+      {rows().length>0&&<div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",fontSize:12,borderCollapse:"collapse"}}>
+          <thead>
+            <tr style={{color:C.mut,textAlign:"left"}}>
+              <th style={{padding:"6px 4px",fontWeight:600}}>{sr?"Proizvod":"Product"}</th>
+              <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Pregledi":"Viewed"}</th>
+              <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Korpa":"Cart"}</th>
+              <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Kupljeno":"Purchased"}</th>
+              <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Prihod":"Revenue"}</th>
+              {filter==="spikes"&&<th style={{padding:"6px 4px",fontWeight:600,textAlign:"left"}}>{sr?"Izvor":"Source"}</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {rows().map((r,i)=><tr key={i} style={{borderTop:`1px solid ${C.brd}`}}>
+              <td style={{padding:"8px 4px",color:C.txt}}>{r.name}</td>
+              <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{r.viewed.toLocaleString()}</td>
+              <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{r.addedToCart.toLocaleString()}</td>
+              <td style={{padding:"8px 4px",textAlign:"right",fontWeight:600,color:C.txt}}>{r.purchased.toLocaleString()}</td>
+              <td style={{padding:"8px 4px",textAlign:"right",color:C.grn}}>€{r.revenue.toFixed(0)}</td>
+              {filter==="spikes"&&<td style={{padding:"8px 4px",color:C.mut}}>{r.topSource}</td>}
+            </tr>)}
+          </tbody>
+        </table>
+      </div>}
+    </>}
+  </div>;
+}
+
 const MODS=[
   {id:1,icon:"📊",col:"#6366F1",tk:"m1t",sk:"m1s"},
   {id:8,icon:"📄",col:"#F97316",tk:"m8t",sk:"m8s"},
   {id:9,icon:"🔗",col:"#00D4FF",tk:"m9t",sk:"m9s"},
   {id:10,icon:"👥",col:"#A855F7",tk:"m10t",sk:"m10s"},
   {id:11,icon:"⏱️",col:"#EC4899",tk:"m11t",sk:"m11s"},
+  {id:12,icon:"🛍️",col:"#F43F5E",tk:"m12t",sk:"m12s"},
   {id:2,icon:"💰",col:"#10B981",tk:"m2t",sk:"m2s"},
   {id:7,icon:"🚀",col:"#06B6D4",tk:"m7t",sk:"m7s"},
   {id:3,icon:"✍️",col:"#F59E0B",tk:"m3t",sk:"m3s"},
@@ -2994,7 +3143,7 @@ export default function App(){
   useEffect(()=>{ localStorage.setItem("mat_lang",lang); },[lang]);
 
   const MOD_COLORS=["#6366F1","#F97316","#00D4FF","#A855F7","#EC4899","#10B981","#06B6D4","#F59E0B","#8B5CF6","#34D399","#34D399"];
-  const Comp=mod===1?HealthMod:mod===8?ReportMod:mod===9?BookmarkMod:mod===10?(props=><MyClientsMod {...props} goMod={goMod}/>):mod===11?TimeMachineMod:mod===2?BudgetMod:mod===7?ScalingMod:mod===3?CopyMod:mod===4?AudMod:mod===5?RoasMod:mod===6?CheckMod:null;
+  const Comp=mod===1?HealthMod:mod===8?ReportMod:mod===9?BookmarkMod:mod===10?(props=><MyClientsMod {...props} goMod={goMod}/>):mod===11?TimeMachineMod:mod===12?ProductIntelligenceMod:mod===2?BudgetMod:mod===7?ScalingMod:mod===3?CopyMod:mod===4?AudMod:mod===5?RoasMod:mod===6?CheckMod:null;
 
   const ModCard=({m,i,large})=>(
     <button onClick={()=>goMod(m.id)} style={{
