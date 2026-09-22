@@ -1,6 +1,6 @@
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const APP_URL = "https://meta-ads-toolkit-a71e.vercel.app";
+const APP_URL = process.env.APP_URL;
 const REDIRECT_URI = `${APP_URL}/api/ga4-callback`;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
