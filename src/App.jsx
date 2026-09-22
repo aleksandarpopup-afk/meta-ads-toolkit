@@ -2052,9 +2052,10 @@ async function requestNotificationPermission(){
 }
 
 function generateBookmarkletCode(userId){
+  const currentAppUrl=window.location.origin;
   return "javascript:(function(){"+
   "var USER_ID='"+userId+"';"+
-  "var appUrl='https://meta-ads-toolkit-a71e.vercel.app';"+
+  "var appUrl='"+currentAppUrl+"';"+
   "var apiUrl=appUrl+'/api/temp-upload';"+
   "var url=window.location.href;var title=document.title;var dateRange='';"+
   "var dMatch=url.match(/date[=%3D]+([0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9])/);"+
