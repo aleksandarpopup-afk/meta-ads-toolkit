@@ -2104,6 +2104,14 @@ function BookmarkMod({t,lang}){
   const [analysis,setAnalysis]=useState("");
   const [loading,setLoading]=useState(false);
   const [fetchingData,setFetchingData]=useState(false);
+  const [clientsList,setClientsList]=useState([]);
+  const [showNewClientInput,setShowNewClientInput]=useState(false);
+
+  useEffect(()=>{
+    const uid=localStorage.getItem("mat_user_id");
+    if(!uid) return;
+    fetch(`/api/clients?user_id=${uid}`).then(r=>r.json()).then(d=>setClientsList(Array.isArray(d)?d:[])).catch(()=>{});
+  },[]);
 
   useEffect(()=>{
     const params=new URLSearchParams(window.location.search);
@@ -2319,7 +2327,18 @@ Be specific. Use actual numbers from the screenshot.`;
         </div>}
         <div style={{marginBottom:14}}>
           <Lbl c={sr?"Naziv klijenta (opciono)":"Client name (optional)"}/>
-          <TIn v={clientName} ch={setClientName} ph={sr?"npr. Sport Reality MNE":"e.g. Sport Reality MNE"}/>
+          {!showNewClientInput&&<select value={clientName} onChange={e=>{
+              if(e.target.value==="__new__"){ setShowNewClientInput(true); setClientName(""); }
+              else setClientName(e.target.value);
+            }} style={{width:"100%",padding:"13px 12px",background:"rgba(255,255,255,0.06)",border:`1px solid ${C.brd}`,borderRadius:10,color:C.txt,fontSize:14,outline:"none",boxSizing:"border-box"}}>
+            <option value="">{sr?"— Bez klijenta —":"— No client —"}</option>
+            {clientsList.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}
+            <option value="__new__">+ {sr?"Novi klijent...":"New client..."}</option>
+          </select>}
+          {showNewClientInput&&<div style={{display:"flex",gap:8}}>
+            <div style={{flex:1}}><TIn v={clientName} ch={setClientName} ph={sr?"npr. Sport Reality MNE":"e.g. Sport Reality MNE"}/></div>
+            <button onClick={()=>{setShowNewClientInput(false);setClientName("");}} style={{background:"none",border:`1px solid ${C.brd}`,borderRadius:10,color:C.mut,fontSize:12,padding:"0 14px",cursor:"pointer"}}>{sr?"Odustani":"Cancel"}</button>
+          </div>}
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:14}}>
           <div><Lbl c={sr?"Period od":"Period from"}/><DIn v={periodFrom} ch={setPeriodFrom}/></div>
@@ -2363,6 +2382,12 @@ function MyClientsMod({t,lang,goMod}){
   const [ga4Setup,setGa4Setup]=useState(null);
   const [ga4Error,setGa4Error]=useState("");
   const [ga4Saving,setGa4Saving]=useState(false);
+  const [newClientOpen,setNewClientOpen]=useState(false);
+  const [newClientName,setNewClientName]=useState("");
+  const [creatingClient,setCreatingClient]=useState(false);
+  const [renaming,setRenaming]=useState(false);
+  const [renameValue,setRenameValue]=useState("");
+  const [renamingSaving,setRenamingSaving]=useState(false);
 
   useEffect(()=>{
     const uid=localStorage.getItem("mat_user_id");
@@ -2463,11 +2488,60 @@ function MyClientsMod({t,lang,goMod}){
     }catch(e){}
   };
 
+  const addClient=async()=>{
+    const uid=localStorage.getItem("mat_user_id");
+    if(!uid||!newClientName.trim()) return;
+    setCreatingClient(true);
+    try{
+      const r=await fetch("/api/clients",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({user_id:uid,name:newClientName.trim()})
+      });
+      const c=await r.json();
+      if(r.ok&&c.id){
+        setClients(prev=>[c,...prev]);
+        setNewClientName("");
+        setNewClientOpen(false);
+      }
+    }catch(e){}
+    setCreatingClient(false);
+  };
+
+  const startRename=()=>{ setRenameValue(selected.name); setRenaming(true); };
+
+  const saveRename=async()=>{
+    if(!renameValue.trim()) return;
+    setRenamingSaving(true);
+    try{
+      const r=await fetch(`/api/clients?id=${selected.id}`,{
+        method:"PATCH",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({name:renameValue.trim()})
+      });
+      const updated=await r.json();
+      if(r.ok&&updated.id){
+        setSelected(s=>({...s,name:updated.name}));
+        setClients(prev=>prev.map(c=>c.id===updated.id?{...c,name:updated.name}:c));
+        setRenaming(false);
+      }
+    }catch(e){}
+    setRenamingSaving(false);
+  };
+
   if(selected) return <div>
     <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
       <button onClick={()=>{setSelected(null);setAnalyses([]);}} style={{background:"none",border:"none",color:C.acl,cursor:"pointer",fontSize:13,fontWeight:600,padding:0}}>← {sr?"Svi klijenti":"All clients"}</button>
     </div>
-    <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 4px"}}>{selected.name}</h2>
+    {!renaming&&<div style={{display:"flex",alignItems:"center",gap:10,margin:"0 0 4px"}}>
+      <h2 style={{fontSize:20,fontWeight:800,margin:0}}>{selected.name}</h2>
+      <button onClick={startRename} style={{background:"none",border:"none",color:C.mut,cursor:"pointer",fontSize:14,padding:2}} title={sr?"Izmeni ime":"Edit name"}>✏️</button>
+    </div>}
+    {renaming&&<div style={{display:"flex",gap:8,alignItems:"center",margin:"0 0 4px"}}>
+      <input value={renameValue} onChange={e=>setRenameValue(e.target.value)} autoFocus style={{flex:1,padding:"8px 12px",borderRadius:8,border:`1px solid ${C.brd}`,background:"rgba(255,255,255,0.05)",color:C.txt,fontSize:15,fontWeight:700}}/>
+      <button onClick={saveRename} disabled={renamingSaving||!renameValue.trim()} style={{background:"rgba(52,211,153,0.15)",border:"1px solid rgba(52,211,153,0.3)",borderRadius:8,color:C.grn,fontSize:12,fontWeight:700,padding:"8px 12px",cursor:"pointer"}}>{sr?"Sačuvaj":"Save"}</button>
+      <button onClick={()=>setRenaming(false)} style={{background:"none",border:"none",color:C.mut,cursor:"pointer",fontSize:12,padding:"8px"}}>{sr?"Otkaži":"Cancel"}</button>
+    </div>}
     <p style={{color:C.mut,fontSize:13,margin:"0 0 16px"}}>{sr?"Istorija analiza":"Analysis history"}</p>
 
     <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px 16px",marginBottom:20}}>
@@ -2532,7 +2606,14 @@ function MyClientsMod({t,lang,goMod}){
 
   return <div>
     <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>{t.m10t}</h2>
-    <p style={{color:C.mut,fontSize:13,margin:"0 0 24px"}}>{t.m10s}</p>
+    <p style={{color:C.mut,fontSize:13,margin:"0 0 20px"}}>{t.m10s}</p>
+
+    {!newClientOpen&&<button onClick={()=>setNewClientOpen(true)} style={{background:"rgba(99,102,241,0.15)",border:"1px solid rgba(99,102,241,0.3)",borderRadius:10,color:C.acl,fontSize:13,fontWeight:700,padding:"10px 16px",cursor:"pointer",marginBottom:20}}>+ {sr?"Novi klijent":"New client"}</button>}
+    {newClientOpen&&<div style={{display:"flex",gap:8,marginBottom:20}}>
+      <input value={newClientName} onChange={e=>setNewClientName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addClient()} autoFocus placeholder={sr?"Ime klijenta...":"Client name..."} style={{flex:1,padding:"10px 14px",borderRadius:10,border:`1px solid ${C.brd}`,background:"rgba(255,255,255,0.05)",color:C.txt,fontSize:13}}/>
+      <button onClick={addClient} disabled={creatingClient||!newClientName.trim()} style={{background:"linear-gradient(135deg,#6366F1,#4f46e5)",border:"none",borderRadius:10,color:"#fff",fontSize:13,fontWeight:700,padding:"10px 16px",cursor:"pointer"}}>{sr?"Sačuvaj":"Save"}</button>
+      <button onClick={()=>{setNewClientOpen(false);setNewClientName("");}} style={{background:"none",border:"none",color:C.mut,cursor:"pointer",fontSize:12}}>{sr?"Otkaži":"Cancel"}</button>
+    </div>}
 
     {loading&&<div style={{textAlign:"center",padding:"32px 0"}}>
       <div style={{color:C.acl,fontSize:14}}>✦ {sr?"Učitavam klijente...":"Loading clients..."}</div>
@@ -2541,7 +2622,7 @@ function MyClientsMod({t,lang,goMod}){
     {!loading&&clients.length===0&&<div style={{textAlign:"center",padding:"32px 0"}}>
       <div style={{fontSize:40,marginBottom:12}}>👥</div>
       <div style={{color:C.txt,fontWeight:700,fontSize:15,marginBottom:8}}>{sr?"Još nema klijenata":"No clients yet"}</div>
-      <div style={{color:C.mut,fontSize:13,marginBottom:20}}>{sr?"Kada uradiš analizu u Bookmark Connector-u ili Report Generator-u sa imenom klijenta, ona će se automatski sačuvati ovde.":"When you analyze in Bookmark Connector or Report Generator with a client name, it will automatically be saved here."}</div>
+      <div style={{color:C.mut,fontSize:13,marginBottom:20}}>{sr?"Klikni \"+ Novi klijent\" iznad, ili uradi analizu u Bookmark Connector-u/Report Generator-u sa imenom klijenta i on će se automatski pojaviti ovde.":"Click \"+ New client\" above, or run an analysis in Bookmark Connector/Report Generator with a client name and it will automatically appear here."}</div>
       <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap"}}>
         <button onClick={()=>goMod(9)} style={{background:"rgba(0,212,255,0.15)",border:"1px solid rgba(0,212,255,0.3)",borderRadius:10,color:"#00D4FF",fontSize:13,fontWeight:600,padding:"10px 18px",cursor:"pointer"}}>🔗 Bookmark Connector</button>
         <button onClick={()=>goMod(8)} style={{background:"rgba(249,115,22,0.15)",border:"1px solid rgba(249,115,22,0.3)",borderRadius:10,color:"#F97316",fontSize:13,fontWeight:600,padding:"10px 18px",cursor:"pointer"}}>📄 Report Generator</button>
@@ -2882,12 +2963,35 @@ function ProductIntelligenceMod({t,lang}){
   const [sortKey,setSortKey]=useState("revenue");
   const [sortDir,setSortDir]=useState("desc");
   const [visibleCount,setVisibleCount]=useState(50);
+  const [newClientOpen,setNewClientOpen]=useState(false);
+  const [newClientName,setNewClientName]=useState("");
+  const [creatingClient,setCreatingClient]=useState(false);
 
   useEffect(()=>{
     const uid=localStorage.getItem("mat_user_id");
     if(!uid) return;
     fetch(`/api/clients?user_id=${uid}`).then(r=>r.json()).then(d=>setClients(Array.isArray(d)?d:[])).catch(()=>{});
   },[]);
+
+  const addClient=async()=>{
+    const uid=localStorage.getItem("mat_user_id");
+    if(!uid||!newClientName.trim()) return;
+    setCreatingClient(true);
+    try{
+      const r=await fetch("/api/clients",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({user_id:uid,name:newClientName.trim()})
+      });
+      const c=await r.json();
+      if(r.ok&&c.id){
+        setClients(prev=>[c,...prev]);
+        setNewClientName("");
+        setNewClientOpen(false);
+      }
+    }catch(e){}
+    setCreatingClient(false);
+  };
 
   const generateBrief=async(d)=>{
     setAiLoading(true);
@@ -2927,6 +3031,7 @@ Napuštene korpe: ${abandoned.map(a=>`${a.name} (${a.addedToCart} u korpi, ${a.c
     try{
       const qs=params.from&&params.to?`from=${params.from}&to=${params.to}`:`days=${params.days}`;
       const res=await fetch(`/api/product-intelligence?client_id=${client.id}&${qs}`);
+      if(res.status===404){ setErr("no_ga4"); setLoading(false); return; }
       const d=await res.json();
       if(!res.ok) throw new Error(d.error||(sr?"Greška pri učitavanju":"Loading error"));
       setData(d);
@@ -3005,10 +3110,18 @@ Napuštene korpe: ${abandoned.map(a=>`${a.name} (${a.addedToCart} u korpi, ${a.c
   // IZBOR KLIJENTA
   if(!selectedClient) return <div>
     <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>🛍️ Product Intelligence</h2>
-    <p style={{color:C.mut,fontSize:13,margin:"0 0 24px"}}>{t.m12s}</p>
+    <p style={{color:C.mut,fontSize:13,margin:"0 0 20px"}}>{t.m12s}</p>
+
+    {!newClientOpen&&<button onClick={()=>setNewClientOpen(true)} style={{background:"rgba(99,102,241,0.15)",border:"1px solid rgba(99,102,241,0.3)",borderRadius:10,color:C.acl,fontSize:13,fontWeight:700,padding:"10px 16px",cursor:"pointer",marginBottom:20}}>+ {sr?"Novi klijent":"New client"}</button>}
+    {newClientOpen&&<div style={{display:"flex",gap:8,marginBottom:20}}>
+      <input value={newClientName} onChange={e=>setNewClientName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addClient()} autoFocus placeholder={sr?"Ime klijenta...":"Client name..."} style={{flex:1,padding:"10px 14px",borderRadius:10,border:`1px solid ${C.brd}`,background:"rgba(255,255,255,0.05)",color:C.txt,fontSize:13}}/>
+      <button onClick={addClient} disabled={creatingClient||!newClientName.trim()} style={{background:"linear-gradient(135deg,#6366F1,#4f46e5)",border:"none",borderRadius:10,color:"#fff",fontSize:13,fontWeight:700,padding:"10px 16px",cursor:"pointer"}}>{sr?"Sačuvaj":"Save"}</button>
+      <button onClick={()=>{setNewClientOpen(false);setNewClientName("");}} style={{background:"none",border:"none",color:C.mut,cursor:"pointer",fontSize:12}}>{sr?"Otkaži":"Cancel"}</button>
+    </div>}
+
     {clients.length===0
       ?<div style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:12,padding:"16px",color:C.mut,fontSize:13,textAlign:"center"}}>
-        {sr?"Nema klijenata. Dodaj klijenta u 'Moji klijenti' i poveži GA4.":"No clients. Add a client in 'My Clients' and connect GA4."}
+        {sr?"Nema klijenata još. Dodaj jednog iznad.":"No clients yet. Add one above."}
       </div>
       :<div style={{display:"flex",flexDirection:"column",gap:8}}>
         {clients.map(c=><button key={c.id} onClick={()=>{setSelectedClient(c);load(c,{days:period});}} style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:10,padding:"12px 16px",textAlign:"left",cursor:"pointer",color:C.txt,fontWeight:600,fontSize:13}}>
@@ -3046,7 +3159,10 @@ Napuštene korpe: ${abandoned.map(a=>`${a.name} (${a.addedToCart} u korpi, ${a.c
       <div style={{color:C.acl,fontWeight:700,fontSize:15}}>{sr?"Učitavam GA4 podatke...":"Loading GA4 data..."}</div>
     </div>}
 
-    {err&&!loading&&<div style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:12,padding:"16px",color:C.red,fontSize:13,marginBottom:16}}>⚠️ {err}</div>}
+    {err==="no_ga4"&&!loading&&<div style={{background:"rgba(0,212,255,0.08)",border:"1px solid rgba(0,212,255,0.2)",borderRadius:12,padding:"16px",color:C.txt,fontSize:13,marginBottom:16}}>
+      🔗 {sr?"GA4 nije povezan za ovog klijenta. Idi u":"GA4 is not connected for this client. Go to"} <b>{sr?"Moji klijenti":"My Clients"}</b> {sr?"da ga povežeš.":"to connect it."}
+    </div>}
+    {err&&err!=="no_ga4"&&!loading&&<div style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:12,padding:"16px",color:C.red,fontSize:13,marginBottom:16}}>⚠️ {err}</div>}
 
     {data&&!loading&&<>
       <div style={{background:"rgba(99,102,241,0.06)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:12,padding:"14px 16px",marginBottom:16}}>
