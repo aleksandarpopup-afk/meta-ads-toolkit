@@ -67,6 +67,7 @@ const T={
     m10t:"Moji klijenti", m10s:"Istorija analiza po klijentu",
     m11t:"Time Machine", m11s:"Izveštaj i grafikon za period",
     m12t:"Product Intelligence", m12s:"Analiza proizvoda i sajta iz GA4 podataka",
+    m13t:"Pitaj svoje podatke", m13s:"Postavi pitanje o GA4 podacima svojim rečima",
     analyze:"Analiziraj →", gen:"Generiši →", calc:"Izračunaj →",
     newA:"← Nova analiza", poor:"Kritično", ok:"Prosečno", good:"Odlično",
     nxt:"Dalje →", prv:"←", res:"Rezultati", s1:"Osnove", s2:"Metrike", s3:"Targeting & Kreativa",
@@ -223,6 +224,7 @@ const T={
     m10t:"My Clients", m10s:"Analysis history by client",
     m11t:"Time Machine", m11s:"Report and chart for any period",
     m12t:"Product Intelligence", m12s:"Product and site analysis from GA4 data",
+    m13t:"Ask Your Data", m13s:"Ask a question about your GA4 data, in your own words",
     analyze:"Analyze →", gen:"Generate →", calc:"Calculate →",
     newA:"← New Analysis", poor:"Critical", ok:"Average", good:"Excellent",
     nxt:"Next →", prv:"←", res:"Results", s1:"Basics", s2:"Metrics", s3:"Targeting & Creative",
@@ -3280,9 +3282,130 @@ ${summary}`;
   </div>;
 }
 
+function AskDataMod({t,lang}){
+  const sr=lang==="sr";
+  const [clients,setClients]=useState([]);
+  const [selectedClient,setSelectedClient]=useState(null);
+  const [messages,setMessages]=useState([]);
+  const [input,setInput]=useState("");
+  const [sending,setSending]=useState(false);
+  const [newClientOpen,setNewClientOpen]=useState(false);
+  const [newClientName,setNewClientName]=useState("");
+  const [creatingClient,setCreatingClient]=useState(false);
+  const scrollRef=useRef(null);
+
+  useEffect(()=>{
+    const uid=localStorage.getItem("mat_user_id");
+    if(!uid) return;
+    fetch(`/api/clients?user_id=${uid}`).then(r=>r.json()).then(d=>setClients(Array.isArray(d)?d:[])).catch(()=>{});
+  },[]);
+
+  useEffect(()=>{
+    if(scrollRef.current) scrollRef.current.scrollTop=scrollRef.current.scrollHeight;
+  },[messages,sending]);
+
+  const addClient=async()=>{
+    const uid=localStorage.getItem("mat_user_id");
+    if(!uid||!newClientName.trim()) return;
+    setCreatingClient(true);
+    try{
+      const r=await fetch("/api/clients",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({user_id:uid,name:newClientName.trim()})
+      });
+      const c=await r.json();
+      if(r.ok&&c.id){
+        setClients(prev=>[c,...prev]);
+        setNewClientName("");
+        setNewClientOpen(false);
+      }
+    }catch(e){}
+    setCreatingClient(false);
+  };
+
+  const send=async()=>{
+    if(!input.trim()||sending||!selectedClient) return;
+    const q=input.trim();
+    setInput("");
+    const historyForRequest=messages;
+    setMessages(m=>[...m,{role:"user",text:q}]);
+    setSending(true);
+    try{
+      const res=await fetch("/api/ga4-ask",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({client_id:selectedClient.id,question:q,history:historyForRequest,lang})
+      });
+      if(res.status===404){
+        setMessages(m=>[...m,{role:"assistant",text:sr?"GA4 nije povezan za ovog klijenta. Idi u Moji klijenti da ga povežeš.":"GA4 is not connected for this client. Go to My Clients to connect it."}]);
+        setSending(false);
+        return;
+      }
+      const d=await res.json();
+      if(!res.ok) throw new Error(d.error||"Error");
+      setMessages(m=>[...m,{role:"assistant",text:d.answer}]);
+    }catch(e){
+      setMessages(m=>[...m,{role:"assistant",text:sr?"Došlo je do greške. Pokušaj ponovo.":"An error occurred. Please try again."}]);
+    }
+    setSending(false);
+  };
+
+  const newConversation=()=>setMessages([]);
+
+  // IZBOR KLIJENTA
+  if(!selectedClient) return <div>
+    <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>💬 {sr?"Pitaj svoje podatke":"Ask Your Data"}</h2>
+    <p style={{color:C.mut,fontSize:13,margin:"0 0 20px"}}>{t.m13s}</p>
+
+    {!newClientOpen&&<button onClick={()=>setNewClientOpen(true)} style={{background:"rgba(99,102,241,0.15)",border:"1px solid rgba(99,102,241,0.3)",borderRadius:10,color:C.acl,fontSize:13,fontWeight:700,padding:"10px 16px",cursor:"pointer",marginBottom:20}}>+ {sr?"Novi klijent":"New client"}</button>}
+    {newClientOpen&&<div style={{display:"flex",gap:8,marginBottom:20}}>
+      <input value={newClientName} onChange={e=>setNewClientName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addClient()} autoFocus placeholder={sr?"Ime klijenta...":"Client name..."} style={{flex:1,padding:"10px 14px",borderRadius:10,border:`1px solid ${C.brd}`,background:"rgba(255,255,255,0.05)",color:C.txt,fontSize:13}}/>
+      <button onClick={addClient} disabled={creatingClient||!newClientName.trim()} style={{background:"linear-gradient(135deg,#6366F1,#4f46e5)",border:"none",borderRadius:10,color:"#fff",fontSize:13,fontWeight:700,padding:"10px 16px",cursor:"pointer"}}>{sr?"Sačuvaj":"Save"}</button>
+      <button onClick={()=>{setNewClientOpen(false);setNewClientName("");}} style={{background:"none",border:"none",color:C.mut,cursor:"pointer",fontSize:12}}>{sr?"Otkaži":"Cancel"}</button>
+    </div>}
+
+    {clients.length===0
+      ?<div style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:12,padding:"16px",color:C.mut,fontSize:13,textAlign:"center"}}>
+        {sr?"Nema klijenata još. Dodaj jednog iznad.":"No clients yet. Add one above."}
+      </div>
+      :<div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {clients.map(c=><button key={c.id} onClick={()=>{setSelectedClient(c);setMessages([]);}} style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:10,padding:"12px 16px",textAlign:"left",cursor:"pointer",color:C.txt,fontWeight:600,fontSize:13}}>
+          👤 {c.name}
+        </button>)}
+      </div>
+    }
+  </div>;
+
+  // CHAT EKRAN
+  return <div style={{display:"flex",flexDirection:"column",height:"calc(100vh - 220px)",minHeight:420}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12,flexWrap:"wrap",gap:8}}>
+      <div>
+        <button onClick={()=>{setSelectedClient(null);setMessages([]);}} style={{background:"none",border:"none",color:C.mut,cursor:"pointer",fontSize:12,padding:0,marginBottom:4}}>{sr?"← Svi klijenti":"← All clients"}</button>
+        <h2 style={{fontSize:18,fontWeight:800,margin:0}}>{selectedClient.name}</h2>
+      </div>
+      <button onClick={newConversation} style={{background:"rgba(255,255,255,0.05)",border:`1px solid ${C.brd}`,borderRadius:8,color:C.mut,fontSize:12,fontWeight:600,padding:"8px 14px",cursor:"pointer"}}>🔄 {sr?"Nov razgovor":"New conversation"}</button>
+    </div>
+
+    <div ref={scrollRef} style={{flex:1,overflowY:"auto",background:"rgba(255,255,255,0.02)",border:`1px solid ${C.brd}`,borderRadius:12,padding:16,marginBottom:12,display:"flex",flexDirection:"column",gap:10}}>
+      {messages.length===0&&<div style={{color:C.mut,fontSize:13,textAlign:"center",padding:"40px 10px"}}>
+        {sr?'Postavi pitanje o svojim GA4 podacima, npr. "Koji je najprodavaniji proizvod poslednjih 30 dana?"':'Ask a question about your GA4 data, e.g. "What\'s the top-selling product in the last 30 days?"'}
+      </div>}
+      {messages.map((m,i)=><div key={i} style={{alignSelf:m.role==="user"?"flex-end":"flex-start",maxWidth:"80%",background:m.role==="user"?"rgba(99,102,241,0.2)":"rgba(255,255,255,0.05)",border:`1px solid ${m.role==="user"?"rgba(99,102,241,0.4)":C.brd}`,borderRadius:12,padding:"10px 14px",color:C.txt,fontSize:13,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{m.text}</div>)}
+      {sending&&<div style={{alignSelf:"flex-start",color:C.mut,fontSize:13}}>{sr?"Razmišljam...":"Thinking..."}</div>}
+    </div>
+
+    <div style={{display:"flex",gap:8}}>
+      <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder={sr?"Postavi pitanje...":"Ask a question..."} disabled={sending} style={{flex:1,padding:"12px 14px",borderRadius:10,border:`1px solid ${C.brd}`,background:"rgba(255,255,255,0.05)",color:C.txt,fontSize:14,boxSizing:"border-box"}}/>
+      <button onClick={send} disabled={sending||!input.trim()} style={{padding:"12px 20px",borderRadius:10,border:"none",background:sending||!input.trim()?"rgba(99,102,241,0.3)":"linear-gradient(135deg,#6366F1,#4f46e5)",color:"#fff",fontSize:13,fontWeight:700,cursor:sending||!input.trim()?"default":"pointer",whiteSpace:"nowrap"}}>{sr?"Pošalji":"Send"}</button>
+    </div>
+  </div>;
+}
+
 const MODS=[
   {id:1,icon:"📊",col:"#6366F1",tk:"m1t",sk:"m1s"},
   {id:12,icon:"🛍️",col:"#F43F5E",tk:"m12t",sk:"m12s"},
+  {id:13,icon:"💬",col:"#22D3EE",tk:"m13t",sk:"m13s"},
   {id:8,icon:"📄",col:"#F97316",tk:"m8t",sk:"m8s"},
   {id:9,icon:"🔗",col:"#00D4FF",tk:"m9t",sk:"m9s"},
   {id:10,icon:"👥",col:"#A855F7",tk:"m10t",sk:"m10s"},
@@ -3414,7 +3537,7 @@ export default function App(){
   // Save lang preference
   useEffect(()=>{ localStorage.setItem("mat_lang",lang); },[lang]);
 
-  const Comp=mod===1?HealthMod:mod===8?ReportMod:mod===9?BookmarkMod:mod===10?(props=><MyClientsMod {...props} goMod={goMod}/>):mod===11?TimeMachineMod:mod===12?ProductIntelligenceMod:mod===2?BudgetMod:mod===7?ScalingMod:mod===3?CopyMod:mod===4?AudMod:mod===5?RoasMod:mod===6?CheckMod:null;
+  const Comp=mod===1?HealthMod:mod===8?ReportMod:mod===9?BookmarkMod:mod===10?(props=><MyClientsMod {...props} goMod={goMod}/>):mod===11?TimeMachineMod:mod===12?ProductIntelligenceMod:mod===13?AskDataMod:mod===2?BudgetMod:mod===7?ScalingMod:mod===3?CopyMod:mod===4?AudMod:mod===5?RoasMod:mod===6?CheckMod:null;
 
   const ModCard=({m,i,large})=>(
     <button onClick={()=>goMod(m.id)} style={{
