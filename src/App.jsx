@@ -3214,6 +3214,8 @@ ${summary}`;
         {filters.map(f=><button key={f.v} onClick={()=>{setFilter(f.v);setPaidOrganic(null);setSourcePlatform(null);setSearch("");setVisibleCount(50);}} style={{padding:"6px 12px",borderRadius:20,border:`1px solid ${filter===f.v?"rgba(99,102,241,0.6)":C.brd}`,background:filter===f.v?"rgba(99,102,241,0.2)":"transparent",color:filter===f.v?C.acl:C.mut,fontSize:12,fontWeight:600,cursor:"pointer"}}>{f.l}</button>)}
       </div>
 
+      {filter==="bestsellers"&&<div style={{color:C.mut,fontSize:11,marginBottom:14,fontStyle:"italic"}}>ⓘ {sr?"Varijante istog proizvoda (npr. različite boje) prikazujemo posebno, po ID-u, radi preciznosti. GA4-ov sopstveni izveštaj ih grupiše pod isto ime, pa se pojedinačni redovi ovde mogu razlikovati od GA4 'top proizvod' pogleda - zbir svih varijanti se poklapa.":"We show variants of the same product (e.g. different colors) separately, by ID, for precision. GA4's own report groups them under one name, so individual rows here may differ from GA4's 'top product' view - the sum of all variants matches."}</div>}
+
       {(filter==="spikes"||filter==="drops")&&<div style={{marginBottom:14}}>
         <Lbl c={sr?"Meri po":"Measure by"}/>
         <div style={{display:"flex",gap:6}}>
