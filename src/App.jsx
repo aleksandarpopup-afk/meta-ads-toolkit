@@ -3082,9 +3082,9 @@ ${summary}`;
     {v:"sources",l:sr?"Izvori":"Sources"}
   ];
   const measures={
-    viewed:{min:20,label:sr?"Pregledi":"Viewed",field:"viewed",changeField:"viewedChangePct"},
-    addedToCart:{min:10,label:sr?"Korpa":"Cart",field:"addedToCart",changeField:"cartChangePct"},
-    purchased:{min:5,label:sr?"Kupljeno":"Purchased",field:"purchased",changeField:"purchasedChangePct"}
+    viewed:{min:20,label:sr?"Pregledi":"Viewed",field:"viewed",changeField:"viewedChangePct",prevField:"previousViewed"},
+    addedToCart:{min:10,label:sr?"Korpa":"Cart",field:"addedToCart",changeField:"cartChangePct",prevField:"previousAddedToCart"},
+    purchased:{min:5,label:sr?"Kupljeno":"Purchased",field:"purchased",changeField:"purchasedChangePct",prevField:"previousPurchased"}
   };
   const platformLabels={meta:"Meta",google:"Google",tiktok:"TikTok",direct:sr?"Direktan":"Direct",other:sr?"Ostalo":"Other"};
 
@@ -3107,7 +3107,13 @@ ${summary}`;
     if(filter==="bestsellers") return [...data.catalog].sort((a,b)=>b.revenue-a.revenue).slice(0,10);
     if(filter==="spikes"){
       const cfg=measures[measure];
-      return data.catalog.filter(i=>i[cfg.field]>=cfg.min&&i[cfg.changeField]>=50).sort((a,b)=>b[cfg.changeField]-a[cfg.changeField]).slice(0,10);
+      return data.catalog.filter(i=>i[cfg.field]>=cfg.min&&i[cfg.changeField]>=50).sort((a,b)=>{
+        const aZero=a[cfg.prevField]===0, bZero=b[cfg.prevField]===0;
+        if(aZero&&!bZero) return -1;
+        if(!aZero&&bZero) return 1;
+        if(aZero&&bZero) return b[cfg.field]-a[cfg.field];
+        return b[cfg.changeField]-a[cfg.changeField];
+      }).slice(0,10);
     }
     if(filter==="drops"){
       const cfg=measures[measure];
@@ -3271,7 +3277,12 @@ ${summary}`;
               <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{r.viewToCartRate.toFixed(1)}%</td>
               <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{r.cartToPurchaseRate.toFixed(1)}%</td>
               <td style={{padding:"8px 4px",textAlign:"right",color:C.yel}}>{r.conversionRate.toFixed(1)}%</td>
-              {showTrendCol&&<td style={{padding:"8px 4px",textAlign:"right",fontWeight:700,color:filter==="spikes"?C.grn:C.red}}>{r[trendCfg.changeField]>=0?"+":""}{r[trendCfg.changeField].toFixed(0)}%</td>}
+              {showTrendCol&&<td style={{padding:"8px 4px",textAlign:"right",fontWeight:700,color:filter==="spikes"?C.grn:C.red}}>
+                {filter==="spikes"&&r[trendCfg.prevField]===0
+                  ?`0→${r[trendCfg.field]}`
+                  :`${r[trendCfg.changeField]>=0?"+":""}${r[trendCfg.changeField].toFixed(0)}%`
+                }
+              </td>}
             </tr>)}
           </tbody>
         </table>
