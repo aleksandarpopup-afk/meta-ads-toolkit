@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 // ── IMAGE TYPE DETECTOR ───────────────────────────────────────────────────────
 function getImageMediaType(base64){
@@ -2966,6 +2966,8 @@ function ProductIntelligenceMod({t,lang}){
   const [newClientOpen,setNewClientOpen]=useState(false);
   const [newClientName,setNewClientName]=useState("");
   const [creatingClient,setCreatingClient]=useState(false);
+  const briefReqId=useRef(0);
+  const lastData=useRef(null);
 
   useEffect(()=>{
     const uid=localStorage.getItem("mat_user_id");
@@ -2994,6 +2996,7 @@ function ProductIntelligenceMod({t,lang}){
   };
 
   const generateBrief=async(d)=>{
+    const myId=++briefReqId.current;
     setAiLoading(true);
     try{
       const bestsellers=[...d.catalog].sort((a,b)=>b.revenue-a.revenue).slice(0,5);
@@ -3005,8 +3008,22 @@ Skokovi u pregledima: ${spikes.map(s=>`${s.name} (+${s.viewedChangePct.toFixed(0
 Napuštene korpe: ${abandoned.map(a=>`${a.name} (${a.addedToCart} u korpi, ${a.conversionRate.toFixed(1)}% konverzija)`).join("; ")||"nema"}.`;
 
       const prompt=sr
-        ?`Ti si e-commerce analitičar. Na osnovu ovih GA4 podataka o proizvodima za poslednjih ${d.periodDays} dana, napiši KRATAK uvid (maksimalno 3 rečenice, srpski jezik, ekavica, bez markdown formatiranja) sa najvažnijim zapažanjem i konkretnim predlogom akcije.\n\n${summary}`
-        :`You are an e-commerce analyst. Based on this GA4 product data for the last ${d.periodDays} days, write a SHORT insight (max 3 sentences, no markdown) with the key observation and a concrete action suggestion.\n\n${summary}`;
+        ?`Ti si e-commerce analitičar. Piši isključivo na srpskom jeziku, ekavski (ne "prosječan" već "prosečan", ne "također" već "takođe", ne "riječi" već "reči", ne "tjedan" već "nedelja"). Na osnovu ovih GA4 podataka o proizvodima za poslednjih ${d.periodDays} dana, napiši uvid u TAČNO tri linije, bez markdown formatiranja (bez **, bez #), svaka linija u formatu "Naziv: rečenica":
+
+Best-selleri: [jedna rečenica o najboljim proizvodima]
+Skokovi: [jedna rečenica o proizvodima koji rastu, ili napiši da nema značajnih skokova ako nema]
+Napuštene korpe: [jedna rečenica o proizvodima sa niskom konverzijom iz korpe, ili napiši da nema ako nema]
+
+Podaci:
+${summary}`
+        :`You are an e-commerce analyst. Based on this GA4 product data for the last ${d.periodDays} days, write an insight in EXACTLY three lines, no markdown formatting, each line as "Label: sentence":
+
+Bestsellers: [one sentence about top products]
+Spikes: [one sentence about rising products, or state there are none significant]
+Abandoned carts: [one sentence about products with low cart-to-purchase conversion, or state there are none]
+
+Data:
+${summary}`;
 
       const res=await fetch("/api/analyze",{
         method:"POST",
@@ -3014,20 +3031,24 @@ Napuštene korpe: ${abandoned.map(a=>`${a.name} (${a.addedToCart} u korpi, ${a.c
         body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:300,messages:[{role:"user",content:prompt}]})
       });
       const rd=await res.json();
+      if(myId!==briefReqId.current) return; // stigao je zakasneli odgovor, ignoriši ga
       setAiBrief(rd.content?.[0]?.text||"");
-    }catch(e){}
-    setAiLoading(false);
+    }catch(e){
+      if(myId===briefReqId.current) setAiBrief("");
+    }
+    if(myId===briefReqId.current) setAiLoading(false);
   };
 
   // Ponovo generiši AI uvid ako korisnik promeni jezik dok su podaci već učitani
   useEffect(()=>{
-    if(data) generateBrief(data);
+    if(lastData.current) generateBrief(lastData.current);
   },[lang]);
 
   const load=async(client,params)=>{
     setLoading(true); setErr(""); setData(null); setAiBrief(""); setFilter("all");
     setPaidOrganic(null); setSourcePlatform(null); setMeasure("viewed");
     setSearch(""); setSortKey("revenue"); setSortDir("desc"); setVisibleCount(50);
+    lastData.current=null;
     try{
       const qs=params.from&&params.to?`from=${params.from}&to=${params.to}`:`days=${params.days}`;
       const res=await fetch(`/api/product-intelligence?client_id=${client.id}&${qs}`);
@@ -3035,6 +3056,7 @@ Napuštene korpe: ${abandoned.map(a=>`${a.name} (${a.addedToCart} u korpi, ${a.c
       const d=await res.json();
       if(!res.ok) throw new Error(d.error||(sr?"Greška pri učitavanju":"Loading error"));
       setData(d);
+      lastData.current=d;
       generateBrief(d);
     }catch(e){ setErr(e.message); }
     setLoading(false);
@@ -3097,7 +3119,10 @@ Napuštene korpe: ${abandoned.map(a=>`${a.name} (${a.addedToCart} u korpi, ${a.c
   const filteredRows=()=>{
     let r=rawRows();
     if(isExplorable){
-      if(search.trim()) r=r.filter(i=>i.name.toLowerCase().includes(search.trim().toLowerCase()));
+      if(search.trim()){
+        const q=search.trim().toLowerCase();
+        r=r.filter(i=>i.name.toLowerCase().includes(q)||String(i.id).toLowerCase().includes(q));
+      }
       r=sortRows(r);
     }
     return r;
@@ -3169,7 +3194,13 @@ Napuštene korpe: ${abandoned.map(a=>`${a.name} (${a.addedToCart} u korpi, ${a.c
         <div style={{color:C.acl,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"1px",marginBottom:8}}>{sr?"AI Uvid":"AI Insight"}</div>
         {aiLoading
           ?<div style={{color:C.mut,fontSize:13}}>{sr?"Analiziram...":"Analyzing..."}</div>
-          :<div style={{color:C.txt,fontSize:13,lineHeight:1.6}}>{aiBrief}</div>
+          :<div style={{color:C.txt,fontSize:13,lineHeight:1.7}}>
+            {aiBrief.split("\n").filter(l=>l.trim()).map((line,i)=>{
+              const idx=line.indexOf(":");
+              if(idx===-1) return <div key={i}>{line}</div>;
+              return <div key={i}><b>{line.slice(0,idx+1)}</b>{line.slice(idx+1)}</div>;
+            })}
+          </div>
         }
       </div>
 
@@ -3188,7 +3219,7 @@ Napuštene korpe: ${abandoned.map(a=>`${a.name} (${a.addedToCart} u korpi, ${a.c
         </div>
       </div>}
 
-      {filter==="sources"&&<div style={{marginBottom:16}}>
+      {filter==="sources"&&<div style={{marginBottom:10}}>
         <Lbl c={sr?"💰 Plaćeno":"💰 Paid"}/>
         <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
           {["meta","google","tiktok"].map(p=><button key={p} onClick={()=>{setPaidOrganic("paid");setSourcePlatform(p);setSearch("");setVisibleCount(50);}} style={{flex:"1 1 100px",padding:"10px",borderRadius:10,border:`1px solid ${paidOrganic==="paid"&&sourcePlatform===p?"rgba(0,212,255,0.6)":C.brd}`,background:paidOrganic==="paid"&&sourcePlatform===p?"rgba(0,212,255,0.15)":"rgba(255,255,255,0.03)",cursor:"pointer",textAlign:"left"}}>
@@ -3204,9 +3235,10 @@ Napuštene korpe: ${abandoned.map(a=>`${a.name} (${a.addedToCart} u korpi, ${a.c
           </button>)}
         </div>
         {!(paidOrganic&&sourcePlatform)&&<div style={{color:C.mut,fontSize:12,textAlign:"center",padding:"10px 0"}}>{sr?"Izaberi kanal iznad da vidiš proizvode":"Pick a channel above to see products"}</div>}
+        {paidOrganic&&sourcePlatform&&<div style={{color:C.mut,fontSize:11,marginBottom:10,fontStyle:"italic"}}>ⓘ {sr?"Zbir prihoda po proizvodima ispod može biti nešto manji od broja iznad, zbog GA4 ograničenja kod transakcija bez potpunih podataka o proizvodu.":"The per-product revenue sum below may be slightly lower than the number above, due to a GA4 limitation with transactions missing full product data."}</div>}
       </div>}
 
-      {isExplorable&&<input value={search} onChange={e=>{setSearch(e.target.value);setVisibleCount(50);}} placeholder={sr?"🔍 Pretraži proizvod po nazivu...":"🔍 Search product by name..."} style={{width:"100%",padding:"10px 14px",borderRadius:10,border:`1px solid ${C.brd}`,background:"rgba(255,255,255,0.03)",color:C.txt,fontSize:13,marginBottom:14,boxSizing:"border-box"}}/>}
+      {isExplorable&&<input value={search} onChange={e=>{setSearch(e.target.value);setVisibleCount(50);}} placeholder={sr?"🔍 Pretraži po nazivu ili ID-u...":"🔍 Search by name or ID..."} style={{width:"100%",padding:"10px 14px",borderRadius:10,border:`1px solid ${C.brd}`,background:"rgba(255,255,255,0.03)",color:C.txt,fontSize:13,marginBottom:14,boxSizing:"border-box"}}/>}
 
       {rows.length===0&&(filter!=="sources"||(paidOrganic&&sourcePlatform))&&<div style={{color:C.mut,fontSize:13,textAlign:"center",padding:"20px 0"}}>{sr?"Nema proizvoda u ovoj kategoriji za izabrani period.":"No products in this category for the selected period."}</div>}
 
@@ -3219,17 +3251,21 @@ Napuštene korpe: ${abandoned.map(a=>`${a.name} (${a.addedToCart} u korpi, ${a.c
               <SortTh k="addedToCart" label={sr?"Korpa":"Cart"}/>
               <SortTh k="purchased" label={sr?"Kupljeno":"Purchased"}/>
               <SortTh k="revenue" label={sr?"Prihod":"Revenue"}/>
-              <SortTh k="conversionRate" label={sr?"Konverzija":"Conversion"}/>
+              <SortTh k="viewToCartRate" label={sr?"Pregled→Korpa":"View→Cart"}/>
+              <SortTh k="cartToPurchaseRate" label={sr?"Korpa→Kupovina":"Cart→Purchase"}/>
+              <SortTh k="conversionRate" label={sr?"Ukupna konverzija":"Overall conversion"}/>
               {showTrendCol&&<th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Promena":"Change"}</th>}
             </tr>
           </thead>
           <tbody>
             {visibleRows.map((r,i)=><tr key={i} style={{borderTop:`1px solid ${C.brd}`}}>
-              <td style={{padding:"8px 4px",color:C.txt}}>{r.name}</td>
+              <td style={{padding:"8px 4px",color:C.txt}}>{r.name} <span style={{color:C.mut}}>({r.id})</span></td>
               <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{r.viewed.toLocaleString()}</td>
               <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{r.addedToCart.toLocaleString()}</td>
               <td style={{padding:"8px 4px",textAlign:"right",fontWeight:600,color:C.txt}}>{r.purchased.toLocaleString()}</td>
               <td style={{padding:"8px 4px",textAlign:"right",color:C.grn}}>€{r.revenue.toFixed(0)}</td>
+              <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{r.viewToCartRate.toFixed(1)}%</td>
+              <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{r.cartToPurchaseRate.toFixed(1)}%</td>
               <td style={{padding:"8px 4px",textAlign:"right",color:C.yel}}>{r.conversionRate.toFixed(1)}%</td>
               {showTrendCol&&<td style={{padding:"8px 4px",textAlign:"right",fontWeight:700,color:filter==="spikes"?C.grn:C.red}}>{r[trendCfg.changeField]>=0?"+":""}{r[trendCfg.changeField].toFixed(0)}%</td>}
             </tr>)}
