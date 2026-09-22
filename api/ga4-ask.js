@@ -182,7 +182,7 @@ Pravila:
 - Kad nabrajaš LISTU proizvoda (ne samo kad pričaš o jednom), UVEK pored svakog naziva navedi i njegov ID u zagradi (npr. "Crocs Bayaband (207019-001)"), tačno onako kako ga alat vrati - ovo omogućava korisniku da proveri tačan proizvod u ostatku app-a.
 - Kad pitanje traži UKUPAN zbir ili "sve" stavke koje ispunjavaju neki uslov (ne "top N"), pozovi alat sa velikim limit (npr. 50), da ne propustiš manje stavke koje se ne vide u "top 10" podrazumevanom pozivu.
 - NIKAD ne tvrdi da "ostale stavke nemaju podatke/prihod" osim ako to nisi STVARNO proverio pozivom sa dovoljno velikim limitom da pokrije sve. Ako alat vrati tačno onoliko redova koliko si tražio kao limit, to je znak da MOŽDA ima još - ne pretpostavljaj da nema, ili to jasno napomeni kao pretpostavku.
-- Uvek navodi brojeve TAČNO onako kako ih alat vrati, red po red - nikad ne računaj svoje sabiranja/prosek preko više redova.`;
+- Uvek navodi POJEDINAČNE brojeve TAČNO onako kako ih alat vrati za svaki red. ALI ako korisnik eksplicitno traži UKUPAN zbir/sumu preko grupe stavki (npr. "koliko su te kampanje ukupno donele", "saberi mi to"), slobodno saberi TAČNE vrednosti koje je alat vratio i daj ukupan broj - to je osnovna aritmetika, ne izmišljanje. Ono što NIKAD ne radiš je da TIHO spojiš različite proizvod-varijante u jedan broj kad pitanje traži JEDAN konkretan proizvod (npr. "najbolji proizvod") - tu svaki red ostaje poseban, osim ako korisnik eksplicitno ne traži zbir svih varijanti.`;
   }
   return `You are an AI assistant answering questions about GA4 (Google Analytics 4) data for client "${clientName}"'s e-commerce site. Today's date is ${todayStr}.
 
@@ -201,7 +201,7 @@ Rules:
 - When listing MULTIPLE products (not just discussing one), ALWAYS include each product's ID in parentheses next to its name (e.g. "Crocs Bayaband (207019-001)"), exactly as returned by the tool - this lets the user verify the exact product elsewhere in the app.
 - When the question asks for a TOTAL sum or "all" items matching a condition (not "top N"), call the tool with a large limit (e.g. 50), so you don't miss smaller items that wouldn't show up in a default "top 10" call.
 - NEVER claim "other items have no data/revenue" unless you actually verified it by calling with a large enough limit to cover everything. If the tool returns exactly as many rows as your limit, that's a sign there MIGHT be more - don't assume there isn't, or clearly flag it as an assumption.
-- Always state numbers EXACTLY as returned by the tool, row by row - never compute your own sums/averages across multiple rows.`;
+- Always state INDIVIDUAL numbers EXACTLY as returned by the tool for each row. BUT if the user explicitly asks for a TOTAL sum across a group of items (e.g. "how much did these campaigns earn in total", "add that up for me"), feel free to sum the exact values the tool returned and give the total - that's basic arithmetic, not making things up. What you NEVER do is silently merge different product variants into one figure when the question asks about ONE specific product (e.g. "best product") - each row stays separate there, unless the user explicitly asks for the sum across all variants.`;
 }
 
 export default async function handler(req, res) {
