@@ -124,6 +124,50 @@ async function execQueryCampaigns(propertyId, accessToken, p) {
   }));
 }
 
+// ── Alat 3: proizvodi FILTRIRANI po izvoru saobraćaja (npr. samo Meta, samo Google) ──
+async function execQueryProductsBySource(propertyId, accessToken, p) {
+  const dateRanges = [{ startDate: p.startDate, endDate: p.endDate }];
+  const hasComparison = !!(p.previousStartDate && p.previousEndDate);
+  if (hasComparison) dateRanges.push({ startDate: p.previousStartDate, endDate: p.previousEndDate });
+
+  const orderMetricMap = { viewed: "itemsViewed", addedToCart: "itemsAddedToCart", purchased: "itemsPurchased", revenue: "itemRevenue" };
+  const orderMetric = orderMetricMap[p.orderBy] || "itemRevenue";
+
+  const body = {
+    dateRanges,
+    dimensions: [{ name: "itemId" }, { name: "itemName" }],
+    metrics: [{ name: "itemsViewed" }, { name: "itemsAddedToCart" }, { name: "itemsPurchased" }, { name: "itemRevenue" }],
+    orderBys: [{ metric: { metricName: orderMetric }, desc: true }],
+    limit: Math.min(p.limit || 10, 50)
+  };
+  const filters = [{ filter: { fieldName: "sessionSource", stringFilter: { matchType: "CONTAINS", value: p.sourceContains, caseSensitive: false } } }];
+  if (p.nameContains) filters.push({ filter: { fieldName: "itemName", stringFilter: { matchType: "CONTAINS", value: p.nameContains, caseSensitive: false } } });
+  body.dimensionFilter = filters.length === 1 ? filters[0] : { andGroup: { expressions: filters } };
+
+  const data = await ga4Fetch(propertyId, accessToken, body);
+  const byItem = {};
+  for (const row of data.rows || []) {
+    const id = row.dimensionValues[0].value;
+    const name = row.dimensionValues[1].value;
+    const rangeIdx = hasComparison ? row.dimensionValues[2].value : "date_range_0";
+    const m = {
+      viewed: parseInt(row.metricValues[0].value) || 0,
+      addedToCart: parseInt(row.metricValues[1].value) || 0,
+      purchased: parseInt(row.metricValues[2].value) || 0,
+      revenue: parseFloat(row.metricValues[3].value) || 0
+    };
+    if (!byItem[id]) byItem[id] = { id, name, current: null, previous: null };
+    if (rangeIdx === "date_range_0") byItem[id].current = m;
+    else byItem[id].previous = m;
+  }
+  return Object.values(byItem).map((it) => ({
+    id: it.id,
+    name: it.name,
+    ...(it.current || { viewed: 0, addedToCart: 0, purchased: 0, revenue: 0 }),
+    ...(hasComparison ? { previousPeriod: it.previous || { viewed: 0, addedToCart: 0, purchased: 0, revenue: 0 } } : {})
+  }));
+}
+
 const tools = [
   {
     name: "query_products",
@@ -159,6 +203,24 @@ const tools = [
       },
       required: ["startDate", "endDate"]
     }
+  },
+  {
+    name: "query_products_by_source",
+    description: "Vraća GA4 e-commerce metrike na nivou proizvoda, FILTRIRANO po izvoru saobraćaja (npr. samo Meta/Facebook, samo Google, samo TikTok). Koristi OVAJ alat (ne query_products) kad pitanje kombinuje proizvod I izvor/platformu istovremeno (npr. 'koji proizvod je najprodavaniji preko Meta oglasa', 'prihod od X proizvoda sa Google-a').",
+    input_schema: {
+      type: "object",
+      properties: {
+        startDate: { type: "string" },
+        endDate: { type: "string" },
+        previousStartDate: { type: "string" },
+        previousEndDate: { type: "string" },
+        sourceContains: { type: "string", description: "OBAVEZNO - filtrira po izvoru saobraćaja, npr 'facebook' ili 'instagram' za Meta, 'google' za Google, 'tiktok' za TikTok." },
+        nameContains: { type: "string", description: "Opciono - dodatno filtrira proizvode čiji naziv sadrži ovaj tekst." },
+        orderBy: { type: "string", enum: ["viewed", "addedToCart", "purchased", "revenue"] },
+        limit: { type: "integer" }
+      },
+      required: ["startDate", "endDate", "sourceContains"]
+    }
   }
 ];
 
@@ -175,7 +237,7 @@ Pravila:
 - Ako je pitanje nejasno (npr. "najbolji proizvod" bez definisanog merila), izaberi razumnu pretpostavku (npr. po prihodu) i to kratko napomeni ("Gledao sam po prihodu - javi ako si mislio nešto drugo").
 - Ako pitanje traži nešto što GA4 ne prati (profit, marža, troškovi, plate, zalihe i slično), jasno reci da GA4 to ne prati, i predloži šta GA4 STVARNO zna da pokaže umesto toga.
 - Ako za traženi period/proizvod/kampanju nema podataka, jasno to reci - nikad ne izmišljaj brojeve.
-- Ako pitanje pominje "kampanju" ili "izvor/kanal saobraćaja", koristi query_campaigns. Ako pominje "proizvod" ili konkretan artikal, koristi query_products.
+- Imaš TRI alata: query_products (proizvod-nivo, bez filtera po izvoru), query_campaigns (kampanja/saobraćaj-nivo), i query_products_by_source (proizvod-nivo, ALI filtrirano po konkretnom izvoru/platformi). Ako pitanje pominje SAMO "kampanju" ili izvor/kanal (bez konkretnog proizvoda), koristi query_campaigns. Ako pitanje pominje SAMO "proizvod" (bez izvora/platforme), koristi query_products. Ako pitanje KOMBINUJE proizvod I izvor/platformu istovremeno (npr. "koji proizvod je najprodavaniji preko Meta oglasa"), koristi query_products_by_source.
 - Za pitanja o rastu/padu/promeni u odnosu na prethodni period, uvek prosledi i previousStartDate/previousEndDate alatu da dobiješ oba perioda u jednom pozivu.
 - Ako alat vrati više redova sa sličnim/istim osnovnim nazivom proizvoda (varijante - npr. različite boje ili veličine, svaka sa svojim ID-om), NIKAD ih sam ne sabiraj u odgovoru. Navedi tačan broj za tačno onaj red (ID) koji odgovara pitanju, i ako postoji više sličnih varijanti, to pomeni ("postoji i nekoliko drugih varijanti ovog proizvoda sa sličnim imenom").
 - Za period NIKAD sam ne računaj apsolutne datume - uvek koristi GA4-ove ugrađene relativne izraze (npr. "poslednjih 30 dana" = startDate:"30daysAgo", endDate:"yesterday"; "poslednjih 7 dana" = startDate:"7daysAgo", endDate:"yesterday"). Ovo garantuje da se tvoj odgovor tačno poklapa sa onim što app inače prikazuje. Apsolutne datume (YYYY-MM-DD) koristi SAMO ako korisnik eksplicitno navede tačan datum ili mesec.
@@ -194,7 +256,7 @@ Rules:
 - If the question is ambiguous (e.g. "best product" with no defined metric), pick a reasonable assumption (e.g. by revenue) and briefly note it ("I looked at this by revenue - let me know if you meant something else").
 - If the question asks for something GA4 doesn't track (profit, margin, costs, payroll, inventory, etc.), clearly say GA4 doesn't track that, and suggest what GA4 actually can show instead.
 - If there's no data for the requested period/product/campaign, clearly say so - never make up numbers.
-- If the question mentions a "campaign" or "traffic source/channel", use query_campaigns. If it mentions a "product" or specific item, use query_products.
+- You have THREE tools: query_products (product-level, no source filter), query_campaigns (campaign/traffic-level), and query_products_by_source (product-level, BUT filtered by a specific source/platform). If the question mentions ONLY a "campaign" or traffic source/channel (no specific product), use query_campaigns. If it mentions ONLY a "product" (no source/platform), use query_products. If the question COMBINES a product AND a source/platform (e.g. "which product sells best via Meta ads"), use query_products_by_source.
 - For growth/drop/change questions, always pass previousStartDate/previousEndDate to the tool to get both periods in one call.
 - If the tool returns multiple rows with similar/identical base product names (variants - e.g. different colors or sizes, each with its own ID), NEVER sum them yourself in your answer. State the exact number for the specific row (ID) that matches the question, and if several similar variants exist, mention that ("there are also a few other variants of this product with a similar name").
 - Never compute absolute dates yourself for periods - always use GA4's built-in relative expressions (e.g. "last 30 days" = startDate:"30daysAgo", endDate:"yesterday"; "last 7 days" = startDate:"7daysAgo", endDate:"yesterday"). This guarantees your answer exactly matches what the app otherwise displays. Only use absolute dates (YYYY-MM-DD) if the user explicitly names a specific date or month.
@@ -266,6 +328,7 @@ export default async function handler(req, res) {
           try {
             if (block.name === "query_products") result = await execQueryProducts(property_id, accessToken, block.input);
             else if (block.name === "query_campaigns") result = await execQueryCampaigns(property_id, accessToken, block.input);
+            else if (block.name === "query_products_by_source") result = await execQueryProductsBySource(property_id, accessToken, block.input);
             else result = { error: "Unknown tool" };
           } catch (e) {
             result = { error: e.message };
