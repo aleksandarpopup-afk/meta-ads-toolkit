@@ -4,7 +4,7 @@ const APP_URL = process.env.APP_URL;
 const REDIRECT_URI = `${APP_URL}/api/google-ads-callback`;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
-const GADS_VERSION = "v20";
+const GADS_VERSION = "v25";
 
 async function gadsSearch(customerId, accessToken, query, loginCustomerId) {
   const headers = { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` };
