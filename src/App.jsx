@@ -76,6 +76,7 @@ const T={
     m11t:"Time Machine", m11s:"Izveštaj i grafikon za period",
     m12t:"Product Intelligence", m12s:"Analiza proizvoda i sajta iz GA4 podataka",
     m13t:"Pitaj svoje podatke", m13s:"Postavi pitanje o GA4 podacima svojim rečima",
+    m14t:"Kampanje", m14s:"ROAS po kampanji - Google Ads spend spojen sa GA4 revenue",
     analyze:"Analiziraj →", gen:"Generiši →", calc:"Izračunaj →",
     newA:"← Nova analiza", poor:"Kritično", ok:"Prosečno", good:"Odlično",
     nxt:"Dalje →", prv:"←", res:"Rezultati", s1:"Osnove", s2:"Metrike", s3:"Targeting & Kreativa",
@@ -233,6 +234,7 @@ const T={
     m11t:"Time Machine", m11s:"Report and chart for any period",
     m12t:"Product Intelligence", m12s:"Product and site analysis from GA4 data",
     m13t:"Ask Your Data", m13s:"Ask a question about your GA4 data, in your own words",
+    m14t:"Campaigns", m14s:"ROAS by campaign - Google Ads spend blended with GA4 revenue",
     analyze:"Analyze →", gen:"Generate →", calc:"Calculate →",
     newA:"← New Analysis", poor:"Critical", ok:"Average", good:"Excellent",
     nxt:"Next →", prv:"←", res:"Results", s1:"Basics", s2:"Metrics", s3:"Targeting & Creative",
@@ -3510,10 +3512,168 @@ function AskDataMod({t,lang}){
   </div>;
 }
 
+function CampaignsMod({t,lang}){
+  const sr=lang==="sr";
+  const [clients,setClients]=useState([]);
+  const [selectedClient,setSelectedClient]=useState(null);
+  const [period,setPeriod]=useState("30");
+  const [loading,setLoading]=useState(false);
+  const [data,setData]=useState(null);
+  const [err,setErr]=useState("");
+  const [newClientOpen,setNewClientOpen]=useState(false);
+  const [newClientName,setNewClientName]=useState("");
+  const [creatingClient,setCreatingClient]=useState(false);
+
+  useEffect(()=>{
+    const uid=localStorage.getItem("mat_user_id");
+    if(!uid) return;
+    fetch(`/api/clients?user_id=${uid}`).then(r=>r.json()).then(d=>setClients(Array.isArray(d)?d:[])).catch(()=>{});
+  },[]);
+
+  const addClient=async()=>{
+    const uid=localStorage.getItem("mat_user_id");
+    if(!uid||!newClientName.trim()) return;
+    setCreatingClient(true);
+    try{
+      const r=await fetch("/api/clients",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({user_id:uid,name:newClientName.trim()})
+      });
+      const c=await r.json();
+      if(r.ok&&c.id){
+        setClients(prev=>[c,...prev]);
+        setNewClientName("");
+        setNewClientOpen(false);
+      }
+    }catch(e){}
+    setCreatingClient(false);
+  };
+
+  const load=async(client,p)=>{
+    setLoading(true); setErr(""); setData(null);
+    try{
+      const res=await fetch(`/api/campaigns?client_id=${client.id}&days=${p}`);
+      const d=await res.json();
+      if(res.status===404){ setErr(d.error==="no_gads"?"no_gads":"no_ga4"); setLoading(false); return; }
+      if(!res.ok) throw new Error(d.error||(sr?"Greška pri učitavanju":"Loading error"));
+      setData(d);
+    }catch(e){ setErr(e.message); }
+    setLoading(false);
+  };
+
+  const periods=[{v:"7",l:sr?"7 dana":"7 days"},{v:"30",l:sr?"30 dana":"30 days"},{v:"90",l:sr?"90 dana":"90 days"}];
+
+  // IZBOR KLIJENTA
+  if(!selectedClient) return <div>
+    <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>📢 {sr?"Kampanje":"Campaigns"}</h2>
+    <p style={{color:C.mut,fontSize:13,margin:"0 0 20px"}}>{t.m14s}</p>
+
+    {!newClientOpen&&<button onClick={()=>setNewClientOpen(true)} style={{background:"rgba(99,102,241,0.15)",border:"1px solid rgba(99,102,241,0.3)",borderRadius:10,color:C.acl,fontSize:13,fontWeight:700,padding:"10px 16px",cursor:"pointer",marginBottom:20}}>+ {sr?"Novi klijent":"New client"}</button>}
+    {newClientOpen&&<div style={{display:"flex",gap:8,marginBottom:20}}>
+      <input value={newClientName} onChange={e=>setNewClientName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addClient()} autoFocus placeholder={sr?"Ime klijenta...":"Client name..."} style={{flex:1,padding:"10px 14px",borderRadius:10,border:`1px solid ${C.brd}`,background:"rgba(255,255,255,0.05)",color:C.txt,fontSize:13}}/>
+      <button onClick={addClient} disabled={creatingClient||!newClientName.trim()} style={{background:"linear-gradient(135deg,#6366F1,#4f46e5)",border:"none",borderRadius:10,color:"#fff",fontSize:13,fontWeight:700,padding:"10px 16px",cursor:"pointer"}}>{sr?"Sačuvaj":"Save"}</button>
+      <button onClick={()=>{setNewClientOpen(false);setNewClientName("");}} style={{background:"none",border:"none",color:C.mut,cursor:"pointer",fontSize:12}}>{sr?"Otkaži":"Cancel"}</button>
+    </div>}
+
+    {clients.length===0
+      ?<div style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:12,padding:"16px",color:C.mut,fontSize:13,textAlign:"center"}}>
+        {sr?"Nema klijenata još. Dodaj jednog iznad.":"No clients yet. Add one above."}
+      </div>
+      :<div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {clients.map(c=><button key={c.id} onClick={()=>{setSelectedClient(c);load(c,period);}} style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:10,padding:"12px 16px",textAlign:"left",cursor:"pointer",color:C.txt,fontWeight:600,fontSize:13}}>
+          👤 {c.name}
+        </button>)}
+      </div>
+    }
+  </div>;
+
+  // KONTROLNA TABLA
+  return <div>
+    <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:10}}>
+      <div>
+        <button onClick={()=>{setSelectedClient(null);setData(null);}} style={{background:"none",border:"none",color:C.mut,cursor:"pointer",fontSize:12,padding:0,marginBottom:4}}>{sr?"← Svi klijenti":"← All clients"}</button>
+        <h2 style={{fontSize:18,fontWeight:800,margin:0}}>{selectedClient.name}</h2>
+      </div>
+      <div style={{display:"flex",gap:6}}>
+        {periods.map(p=><button key={p.v} onClick={()=>{setPeriod(p.v);load(selectedClient,p.v);}} style={{padding:"6px 12px",borderRadius:8,border:`1px solid ${period===p.v?"rgba(99,102,241,0.6)":C.brd}`,background:period===p.v?"rgba(99,102,241,0.2)":"transparent",color:period===p.v?C.acl:C.mut,fontSize:12,fontWeight:600,cursor:"pointer"}}>{p.l}</button>)}
+      </div>
+    </div>
+
+    {loading&&<div style={{textAlign:"center",padding:"40px 0"}}>
+      <div style={{fontSize:36,marginBottom:16}}>📢</div>
+      <div style={{color:C.acl,fontWeight:700,fontSize:15}}>{sr?"Učitavam podatke...":"Loading data..."}</div>
+    </div>}
+
+    {err==="no_gads"&&!loading&&<div style={{background:"rgba(0,212,255,0.08)",border:"1px solid rgba(0,212,255,0.2)",borderRadius:12,padding:"16px",color:C.txt,fontSize:13,marginBottom:16}}>
+      🔗 {sr?"Google Ads nije povezan za ovog klijenta. Idi u":"Google Ads is not connected for this client. Go to"} <b>{sr?"Moji klijenti":"My Clients"}</b> {sr?"da ga povežeš.":"to connect it."}
+    </div>}
+    {err==="no_ga4"&&!loading&&<div style={{background:"rgba(0,212,255,0.08)",border:"1px solid rgba(0,212,255,0.2)",borderRadius:12,padding:"16px",color:C.txt,fontSize:13,marginBottom:16}}>
+      🔗 {sr?"GA4 nije povezan za ovog klijenta. Idi u":"GA4 is not connected for this client. Go to"} <b>{sr?"Moji klijenti":"My Clients"}</b> {sr?"da ga povežeš.":"to connect it."}
+    </div>}
+    {err&&err!=="no_gads"&&err!=="no_ga4"&&!loading&&<div style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:12,padding:"16px",color:C.red,fontSize:13,marginBottom:16}}>⚠️ {err}</div>}
+
+    {data&&!loading&&<>
+      {data.currencyMismatch&&<div style={{background:"rgba(245,158,11,0.1)",border:"1px solid rgba(245,158,11,0.3)",borderRadius:12,padding:"12px 16px",color:C.yel,fontSize:12,marginBottom:16}}>
+        ⚠️ {sr?`Google Ads koristi ${data.gadsCurrency}, a GA4 ${data.currency} - ROAS računica meša dve različite valute, uzmi sa rezervom.`:`Google Ads uses ${data.gadsCurrency}, GA4 uses ${data.currency} - ROAS calculation mixes two different currencies, treat with caution.`}
+      </div>}
+
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:20}}>
+        <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px"}}>
+          <div style={{color:C.mut,fontSize:11,marginBottom:4}}>{sr?"Ukupan spend":"Total spend"}</div>
+          <div style={{color:C.txt,fontSize:18,fontWeight:800}}>{fmtMoney(data.totalSpend,data.gadsCurrency)}</div>
+        </div>
+        <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px"}}>
+          <div style={{color:C.mut,fontSize:11,marginBottom:4}}>{sr?"Ukupan prihod":"Total revenue"}</div>
+          <div style={{color:C.grn,fontSize:18,fontWeight:800}}>{fmtMoney(data.totalRevenue,data.currency)}</div>
+        </div>
+        <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px"}}>
+          <div style={{color:C.mut,fontSize:11,marginBottom:4}}>ROAS</div>
+          <div style={{color:C.acl,fontSize:18,fontWeight:800}}>{data.totalRoas.toFixed(2)}x</div>
+        </div>
+      </div>
+
+      {data.campaigns.length===0&&<div style={{color:C.mut,fontSize:13,textAlign:"center",padding:"20px 0"}}>{sr?"Nema kampanja sa potrošnjom u ovom periodu.":"No campaigns with spend in this period."}</div>}
+
+      {data.campaigns.length>0&&<div style={{overflowX:"auto",marginBottom:16}}>
+        <table style={{width:"100%",fontSize:12,borderCollapse:"collapse"}}>
+          <thead>
+            <tr style={{color:C.mut,textAlign:"left"}}>
+              <th style={{padding:"6px 4px",fontWeight:600}}>{sr?"Kampanja":"Campaign"}</th>
+              <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Klikovi":"Clicks"}</th>
+              <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Impresije":"Impressions"}</th>
+              <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>Spend</th>
+              <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Prihod":"Revenue"}</th>
+              <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Konverzije":"Conversions"}</th>
+              <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>ROAS</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.campaigns.map((c,i)=><tr key={i} style={{borderTop:`1px solid ${C.brd}`}}>
+              <td style={{padding:"8px 4px",color:C.txt}}>{c.campaign_name} <span style={{color:C.mut}}>({c.campaign_id})</span></td>
+              <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{c.clicks.toLocaleString()}</td>
+              <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{c.impressions.toLocaleString()}</td>
+              <td style={{padding:"8px 4px",textAlign:"right",color:C.txt}}>{fmtMoney(c.spend,data.gadsCurrency)}</td>
+              <td style={{padding:"8px 4px",textAlign:"right",color:C.grn}}>{fmtMoney(c.revenue,data.currency)}</td>
+              <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{c.conversions.toFixed(1)}</td>
+              <td style={{padding:"8px 4px",textAlign:"right",fontWeight:700,color:c.roas>=1?C.grn:C.red}}>{c.roas.toFixed(2)}x</td>
+            </tr>)}
+          </tbody>
+        </table>
+      </div>}
+
+      {(data.unattributed.revenue>0||data.unattributed.conversions>0)&&<div style={{background:"rgba(255,255,255,0.02)",border:`1px solid ${C.brd}`,borderRadius:12,padding:"12px 16px",color:C.mut,fontSize:12}}>
+        ℹ️ {sr?"Neraspoređeno":"Unattributed"}: {fmtMoney(data.unattributed.revenue,data.currency)} {sr?"prihoda i":"revenue and"} {data.unattributed.conversions.toFixed(1)} {sr?"konverzija iz GA4 saobraćaja koji nije mogao da se poveže sa konkretnom kampanjom.":"conversions from GA4 traffic that couldn't be matched to a specific campaign."}
+      </div>}
+    </>}
+  </div>;
+}
+
 const MODS=[
   {id:1,icon:"📊",col:"#6366F1",tk:"m1t",sk:"m1s"},
   {id:12,icon:"🛍️",col:"#F43F5E",tk:"m12t",sk:"m12s"},
   {id:13,icon:"💬",col:"#22D3EE",tk:"m13t",sk:"m13s"},
+  {id:14,icon:"📢",col:"#84CC16",tk:"m14t",sk:"m14s"},
   {id:8,icon:"📄",col:"#F97316",tk:"m8t",sk:"m8s"},
   {id:9,icon:"🔗",col:"#00D4FF",tk:"m9t",sk:"m9s"},
   {id:10,icon:"👥",col:"#A855F7",tk:"m10t",sk:"m10s"},
@@ -3645,7 +3805,7 @@ export default function App(){
   // Save lang preference
   useEffect(()=>{ localStorage.setItem("mat_lang",lang); },[lang]);
 
-  const Comp=mod===1?HealthMod:mod===8?ReportMod:mod===9?BookmarkMod:mod===10?(props=><MyClientsMod {...props} goMod={goMod}/>):mod===11?TimeMachineMod:mod===12?ProductIntelligenceMod:mod===13?AskDataMod:mod===2?BudgetMod:mod===7?ScalingMod:mod===3?CopyMod:mod===4?AudMod:mod===5?RoasMod:mod===6?CheckMod:null;
+  const Comp=mod===1?HealthMod:mod===8?ReportMod:mod===9?BookmarkMod:mod===10?(props=><MyClientsMod {...props} goMod={goMod}/>):mod===11?TimeMachineMod:mod===12?ProductIntelligenceMod:mod===13?AskDataMod:mod===14?CampaignsMod:mod===2?BudgetMod:mod===7?ScalingMod:mod===3?CopyMod:mod===4?AudMod:mod===5?RoasMod:mod===6?CheckMod:null;
 
   const ModCard=({m,i,large})=>(
     <button onClick={()=>goMod(m.id)} style={{
