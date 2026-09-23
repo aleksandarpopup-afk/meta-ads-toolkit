@@ -33,6 +33,19 @@ async function gadsSearch(customerId, accessToken, query, loginCustomerId) {
   return data;
 }
 
+async function bulkUpsertSpend(rows, headers) {
+  if (!rows.length) return;
+  const chunkSize = 500;
+  for (let i = 0; i < rows.length; i += chunkSize) {
+    const chunk = rows.slice(i, i + chunkSize);
+    await fetch(`${SUPABASE_URL}/rest/v1/google_ads_daily_spend?on_conflict=client_id,campaign_id,date`, {
+      method: "POST",
+      headers: { ...headers, Prefer: "resolution=merge-duplicates" },
+      body: JSON.stringify(chunk)
+    });
+  }
+}
+
 function dateStr(d) {
   return d.toISOString().split("T")[0];
 }
@@ -71,30 +84,20 @@ export default async function handler(req, res) {
         const query = `SELECT campaign.id, campaign.name, segments.date, metrics.cost_micros, metrics.clicks, metrics.impressions FROM campaign WHERE segments.date BETWEEN '${startStr}' AND '${endStr}'`;
         const data = await gadsSearch(conn.customer_id, accessToken, query, conn.manager_id || undefined);
 
-        for (const row of data.results || []) {
-          const campaignId = row.campaign?.id;
-          const date = row.segments?.date;
-          if (!campaignId || !date) continue;
+        const rows = (data.results || [])
+          .filter((row) => row.campaign?.id && row.segments?.date)
+          .map((row) => ({
+            client_id: conn.client_id,
+            date: row.segments.date,
+            campaign_id: row.campaign.id,
+            campaign_name: row.campaign.name || "",
+            spend: (parseInt(row.metrics?.costMicros) || 0) / 1000000,
+            clicks: parseInt(row.metrics?.clicks) || 0,
+            impressions: parseInt(row.metrics?.impressions) || 0,
+            updated_at: new Date().toISOString()
+          }));
 
-          const spend = (parseInt(row.metrics?.costMicros) || 0) / 1000000;
-          const clicks = parseInt(row.metrics?.clicks) || 0;
-          const impressions = parseInt(row.metrics?.impressions) || 0;
-
-          await fetch(`${SUPABASE_URL}/rest/v1/google_ads_daily_spend?on_conflict=client_id,campaign_id,date`, {
-            method: "POST",
-            headers: { ...headers, Prefer: "resolution=merge-duplicates" },
-            body: JSON.stringify({
-              client_id: conn.client_id,
-              date,
-              campaign_id: campaignId,
-              campaign_name: row.campaign?.name || "",
-              spend,
-              clicks,
-              impressions,
-              updated_at: new Date().toISOString()
-            })
-          });
-        }
+        await bulkUpsertSpend(rows, headers);
         synced++;
       } catch (e) {
         errors.push({ client_id: conn.client_id, error: e.message });
