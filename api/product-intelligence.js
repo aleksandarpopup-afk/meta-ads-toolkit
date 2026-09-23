@@ -86,14 +86,15 @@ export default async function handler(req, res) {
 
   try {
     const connR = await fetch(
-      `${SUPABASE_URL}/rest/v1/ga4_connections?client_id=eq.${client_id}&select=property_id,refresh_token`,
+      `${SUPABASE_URL}/rest/v1/ga4_connections?client_id=eq.${client_id}&select=property_id,refresh_token,currency_code`,
       { headers: supaHeaders }
     );
     const connData = await connR.json();
     if (!connData.length) {
       return res.status(404).json({ error: "GA4 nije povezan za ovog klijenta" });
     }
-    const { property_id, refresh_token } = connData[0];
+    const { property_id, refresh_token, currency_code } = connData[0];
+    const currency = currency_code || "EUR";
     const accessToken = await refreshAccessToken(refresh_token);
 
     // 1. Glavni izveštaj - ceo katalog, grupisano po itemId (ne po nazivu - varijante se ne mešaju!)
@@ -243,6 +244,7 @@ export default async function handler(req, res) {
       periodDays: periodLabel,
       totalProducts: catalog.length,
       totalRevenue,
+      currency,
       catalog,
       sourceTotals,
       sourceCatalog
