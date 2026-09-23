@@ -2399,6 +2399,7 @@ function MyClientsMod({t,lang,goMod}){
   const [gadsSetup,setGadsSetup]=useState(null);
   const [gadsError,setGadsError]=useState("");
   const [gadsSaving,setGadsSaving]=useState(false);
+  const [gadsBackfilling,setGadsBackfilling]=useState(false);
   const [newClientOpen,setNewClientOpen]=useState(false);
   const [newClientName,setNewClientName]=useState("");
   const [creatingClient,setCreatingClient]=useState(false);
@@ -2514,6 +2515,22 @@ function MyClientsMod({t,lang,goMod}){
       await fetch(`/api/google-ads-connect?client_id=${selected.id}`,{method:"DELETE"});
       setGads(null);
     }catch(e){}
+  };
+
+  const refreshGoogleAdsHistory=async()=>{
+    setGadsBackfilling(true);
+    try{
+      const r=await fetch("/api/google-ads-backfill",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({client_id:selected.id,days:90})
+      });
+      const d=await r.json();
+      alert(r.ok?(sr?`Gotovo! Osveženo ${d.rowsWritten} redova istorije.`:`Done! Refreshed ${d.rowsWritten} history rows.`):(d.error||(sr?"Greška":"Error")));
+    }catch(e){
+      alert(sr?"Greška pri osvežavanju.":"Error refreshing.");
+    }
+    setGadsBackfilling(false);
   };
 
   const saveGoogleAdsSelection=async(acc)=>{
@@ -2653,7 +2670,10 @@ function MyClientsMod({t,lang,goMod}){
           <div style={{color:C.grn,fontWeight:700,fontSize:13}}>✅ {sr?"Google Ads povezan":"Google Ads connected"}</div>
           <div style={{color:C.mut,fontSize:11,marginTop:2}}>{gads.account_name} ({gads.customer_id}){gads.manager_id?` · ${sr?"preko MCC":"via MCC"}`:""}</div>
         </div>
-        <button onClick={disconnectGoogleAds} style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.2)",borderRadius:8,color:C.red,fontSize:11,fontWeight:600,padding:"6px 12px",cursor:"pointer",whiteSpace:"nowrap"}}>{sr?"Otkači":"Disconnect"}</button>
+        <div style={{display:"flex",gap:6}}>
+          <button onClick={refreshGoogleAdsHistory} disabled={gadsBackfilling} style={{background:"rgba(0,212,255,0.1)",border:"1px solid rgba(0,212,255,0.2)",borderRadius:8,color:"#00D4FF",fontSize:11,fontWeight:600,padding:"6px 12px",cursor:gadsBackfilling?"default":"pointer",whiteSpace:"nowrap"}}>{gadsBackfilling?(sr?"Osvežavam...":"Refreshing..."):(sr?"🔄 Osveži istoriju":"🔄 Refresh history")}</button>
+          <button onClick={disconnectGoogleAds} style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.2)",borderRadius:8,color:C.red,fontSize:11,fontWeight:600,padding:"6px 12px",cursor:"pointer",whiteSpace:"nowrap"}}>{sr?"Otkači":"Disconnect"}</button>
+        </div>
       </div>}
 
       {!gadsLoading&&!gads&&!(gadsSetup&&String(gadsSetup.client_id)===String(selected.id))&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
