@@ -36,6 +36,14 @@ function useIsMobile(){ const [m,setM]=useState(window.innerWidth<520); useEffec
 // ── UI ATOMS ────────────────────────────────────────────────────────────────
 const Lbl=({c})=><div style={{color:C.mut,fontSize:11,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8}}>{c}</div>;
 const TIn=({v,ch,ph})=><input value={v} onChange={e=>ch(e.target.value)} placeholder={ph} style={{width:"100%",padding:"13px 14px",background:"rgba(255,255,255,0.06)",border:`1px solid ${C.brd}`,borderRadius:10,color:C.txt,fontSize:16,outline:"none",boxSizing:"border-box"}} onFocus={e=>e.target.style.borderColor="rgba(99,102,241,0.5)"} onBlur={e=>e.target.style.borderColor=C.brd}/>;
+
+function fmtMoney(amount,currency){
+  try{
+    return new Intl.NumberFormat("sr-RS",{style:"currency",currency:currency||"EUR",maximumFractionDigits:0}).format(amount||0);
+  }catch(e){
+    return `${(amount||0).toFixed(0)} ${currency||"EUR"}`;
+  }
+}
 const NIn=({v,ch,ph,sx})=><div style={{display:"flex",alignItems:"center",gap:8}}><input type="number" inputMode="decimal" value={v} onChange={e=>ch(e.target.value)} placeholder={ph} style={{flex:1,padding:"13px 14px",background:"rgba(255,255,255,0.06)",border:`1px solid ${C.brd}`,borderRadius:10,color:C.txt,fontSize:16,outline:"none",boxSizing:"border-box"}} onFocus={e=>e.target.style.borderColor="rgba(99,102,241,0.5)"} onBlur={e=>e.target.style.borderColor=C.brd}/>{sx&&<span style={{color:C.mut,fontSize:13,fontWeight:600,minWidth:20}}>{sx}</span>}</div>;
 const DIn=({v,ch})=><input type="date" value={v} onChange={e=>ch(e.target.value)} style={{width:"100%",padding:"13px 12px",background:"rgba(255,255,255,0.06)",border:`1px solid ${C.brd}`,borderRadius:10,color:C.txt,fontSize:14,outline:"none",boxSizing:"border-box"}}/>;
 const Div=({l})=><div style={{display:"flex",alignItems:"center",gap:10,margin:"22px 0 12px"}}><div style={{height:1,flex:1,background:C.brd}}/>{l&&<span style={{color:C.dim,fontSize:10,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",whiteSpace:"nowrap"}}>{l}</span>}<div style={{height:1,flex:1,background:C.brd}}/></div>;
@@ -3005,7 +3013,7 @@ function ProductIntelligenceMod({t,lang}){
       const spikes=d.catalog.filter(i=>i.viewed>=20&&i.viewedChangePct>=50).sort((a,b)=>b.viewedChangePct-a.viewedChangePct).slice(0,5);
       const abandoned=d.catalog.filter(i=>i.addedToCart>=10&&i.conversionRate<5).sort((a,b)=>b.addedToCart-a.addedToCart).slice(0,5);
 
-      const summary=`Best-selleri: ${bestsellers.map(b=>`${b.name} (€${b.revenue.toFixed(0)}, ${b.purchased} kupovina)`).join("; ")||"nema"}.
+      const summary=`Best-selleri: ${bestsellers.map(b=>`${b.name} (${fmtMoney(b.revenue,d.currency)}, ${b.purchased} kupovina)`).join("; ")||"nema"}.
 Skokovi u pregledima: ${spikes.map(s=>`${s.name} (+${s.viewedChangePct.toFixed(0)}%)`).join("; ")||"nema"}.
 Napuštene korpe: ${abandoned.map(a=>`${a.name} (${a.addedToCart} u korpi, ${a.conversionRate.toFixed(1)}% konverzija)`).join("; ")||"nema"}.`;
 
@@ -3211,7 +3219,7 @@ ${summary}`;
       </div>
 
       <div style={{color:C.mut,fontSize:12,marginBottom:14}}>
-        €{(Object.values(data.sourceTotals.paid).reduce((a,b)=>a+b,0)+Object.values(data.sourceTotals.organic).reduce((a,b)=>a+b,0)).toFixed(0)} {sr?"ukupan prihod za period":"total revenue for period"}
+        {fmtMoney(Object.values(data.sourceTotals.paid).reduce((a,b)=>a+b,0)+Object.values(data.sourceTotals.organic).reduce((a,b)=>a+b,0),data.currency)} {sr?"ukupan prihod za period":"total revenue for period"}
       </div>
 
       <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
@@ -3232,14 +3240,14 @@ ${summary}`;
         <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
           {["meta","google","tiktok"].map(p=><button key={p} onClick={()=>{setPaidOrganic("paid");setSourcePlatform(p);setSearch("");setVisibleCount(50);}} style={{flex:"1 1 100px",padding:"10px",borderRadius:10,border:`1px solid ${paidOrganic==="paid"&&sourcePlatform===p?"rgba(0,212,255,0.6)":C.brd}`,background:paidOrganic==="paid"&&sourcePlatform===p?"rgba(0,212,255,0.15)":"rgba(255,255,255,0.03)",cursor:"pointer",textAlign:"left"}}>
             <div style={{color:C.mut,fontSize:11,fontWeight:700,marginBottom:2}}>{platformLabels[p]}</div>
-            <div style={{color:paidOrganic==="paid"&&sourcePlatform===p?"#00D4FF":C.txt,fontSize:14,fontWeight:700}}>€{(data.sourceTotals.paid[p]||0).toFixed(0)}</div>
+            <div style={{color:paidOrganic==="paid"&&sourcePlatform===p?"#00D4FF":C.txt,fontSize:14,fontWeight:700}}>{fmtMoney(data.sourceTotals.paid[p]||0,data.currency)}</div>
           </button>)}
         </div>
         <Lbl c={sr?"🌱 Organsko":"🌱 Organic"}/>
         <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
           {["meta","google","tiktok","direct","other"].map(p=><button key={p} onClick={()=>{setPaidOrganic("organic");setSourcePlatform(p);setSearch("");setVisibleCount(50);}} style={{flex:"1 1 100px",padding:"10px",borderRadius:10,border:`1px solid ${paidOrganic==="organic"&&sourcePlatform===p?"rgba(52,211,153,0.6)":C.brd}`,background:paidOrganic==="organic"&&sourcePlatform===p?"rgba(52,211,153,0.15)":"rgba(255,255,255,0.03)",cursor:"pointer",textAlign:"left"}}>
             <div style={{color:C.mut,fontSize:11,fontWeight:700,marginBottom:2}}>{platformLabels[p]}</div>
-            <div style={{color:paidOrganic==="organic"&&sourcePlatform===p?C.grn:C.txt,fontSize:14,fontWeight:700}}>€{(data.sourceTotals.organic[p]||0).toFixed(0)}</div>
+            <div style={{color:paidOrganic==="organic"&&sourcePlatform===p?C.grn:C.txt,fontSize:14,fontWeight:700}}>{fmtMoney(data.sourceTotals.organic[p]||0,data.currency)}</div>
           </button>)}
         </div>
         {!(paidOrganic&&sourcePlatform)&&<div style={{color:C.mut,fontSize:12,textAlign:"center",padding:"10px 0"}}>{sr?"Izaberi kanal iznad da vidiš proizvode":"Pick a channel above to see products"}</div>}
@@ -3271,7 +3279,7 @@ ${summary}`;
               <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{r.viewed.toLocaleString()}</td>
               <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{r.addedToCart.toLocaleString()}</td>
               <td style={{padding:"8px 4px",textAlign:"right",fontWeight:600,color:C.txt}}>{r.purchased.toLocaleString()}</td>
-              <td style={{padding:"8px 4px",textAlign:"right",color:C.grn}}>€{r.revenue.toFixed(0)}</td>
+              <td style={{padding:"8px 4px",textAlign:"right",color:C.grn}}>{fmtMoney(r.revenue,data.currency)}</td>
               <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{r.viewToCartRate.toFixed(1)}%</td>
               <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{r.cartToPurchaseRate.toFixed(1)}%</td>
               <td style={{padding:"8px 4px",textAlign:"right",color:C.yel}}>{r.conversionRate.toFixed(1)}%</td>
