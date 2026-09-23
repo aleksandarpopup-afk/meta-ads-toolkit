@@ -224,9 +224,9 @@ const tools = [
   }
 ];
 
-function buildSystemPrompt(sr, todayStr, clientName) {
+function buildSystemPrompt(sr, todayStr, clientName, currency) {
   if (sr) {
-    return `Ti si AI asistent koji odgovara na pitanja o GA4 (Google Analytics 4) podacima za e-commerce sajt klijenta "${clientName}". Današnji datum je ${todayStr}.
+    return `Ti si AI asistent koji odgovara na pitanja o GA4 (Google Analytics 4) podacima za e-commerce sajt klijenta "${clientName}". Današnji datum je ${todayStr}. VAŽNO: svi novčani iznosi koje dobiješ od alata su u valuti ${currency} - kad navodiš iznose u odgovoru, uvek koristi ovu valutu (npr. "${currency} 123" ili odgovarajući simbol ako postoji), NIKAD ne pretpostavljaj drugu valutu poput EUR ako klijent koristi nešto drugo.
 
 Imaš dva alata za dobijanje stvarnih podataka: query_products (nivo proizvoda) i query_campaigns (nivo kampanje/saobraćaja). NIKAD ne izmišljaj brojeve - uvek pozovi odgovarajući alat da dobiješ prave podatke pre nego što odgovoriš.
 
@@ -246,7 +246,7 @@ Pravila:
 - NIKAD ne tvrdi da "ostale stavke nemaju podatke/prihod" osim ako to nisi STVARNO proverio pozivom sa dovoljno velikim limitom da pokrije sve. Ako alat vrati tačno onoliko redova koliko si tražio kao limit, to je znak da MOŽDA ima još - ne pretpostavljaj da nema, ili to jasno napomeni kao pretpostavku.
 - Uvek navodi POJEDINAČNE brojeve TAČNO onako kako ih alat vrati za svaki red. ALI ako korisnik eksplicitno traži UKUPAN zbir/sumu preko grupe stavki (npr. "koliko su te kampanje ukupno donele", "saberi mi to"), slobodno saberi TAČNE vrednosti koje je alat vratio i daj ukupan broj - to je osnovna aritmetika, ne izmišljanje. Ono što NIKAD ne radiš je da TIHO spojiš različite proizvod-varijante u jedan broj kad pitanje traži JEDAN konkretan proizvod (npr. "najbolji proizvod") - tu svaki red ostaje poseban, osim ako korisnik eksplicitno ne traži zbir svih varijanti.`;
   }
-  return `You are an AI assistant answering questions about GA4 (Google Analytics 4) data for client "${clientName}"'s e-commerce site. Today's date is ${todayStr}.
+  return `You are an AI assistant answering questions about GA4 (Google Analytics 4) data for client "${clientName}"'s e-commerce site. Today's date is ${todayStr}. IMPORTANT: all monetary amounts you get from the tools are in ${currency} currency - when stating amounts in your answer, always use this currency (e.g. "${currency} 123" or the appropriate symbol if one exists), NEVER assume a different currency like EUR if the client uses something else.
 
 You have two tools to get real data: query_products (product-level) and query_campaigns (campaign/traffic-level). NEVER make up numbers - always call the relevant tool to get real data before answering.
 
@@ -283,12 +283,13 @@ export default async function handler(req, res) {
 
   try {
     const connR = await fetch(
-      `${SUPABASE_URL}/rest/v1/ga4_connections?client_id=eq.${client_id}&select=property_id,refresh_token`,
+      `${SUPABASE_URL}/rest/v1/ga4_connections?client_id=eq.${client_id}&select=property_id,refresh_token,currency_code`,
       { headers: supaHeaders }
     );
     const connData = await connR.json();
     if (!connData.length) return res.status(404).json({ error: "GA4 nije povezan za ovog klijenta" });
-    const { property_id, refresh_token } = connData[0];
+    const { property_id, refresh_token, currency_code } = connData[0];
+    const currency = currency_code || "EUR";
     const accessToken = await refreshAccessToken(refresh_token);
 
     const clientR = await fetch(`${SUPABASE_URL}/rest/v1/clients?id=eq.${client_id}&select=name`, { headers: supaHeaders });
@@ -296,7 +297,7 @@ export default async function handler(req, res) {
     const clientName = clientData[0]?.name || "N/A";
 
     const today = new Date().toISOString().split("T")[0];
-    const systemPrompt = buildSystemPrompt(sr, today, clientName);
+    const systemPrompt = buildSystemPrompt(sr, today, clientName, currency);
 
     let messages = [
       ...(Array.isArray(history) ? history.map((h) => ({ role: h.role, content: h.text })) : []),
