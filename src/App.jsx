@@ -2392,6 +2392,11 @@ function MyClientsMod({t,lang,goMod}){
   const [ga4Setup,setGa4Setup]=useState(null);
   const [ga4Error,setGa4Error]=useState("");
   const [ga4Saving,setGa4Saving]=useState(false);
+  const [gads,setGads]=useState(null);
+  const [gadsLoading,setGadsLoading]=useState(false);
+  const [gadsSetup,setGadsSetup]=useState(null);
+  const [gadsError,setGadsError]=useState("");
+  const [gadsSaving,setGadsSaving]=useState(false);
   const [newClientOpen,setNewClientOpen]=useState(false);
   const [newClientName,setNewClientName]=useState("");
   const [creatingClient,setCreatingClient]=useState(false);
@@ -2414,6 +2419,8 @@ function MyClientsMod({t,lang,goMod}){
     setAnalyses([]);
     setGa4(null);
     setGa4Loading(true);
+    setGads(null);
+    setGadsLoading(true);
     fetch(`/api/analyses?client_id=${client.id}&limit=20`)
       .then(r=>r.json())
       .then(data=>{ setAnalyses(Array.isArray(data)?data:[]); setLoadingA(false); })
@@ -2422,13 +2429,19 @@ function MyClientsMod({t,lang,goMod}){
       .then(r=>r.json())
       .then(data=>{ setGa4(Array.isArray(data)&&data.length>0?data[0]:null); setGa4Loading(false); })
       .catch(()=>setGa4Loading(false));
+    fetch(`/api/google-ads-connect?client_id=${client.id}`)
+      .then(r=>r.json())
+      .then(data=>{ setGads(Array.isArray(data)&&data.length>0?data[0]:null); setGadsLoading(false); })
+      .catch(()=>setGadsLoading(false));
   };
 
-  // Prepoznaj povratak sa Google OAuth ekrana (?ga4_setup= ili ?ga4_error=)
+  // Prepoznaj povratak sa Google OAuth ekrana (?ga4_setup= ili ?ga4_error=, i ?gads_setup=/?gads_error=)
   useEffect(()=>{
     const params=new URLSearchParams(window.location.search);
     const setupId=params.get("ga4_setup");
     const err=params.get("ga4_error");
+    const gadsSetupId=params.get("gads_setup");
+    const gadsErr=params.get("gads_error");
     if(err){
       setGa4Error(err);
       window.history.replaceState({},"",window.location.pathname+"?mod=10");
@@ -2439,15 +2452,26 @@ function MyClientsMod({t,lang,goMod}){
         .then(res=>{ if(res.data) setGa4Setup(res.data); window.history.replaceState({},"",window.location.pathname+"?mod=10"); })
         .catch(()=>window.history.replaceState({},"",window.location.pathname+"?mod=10"));
     }
+    if(gadsErr){
+      setGadsError(gadsErr);
+      window.history.replaceState({},"",window.location.pathname+"?mod=10");
+    }
+    if(gadsSetupId){
+      fetch(`/api/temp-fetch?id=${gadsSetupId}`)
+        .then(r=>r.json())
+        .then(res=>{ if(res.data) setGadsSetup(res.data); window.history.replaceState({},"",window.location.pathname+"?mod=10"); })
+        .catch(()=>window.history.replaceState({},"",window.location.pathname+"?mod=10"));
+    }
   },[]);
 
-  // Kad se klijenti učitaju i imamo GA4 setup na čekanju, automatski otvori tog klijenta
+  // Kad se klijenti učitaju i imamo GA4 ili Google Ads setup na čekanju, automatski otvori tog klijenta
   useEffect(()=>{
-    if(ga4Setup&&clients.length>0){
-      const c=clients.find(cl=>String(cl.id)===String(ga4Setup.client_id));
+    if((ga4Setup||gadsSetup)&&clients.length>0){
+      const pendingClientId=ga4Setup?ga4Setup.client_id:gadsSetup.client_id;
+      const c=clients.find(cl=>String(cl.id)===String(pendingClientId));
       if(c) loadAnalyses(c);
     }
-  },[clients,ga4Setup]);
+  },[clients,ga4Setup,gadsSetup]);
 
   const connectGA4=()=>{
     const uid=localStorage.getItem("mat_user_id");
@@ -2475,6 +2499,42 @@ function MyClientsMod({t,lang,goMod}){
       setGa4Setup(null);
     }catch(e){}
     setGa4Saving(false);
+  };
+
+  const connectGoogleAds=()=>{
+    const uid=localStorage.getItem("mat_user_id");
+    window.location.href=`/api/google-ads-auth?client_id=${selected.id}&uid=${uid}`;
+  };
+
+  const disconnectGoogleAds=async()=>{
+    if(!window.confirm(sr?"Otkači Google Ads vezu za ovog klijenta?":"Disconnect Google Ads for this client?")) return;
+    try{
+      await fetch(`/api/google-ads-connect?client_id=${selected.id}`,{method:"DELETE"});
+      setGads(null);
+    }catch(e){}
+  };
+
+  const saveGoogleAdsSelection=async(acc)=>{
+    setGadsSaving(true);
+    const uid=localStorage.getItem("mat_user_id");
+    try{
+      await fetch("/api/google-ads-connect",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          user_id:uid,
+          client_id:gadsSetup.client_id,
+          customer_id:acc.customer_id,
+          manager_id:acc.manager_id,
+          account_name:acc.account_name,
+          currency_code:acc.currency_code,
+          refresh_token:gadsSetup.refresh_token
+        })
+      });
+      setGads({customer_id:acc.customer_id,manager_id:acc.manager_id,account_name:acc.account_name,currency_code:acc.currency_code});
+      setGadsSetup(null);
+    }catch(e){}
+    setGadsSaving(false);
   };
 
   const toolLabel=(tool)=>{
@@ -2582,6 +2642,35 @@ function MyClientsMod({t,lang,goMod}){
     </div>
 
     {ga4Error&&<div style={{color:C.red,fontSize:12,marginBottom:16}}>⚠️ {sr?"Greška pri povezivanju GA4":"GA4 connection error"}: {ga4Error}</div>}
+
+    <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px 16px",marginBottom:20}}>
+      {gadsLoading&&<div style={{color:C.mut,fontSize:12}}>{sr?"Proveravam Google Ads status...":"Checking Google Ads status..."}</div>}
+
+      {!gadsLoading&&gads&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+        <div>
+          <div style={{color:C.grn,fontWeight:700,fontSize:13}}>✅ {sr?"Google Ads povezan":"Google Ads connected"}</div>
+          <div style={{color:C.mut,fontSize:11,marginTop:2}}>{gads.account_name} ({gads.customer_id}){gads.manager_id?` · ${sr?"preko MCC":"via MCC"}`:""}</div>
+        </div>
+        <button onClick={disconnectGoogleAds} style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.2)",borderRadius:8,color:C.red,fontSize:11,fontWeight:600,padding:"6px 12px",cursor:"pointer",whiteSpace:"nowrap"}}>{sr?"Otkači":"Disconnect"}</button>
+      </div>}
+
+      {!gadsLoading&&!gads&&!(gadsSetup&&String(gadsSetup.client_id)===String(selected.id))&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+        <div style={{color:C.mut,fontSize:12}}>{sr?"Google Ads nije povezan za ovog klijenta":"Google Ads is not connected for this client"}</div>
+        <button onClick={connectGoogleAds} style={{background:"rgba(0,212,255,0.15)",border:"1px solid rgba(0,212,255,0.3)",borderRadius:8,color:"#00D4FF",fontSize:12,fontWeight:700,padding:"8px 14px",cursor:"pointer",whiteSpace:"nowrap"}}>🔗 {sr?"Poveži Google Ads":"Connect Google Ads"}</button>
+      </div>}
+
+      {gadsSetup&&String(gadsSetup.client_id)===String(selected.id)&&<div>
+        <div style={{color:C.txt,fontWeight:700,fontSize:13,marginBottom:10}}>{sr?"Izaberi Google Ads nalog za ovog klijenta:":"Choose a Google Ads account for this client:"}</div>
+        {gadsSetup.properties.length===0&&<div style={{color:C.mut,fontSize:12}}>{sr?"Nije pronađen nijedan Google Ads nalog na ovom Google nalogu.":"No Google Ads accounts found on this Google account."}</div>}
+        {gadsSetup.properties.map(p=><div key={p.customer_id} onClick={()=>!gadsSaving&&saveGoogleAdsSelection(p)}
+          style={{padding:"10px 12px",background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:8,marginBottom:6,cursor:gadsSaving?"default":"pointer",opacity:gadsSaving?0.6:1}}>
+          <div style={{color:C.txt,fontSize:13,fontWeight:600}}>{p.account_name}</div>
+          <div style={{color:C.mut,fontSize:11}}>{p.customer_id}{p.manager_id?` · ${sr?"preko MCC":"via MCC"} ${p.manager_id}`:""}</div>
+        </div>)}
+      </div>}
+    </div>
+
+    {gadsError&&<div style={{color:C.red,fontSize:12,marginBottom:16}}>⚠️ {sr?"Greška pri povezivanju Google Ads":"Google Ads connection error"}: {gadsError}</div>}
 
     {loadingA&&<div style={{textAlign:"center",padding:"24px 0"}}>
       <div style={{color:C.acl,fontSize:14}}>✦ {sr?"Učitavam...":"Loading..."}</div>
