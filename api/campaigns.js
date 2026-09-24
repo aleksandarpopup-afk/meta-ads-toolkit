@@ -110,12 +110,19 @@ export default async function handler(req, res) {
       byCampaign[row.campaign_id].impressions += parseInt(row.impressions) || 0;
     }
 
-    // 4. Revenue/konverzije PO KAMPANJI - ŽIVO iz GA4, filtrirano po sessionGoogleAdsCampaignId (auto-tagging, ne UTM)
+    // 4. Revenue/kupovine PO KAMPANJI - ŽIVO iz GA4, filtrirano po sessionGoogleAdsCampaignId (auto-tagging, ne UTM)
+    // VAŽNO: filtriramo SAMO na kanale gde Google Ads kampanja uopšte može da postoji (Paid Search/Cross-network/Paid Shopping/Paid Video) -
+    // bez ovog filtera, "Neraspoređeno" bi pogrešno hvatalo i Meta/organski/direktan saobraćaj, ne samo izgubljen Google Ads promet.
+    // Koristimo "transactions" (broj STVARNIH kupovina) umesto generičke "conversions" metrike, koja broji SVAKI podešeni cilj (newsletter, forma...),
+    // ne samo kupovine - to je bio uzrok neslaganja sa brojem kupljenih proizvoda.
     const accessToken = await refreshAccessToken(refresh_token);
     const ga4Report = await ga4Fetch(property_id, accessToken, {
       dateRanges: [{ startDate: startStr, endDate: endStr }],
       dimensions: [{ name: "sessionGoogleAdsCampaignId" }],
-      metrics: [{ name: "totalRevenue" }, { name: "conversions" }],
+      metrics: [{ name: "totalRevenue" }, { name: "transactions" }],
+      dimensionFilter: {
+        filter: { fieldName: "sessionDefaultChannelGroup", inListFilter: { values: ["Paid Search", "Cross-network", "Paid Shopping", "Paid Video"] } }
+      },
       limit: 500
     });
 
