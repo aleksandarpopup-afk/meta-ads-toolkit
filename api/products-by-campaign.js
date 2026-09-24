@@ -33,6 +33,14 @@ async function ga4Fetch(propertyId, accessToken, body) {
   return data;
 }
 
+function convert(amount, fromCur, toCur, rates) {
+  if (fromCur === toCur) return amount;
+  const rFrom = fromCur === "EUR" ? 1 : rates[fromCur];
+  const rTo = toCur === "EUR" ? 1 : rates[toCur];
+  if (!rFrom || !rTo) return null;
+  return amount * (rTo / rFrom);
+}
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -67,6 +75,22 @@ export default async function handler(req, res) {
     const { property_id, refresh_token, currency_code } = ga4ConnData[0];
     const currency = currency_code || "EUR";
     const accessToken = await refreshAccessToken(refresh_token);
+
+    const gadsConnR = await fetch(
+      `${SUPABASE_URL}/rest/v1/google_ads_connections?client_id=eq.${client_id}&select=currency_code`,
+      { headers: supaHeaders }
+    );
+    const gadsConnData = await gadsConnR.json();
+    const gadsCurrency = gadsConnData.length ? (gadsConnData[0].currency_code || "EUR") : "EUR";
+
+    const showSpendNative = gadsCurrency !== "EUR";
+    const showRevenueNative = currency !== "EUR";
+    let rates = null;
+    if (showSpendNative || showRevenueNative) {
+      const rateR = await fetch(`${SUPABASE_URL}/rest/v1/exchange_rates?id=eq.1&select=rates`, { headers: supaHeaders });
+      const rateData = await rateR.json();
+      if (rateData.length) rates = rateData[0].rates;
+    }
 
     // 1. GA4 - prihod/kupovine OVOG proizvoda, raščlanjeno po Google Ads kampanji (campaign ID)
     const report = await ga4Fetch(property_id, accessToken, {
@@ -141,6 +165,9 @@ export default async function handler(req, res) {
       const p = productByCampaignId[id];
       const info = campaignInfo[id] || { campaign_name: `Kampanja ${id}`, totalSpend: 0 };
       const totalRev = campaignTotalRevenue[id] || 0;
+      const spendEUR = rates ? convert(info.totalSpend, gadsCurrency, "EUR", rates) : info.totalSpend;
+      const totalRevEUR = rates ? convert(totalRev, currency, "EUR", rates) : totalRev;
+      const productRevenueEUR = rates ? convert(p.revenue, currency, "EUR", rates) : p.revenue;
       return {
         campaign_id: id,
         campaign_name: info.campaign_name,
@@ -148,13 +175,16 @@ export default async function handler(req, res) {
         productAddedToCart: p.addedToCart,
         productPurchased: p.purchased,
         productRevenue: p.revenue,
+        productRevenueEUR,
         campaignTotalSpend: info.totalSpend,
+        campaignTotalSpendEUR: spendEUR,
         campaignTotalRevenue: totalRev,
-        campaignRoas: info.totalSpend > 0 ? totalRev / info.totalSpend : 0
+        campaignTotalRevenueEUR: totalRevEUR,
+        campaignRoas: spendEUR > 0 ? totalRevEUR / spendEUR : 0
       };
     }).sort((a, b) => b.productRevenue - a.productRevenue);
 
-    return res.status(200).json({ currency, results, unattributed, noMatch: false });
+    return res.status(200).json({ currency, gadsCurrency, showSpendNative, showRevenueNative, results, unattributed, noMatch: false });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
