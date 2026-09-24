@@ -240,6 +240,39 @@ export default async function handler(req, res) {
       }
     }
 
+    // 4. Kategorije - proizvod-nivo grupisano po itemCategory (glavni nivo, ne pod-kategorije)
+    const categoryReport = await ga4Fetch(property_id, accessToken, {
+      dateRanges: [currentRange],
+      dimensions: [{ name: "itemCategory" }],
+      metrics: [
+        { name: "itemsViewed" },
+        { name: "itemsAddedToCart" },
+        { name: "itemsPurchased" },
+        { name: "itemRevenue" }
+      ],
+      orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }],
+      limit: 100
+    });
+
+    const categoriesRaw = (categoryReport.rows || []).map((row) => {
+      const viewed = parseInt(row.metricValues[0].value) || 0;
+      const addedToCart = parseInt(row.metricValues[1].value) || 0;
+      const purchased = parseInt(row.metricValues[2].value) || 0;
+      const revenue = parseFloat(row.metricValues[3].value) || 0;
+      return {
+        name: row.dimensionValues[0].value,
+        viewed,
+        addedToCart,
+        purchased,
+        revenue,
+        viewToCartRate: safeRate(addedToCart, viewed),
+        cartToPurchaseRate: safeRate(purchased, addedToCart),
+        conversionRate: safeRate(purchased, viewed)
+      };
+    });
+    const categories = categoriesRaw.filter((c) => c.name && c.name !== "(not set)");
+    const hasCategories = categories.length > 0;
+
     return res.status(200).json({
       periodDays: periodLabel,
       totalProducts: catalog.length,
@@ -247,7 +280,9 @@ export default async function handler(req, res) {
       currency,
       catalog,
       sourceTotals,
-      sourceCatalog
+      sourceCatalog,
+      categories,
+      hasCategories
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });
