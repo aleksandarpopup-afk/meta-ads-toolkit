@@ -3562,6 +3562,7 @@ function CampaignsMod({t,lang}){
   const [adsLoading,setAdsLoading]=useState(false);
   const [productSearch,setProductSearch]=useState("");
   const [productSort,setProductSort]=useState({key:"revenue",dir:"desc"});
+  const [productVisibleCount,setProductVisibleCount]=useState(50);
 
   // "Po proizvodu" tab
   const [byProductQuery,setByProductQuery]=useState("");
@@ -3619,7 +3620,7 @@ function CampaignsMod({t,lang}){
 
   const resetDrill=()=>{
     setDrillCampaign(null); setCampaignProducts(null); setAdGroups(null);
-    setDrillAdGroup(null); setAds(null); setProductSearch("");
+    setDrillAdGroup(null); setAds(null); setProductSearch(""); setProductVisibleCount(50);
   };
 
   const applyPeriod=(p)=>{
@@ -3853,41 +3854,10 @@ function CampaignsMod({t,lang}){
         <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 4px"}}>{drillCampaign.campaign_name}</h3>
         <div style={{color:C.mut,fontSize:12,marginBottom:16}}>{drillCampaign.campaign_id} · {fmtMoney(drillCampaign.spendEUR,"EUR")} spend · {drillCampaign.roas.toFixed(2)}x ROAS</div>
 
-        <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:8}}>{sr?"Proizvodi prodati preko ove kampanje":"Products sold via this campaign"}</div>
-        {campaignProductsLoading&&<div style={{color:C.mut,fontSize:12,marginBottom:16}}>{sr?"Učitavam...":"Loading..."}</div>}
-        {!campaignProductsLoading&&campaignProducts&&<>
-          <input value={productSearch} onChange={e=>setProductSearch(e.target.value)} placeholder={sr?"🔍 Pretraži proizvod...":"🔍 Search product..."} style={{width:"100%",padding:"9px 12px",borderRadius:10,border:`1px solid ${C.brd}`,background:"rgba(255,255,255,0.03)",color:C.txt,fontSize:13,marginBottom:10,boxSizing:"border-box"}}/>
-          {sortedCampaignProducts().length===0&&<div style={{color:C.mut,fontSize:12,marginBottom:16}}>{sr?"Nema proizvoda za ovaj period.":"No products for this period."}</div>}
-          {sortedCampaignProducts().length>0&&<div style={{overflowX:"auto",marginBottom:20}}>
-            <table style={{width:"100%",fontSize:12,borderCollapse:"collapse"}}>
-              <thead>
-                <tr style={{color:C.mut,textAlign:"left"}}>
-                  <th onClick={()=>toggleProductSort("name")} style={{padding:"6px 4px",fontWeight:600,cursor:"pointer"}}>{sr?"Proizvod":"Product"}</th>
-                  <th onClick={()=>toggleProductSort("viewed")} style={{padding:"6px 4px",fontWeight:600,textAlign:"right",cursor:"pointer"}}>{sr?"Pregledi":"Viewed"}</th>
-                  <th onClick={()=>toggleProductSort("addedToCart")} style={{padding:"6px 4px",fontWeight:600,textAlign:"right",cursor:"pointer"}}>{sr?"Korpa":"Cart"}</th>
-                  <th onClick={()=>toggleProductSort("purchased")} style={{padding:"6px 4px",fontWeight:600,textAlign:"right",cursor:"pointer"}}>{sr?"Kupljeno":"Purchased"}</th>
-                  <th onClick={()=>toggleProductSort("revenue")} style={{padding:"6px 4px",fontWeight:600,textAlign:"right",cursor:"pointer"}}>{sr?"Prihod":"Revenue"}</th>
-                  <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Konverzija":"Conversion"}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedCampaignProducts().map((p,i)=><tr key={i} style={{borderTop:`1px solid ${C.brd}`}}>
-                  <td style={{padding:"7px 4px",color:C.txt}}>{p.name} <span style={{color:C.mut}}>({p.id})</span></td>
-                  <td style={{padding:"7px 4px",textAlign:"right",color:C.mut}}>{p.viewed.toLocaleString()}</td>
-                  <td style={{padding:"7px 4px",textAlign:"right",color:C.mut}}>{p.addedToCart.toLocaleString()}</td>
-                  <td style={{padding:"7px 4px",textAlign:"right",fontWeight:600,color:C.txt}}>{p.purchased.toLocaleString()}</td>
-                  <td style={{padding:"7px 4px",textAlign:"right",color:C.grn}}>{fmtMoney(p.revenue,campaignProducts.currency)}</td>
-                  <td style={{padding:"7px 4px",textAlign:"right",color:C.yel}}>{p.conversionRate.toFixed(1)}%</td>
-                </tr>)}
-              </tbody>
-            </table>
-          </div>}
-        </>}
-
         <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:8}}>{sr?"Ad grupe":"Ad groups"}</div>
-        {adGroupsLoading&&<div style={{color:C.mut,fontSize:12}}>{sr?"Učitavam...":"Loading..."}</div>}
-        {!adGroupsLoading&&adGroups&&adGroups.items.length===0&&<div style={{color:C.mut,fontSize:12}}>{sr?"Nema ad grupa sa potrošnjom u ovom periodu.":"No ad groups with spend in this period."}</div>}
-        {!adGroupsLoading&&adGroups&&adGroups.items.length>0&&<div style={{overflowX:"auto"}}>
+        {adGroupsLoading&&<div style={{color:C.mut,fontSize:12,marginBottom:16}}>{sr?"Učitavam...":"Loading..."}</div>}
+        {!adGroupsLoading&&adGroups&&adGroups.items.length===0&&<div style={{color:C.mut,fontSize:12,marginBottom:16}}>{sr?"Nema ad grupa sa potrošnjom u ovom periodu.":"No ad groups with spend in this period."}</div>}
+        {!adGroupsLoading&&adGroups&&adGroups.items.length>0&&<div style={{overflowX:"auto",marginBottom:24}}>
           <table style={{width:"100%",fontSize:12,borderCollapse:"collapse"}}>
             <thead>
               <tr style={{color:C.mut,textAlign:"left"}}>
@@ -3911,6 +3881,40 @@ function CampaignsMod({t,lang}){
             </tbody>
           </table>
         </div>}
+
+        <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:8}}>{sr?"Proizvodi prodati preko ove kampanje":"Products sold via this campaign"}</div>
+        {campaignProductsLoading&&<div style={{color:C.mut,fontSize:12,marginBottom:16}}>{sr?"Učitavam...":"Loading..."}</div>}
+        {!campaignProductsLoading&&campaignProducts&&<>
+          <input value={productSearch} onChange={e=>{setProductSearch(e.target.value);setProductVisibleCount(50);}} placeholder={sr?"🔍 Pretraži proizvod...":"🔍 Search product..."} style={{width:"100%",padding:"9px 12px",borderRadius:10,border:`1px solid ${C.brd}`,background:"rgba(255,255,255,0.03)",color:C.txt,fontSize:13,marginBottom:10,boxSizing:"border-box"}}/>
+          {sortedCampaignProducts().length===0&&<div style={{color:C.mut,fontSize:12,marginBottom:16}}>{sr?"Nema proizvoda za ovaj period.":"No products for this period."}</div>}
+          {sortedCampaignProducts().length>0&&<div style={{overflowX:"auto",marginBottom:10}}>
+            <table style={{width:"100%",fontSize:12,borderCollapse:"collapse"}}>
+              <thead>
+                <tr style={{color:C.mut,textAlign:"left"}}>
+                  <th onClick={()=>toggleProductSort("name")} style={{padding:"6px 4px",fontWeight:600,cursor:"pointer"}}>{sr?"Proizvod":"Product"}</th>
+                  <th onClick={()=>toggleProductSort("viewed")} style={{padding:"6px 4px",fontWeight:600,textAlign:"right",cursor:"pointer"}}>{sr?"Pregledi":"Viewed"}</th>
+                  <th onClick={()=>toggleProductSort("addedToCart")} style={{padding:"6px 4px",fontWeight:600,textAlign:"right",cursor:"pointer"}}>{sr?"Korpa":"Cart"}</th>
+                  <th onClick={()=>toggleProductSort("purchased")} style={{padding:"6px 4px",fontWeight:600,textAlign:"right",cursor:"pointer"}}>{sr?"Kupljeno":"Purchased"}</th>
+                  <th onClick={()=>toggleProductSort("revenue")} style={{padding:"6px 4px",fontWeight:600,textAlign:"right",cursor:"pointer"}}>{sr?"Prihod":"Revenue"}</th>
+                  <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Konverzija":"Conversion"}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedCampaignProducts().slice(0,productVisibleCount).map((p,i)=><tr key={i} style={{borderTop:`1px solid ${C.brd}`}}>
+                  <td style={{padding:"7px 4px",color:C.txt}}>{p.name} <span style={{color:C.mut}}>({p.id})</span></td>
+                  <td style={{padding:"7px 4px",textAlign:"right",color:C.mut}}>{p.viewed.toLocaleString()}</td>
+                  <td style={{padding:"7px 4px",textAlign:"right",color:C.mut}}>{p.addedToCart.toLocaleString()}</td>
+                  <td style={{padding:"7px 4px",textAlign:"right",fontWeight:600,color:C.txt}}>{p.purchased.toLocaleString()}</td>
+                  <td style={{padding:"7px 4px",textAlign:"right",color:C.grn}}>{fmtMoney(p.revenue,campaignProducts.currency)}</td>
+                  <td style={{padding:"7px 4px",textAlign:"right",color:C.yel}}>{p.conversionRate.toFixed(1)}%</td>
+                </tr>)}
+              </tbody>
+            </table>
+          </div>}
+          {sortedCampaignProducts().length>productVisibleCount&&<button onClick={()=>setProductVisibleCount(v=>v+50)} style={{width:"100%",padding:"9px",borderRadius:10,border:`1px solid ${C.brd}`,background:"rgba(255,255,255,0.03)",color:C.mut,fontSize:12,fontWeight:600,cursor:"pointer"}}>
+            {sr?`Prikaži još 50 (${productVisibleCount} / ${sortedCampaignProducts().length})`:`Show 50 more (${productVisibleCount} / ${sortedCampaignProducts().length})`}
+          </button>}
+        </>}
       </div>}
 
       {/* DRILL: AD GRUPA DETALJI (OGLASI) */}
@@ -3978,7 +3982,10 @@ function CampaignsMod({t,lang}){
                 <td style={{padding:"7px 4px",color:C.txt}}>{r.campaign_name} <span style={{color:C.mut}}>({r.campaign_id})</span></td>
                 <td style={{padding:"7px 4px",textAlign:"right",color:C.mut}}>{r.productViewed.toLocaleString()}</td>
                 <td style={{padding:"7px 4px",textAlign:"right",fontWeight:600,color:C.txt}}>{r.productPurchased.toLocaleString()}</td>
-                <td style={{padding:"7px 4px",textAlign:"right",color:C.grn}}>{fmtMoney(r.productRevenue,byProductData.currency)}</td>
+                <td style={{padding:"7px 4px",textAlign:"right",color:C.grn}}>
+                  {fmtMoney(r.productRevenueEUR,"EUR")}
+                  {byProductData.showRevenueNative&&<div style={{color:C.mut,fontSize:10}}>≈ {fmtMoney(r.productRevenue,byProductData.currency)}</div>}
+                </td>
                 <td style={{padding:"7px 4px",textAlign:"right",fontWeight:700,color:r.campaignRoas>=1?C.grn:C.red}}>{r.campaignRoas.toFixed(2)}x</td>
               </tr>)}
             </tbody>
@@ -3994,7 +4001,7 @@ function CampaignsMod({t,lang}){
       {!categoryListLoading&&categoryList&&categoryList.hasCategories&&!selectedCategory&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
         {categoryList.categories.map((c,i)=><button key={i} onClick={()=>openCategory(c.name)} style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:10,padding:"12px 16px",textAlign:"left",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <span style={{color:C.txt,fontWeight:600,fontSize:13}}>{c.name}</span>
-          <span style={{color:C.grn,fontSize:13,fontWeight:700}}>{fmtMoney(c.revenue,categoryList.currency)}</span>
+          <span style={{color:C.grn,fontSize:13,fontWeight:700}}>{fmtMoney(c.revenueEUR,"EUR")}</span>
         </button>)}
       </div>}
 
@@ -4023,7 +4030,10 @@ function CampaignsMod({t,lang}){
                   <td style={{padding:"7px 4px",color:C.txt}}>{r.campaign_name} <span style={{color:C.mut}}>({r.campaign_id})</span></td>
                   <td style={{padding:"7px 4px",textAlign:"right",color:C.mut}}>{r.categoryViewed.toLocaleString()}</td>
                   <td style={{padding:"7px 4px",textAlign:"right",fontWeight:600,color:C.txt}}>{r.categoryPurchased.toLocaleString()}</td>
-                  <td style={{padding:"7px 4px",textAlign:"right",color:C.grn}}>{fmtMoney(r.categoryRevenue,categoryData.currency)}</td>
+                  <td style={{padding:"7px 4px",textAlign:"right",color:C.grn}}>
+                    {fmtMoney(r.categoryRevenueEUR,"EUR")}
+                    {categoryData.showRevenueNative&&<div style={{color:C.mut,fontSize:10}}>≈ {fmtMoney(r.categoryRevenue,categoryData.currency)}</div>}
+                  </td>
                   <td style={{padding:"7px 4px",textAlign:"right",fontWeight:700,color:r.campaignRoas>=1?C.grn:C.red}}>{r.campaignRoas.toFixed(2)}x</td>
                 </tr>)}
               </tbody>
