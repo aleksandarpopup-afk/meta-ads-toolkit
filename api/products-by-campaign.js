@@ -3,6 +3,21 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 
+async function fetchAllSupabaseRows(url, headers) {
+  let allRows = [];
+  let offset = 0;
+  const pageSize = 1000;
+  while (true) {
+    const r = await fetch(url, { headers: { ...headers, Range: `${offset}-${offset + pageSize - 1}` } });
+    const rows = await r.json();
+    if (!Array.isArray(rows)) break;
+    allRows = allRows.concat(rows);
+    if (rows.length < pageSize) break;
+    offset += pageSize;
+  }
+  return allRows;
+}
+
 async function refreshAccessToken(refresh_token) {
   const r = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -135,11 +150,10 @@ export default async function handler(req, res) {
     }
 
     // 2. Spend/naziv/ukupan ROAS SVAKE od ovih kampanja - iz naše baze (kontekst, NE ROAS ovog proizvoda)
-    const spendR = await fetch(
+    const spendRows = await fetchAllSupabaseRows(
       `${SUPABASE_URL}/rest/v1/google_ads_daily_spend?client_id=eq.${client_id}&date=gte.${startStr}&date=lte.${endStr}&campaign_id=in.(${matchedIds.join(",")})&select=campaign_id,campaign_name,spend`,
-      { headers: supaHeaders }
+      supaHeaders
     );
-    const spendRows = await spendR.json();
     const campaignInfo = {};
     for (const row of spendRows) {
       if (!campaignInfo[row.campaign_id]) campaignInfo[row.campaign_id] = { campaign_name: row.campaign_name, totalSpend: 0 };
