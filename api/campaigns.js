@@ -136,7 +136,7 @@ export default async function handler(req, res) {
     const ga4Report = await ga4Fetch(property_id, accessToken, {
       dateRanges: [{ startDate: startStr, endDate: endStr }],
       dimensions: [{ name: "sessionGoogleAdsCampaignId" }],
-      metrics: [{ name: "totalRevenue" }, { name: "transactions" }],
+      metrics: [{ name: "totalRevenue" }, { name: "transactions" }, { name: "itemsPurchased" }],
       dimensionFilter: {
         filter: { fieldName: "sessionDefaultChannelGroup", inListFilter: { values: ["Paid Search", "Cross-network", "Paid Shopping", "Paid Video"] } }
       },
@@ -148,7 +148,8 @@ export default async function handler(req, res) {
       const id = row.dimensionValues[0].value;
       revenueByCampaignId[id] = {
         revenue: parseFloat(row.metricValues[0].value) || 0,
-        conversions: parseFloat(row.metricValues[1].value) || 0
+        conversions: parseFloat(row.metricValues[1].value) || 0,
+        itemsPurchased: parseInt(row.metricValues[2].value) || 0
       };
     }
 
@@ -168,11 +169,12 @@ export default async function handler(req, res) {
     // 5. Spajanje - svaka kampanja sa spend-om dobija svoj GA4 revenue (0 ako nema)
     // Spend i Revenue se uvek prikazuju u EUR (glavno), original valuta ostaje kao referenca
     const campaigns = Object.values(byCampaign).map((c) => {
-      const ga4Data = revenueByCampaignId[c.campaign_id] || { revenue: 0, conversions: 0 };
+      const ga4Data = revenueByCampaignId[c.campaign_id] || { revenue: 0, conversions: 0, itemsPurchased: 0 };
       const spendEUR = rates ? convert(c.spend, gadsCurrency, "EUR", rates) : c.spend;
       const revenueEUR = rates ? convert(ga4Data.revenue, ga4Currency, "EUR", rates) : ga4Data.revenue;
       return {
         ...c,
+        itemsPurchased: ga4Data.itemsPurchased,
         revenue: ga4Data.revenue,
         revenueEUR,
         conversions: ga4Data.conversions,
