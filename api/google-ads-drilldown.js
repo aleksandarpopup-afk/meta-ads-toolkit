@@ -134,7 +134,7 @@ export default async function handler(req, res) {
       const ga4Report = await ga4Fetch(property_id, ga4AccessToken, {
         dateRanges: [{ startDate: startStr, endDate: endStr }],
         dimensions: [{ name: ga4Dimension }],
-        metrics: [{ name: "totalRevenue" }, { name: "conversions" }],
+        metrics: [{ name: "totalRevenue" }, { name: "transactions" }],
         dimensionFilter: { filter: { fieldName: ga4Dimension, inListFilter: { values: ids } } },
         limit: 500
       });
