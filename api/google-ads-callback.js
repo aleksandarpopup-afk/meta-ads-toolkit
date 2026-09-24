@@ -9,14 +9,22 @@ const GADS_VERSION = "v25";
 async function gadsSearch(customerId, accessToken, query, loginCustomerId) {
   const headers = { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` };
   if (loginCustomerId) headers["login-customer-id"] = loginCustomerId;
-  const r = await fetch(`https://googleads.googleapis.com/${GADS_VERSION}/customers/${customerId}/googleAds:search`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ query })
-  });
-  const data = await r.json();
-  if (!r.ok) throw new Error(JSON.stringify(data));
-  return data;
+  let allResults = [];
+  let pageToken;
+  do {
+    const body = { query, pageSize: 10000 };
+    if (pageToken) body.pageToken = pageToken;
+    const r = await fetch(`https://googleads.googleapis.com/${GADS_VERSION}/customers/${customerId}/googleAds:search`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body)
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(JSON.stringify(data));
+    allResults = allResults.concat(data.results || []);
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+  return { results: allResults };
 }
 
 export default async function handler(req, res) {
