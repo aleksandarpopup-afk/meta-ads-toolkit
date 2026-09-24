@@ -47,9 +47,25 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   if (req.method === "OPTIONS") return res.status(200).end();
 
-  const { client_id, days } = req.query;
+  const { client_id, days, from, to } = req.query;
   if (!client_id) return res.status(400).json({ error: "No client_id" });
-  const periodDays = parseInt(days) || 30;
+
+  let startStr, endStr, periodLabel;
+  if (from && to) {
+    startStr = from;
+    endStr = to;
+    const lengthMs = new Date(to) - new Date(from);
+    periodLabel = Math.round(lengthMs / (24 * 60 * 60 * 1000)) + 1;
+  } else {
+    const periodDays = parseInt(days) || 30;
+    const endDateTmp = new Date();
+    endDateTmp.setDate(endDateTmp.getDate() - 1);
+    const startDateTmp = new Date();
+    startDateTmp.setDate(startDateTmp.getDate() - periodDays);
+    startStr = startDateTmp.toISOString().split("T")[0];
+    endStr = endDateTmp.toISOString().split("T")[0];
+    periodLabel = periodDays;
+  }
 
   const supaHeaders = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 
@@ -78,14 +94,6 @@ export default async function handler(req, res) {
     const ga4Currency = currency_code || "EUR";
 
     // 3. Spend/klikovi/impresije - IZ NAŠE BAZE (već sinhronizovano cron poslom, brzo, bez novog API poziva)
-    const today = new Date();
-    const endDate = new Date(today);
-    endDate.setDate(endDate.getDate() - 1);
-    const startDate = new Date(today);
-    startDate.setDate(startDate.getDate() - periodDays);
-    const startStr = startDate.toISOString().split("T")[0];
-    const endStr = endDate.toISOString().split("T")[0];
-
     const spendR = await fetch(
       `${SUPABASE_URL}/rest/v1/google_ads_daily_spend?client_id=eq.${client_id}&date=gte.${startStr}&date=lte.${endStr}&select=campaign_id,campaign_name,spend,clicks,impressions`,
       { headers: supaHeaders }
@@ -105,7 +113,7 @@ export default async function handler(req, res) {
     // 4. Revenue/konverzije PO KAMPANJI - ŽIVO iz GA4, filtrirano po sessionGoogleAdsCampaignId (auto-tagging, ne UTM)
     const accessToken = await refreshAccessToken(refresh_token);
     const ga4Report = await ga4Fetch(property_id, accessToken, {
-      dateRanges: [{ startDate: `${periodDays}daysAgo`, endDate: "yesterday" }],
+      dateRanges: [{ startDate: startStr, endDate: endStr }],
       dimensions: [{ name: "sessionGoogleAdsCampaignId" }],
       metrics: [{ name: "totalRevenue" }, { name: "conversions" }],
       limit: 500
@@ -168,7 +176,7 @@ export default async function handler(req, res) {
     const totalRevenueEUR = campaigns.reduce((s, c) => s + c.revenueEUR, 0);
 
     return res.status(200).json({
-      periodDays,
+      periodDays: periodLabel,
       currency: ga4Currency,
       gadsCurrency,
       rateDate,
