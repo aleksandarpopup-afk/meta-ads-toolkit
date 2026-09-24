@@ -3634,14 +3634,15 @@ function CampaignsMod({t,lang}){
     {err&&err!=="no_gads"&&err!=="no_ga4"&&!loading&&<div style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:12,padding:"16px",color:C.red,fontSize:13,marginBottom:16}}>⚠️ {err}</div>}
 
     {data&&!loading&&<>
-      {data.currencyMismatch&&<div style={{background:"rgba(245,158,11,0.1)",border:"1px solid rgba(245,158,11,0.3)",borderRadius:12,padding:"12px 16px",color:C.yel,fontSize:12,marginBottom:16}}>
-        ⚠️ {sr?`Google Ads koristi ${data.gadsCurrency}, a GA4 ${data.currency} - ROAS računica meša dve različite valute, uzmi sa rezervom.`:`Google Ads uses ${data.gadsCurrency}, GA4 uses ${data.currency} - ROAS calculation mixes two different currencies, treat with caution.`}
+      {data.currencyMismatch&&<div style={{background:"rgba(245,158,11,0.08)",border:"1px solid rgba(245,158,11,0.25)",borderRadius:12,padding:"12px 16px",color:C.yel,fontSize:12,marginBottom:16}}>
+        ℹ️ {sr?`Google Ads koristi ${data.gadsCurrency}, a GA4 ${data.currency} - spend je konvertovan po kursu iz ${data.rateDate?new Date(data.rateDate).toLocaleDateString("sr-RS"):"?"} da bi ROAS bio tačan.`:`Google Ads uses ${data.gadsCurrency}, GA4 uses ${data.currency} - spend was converted using the exchange rate from ${data.rateDate?new Date(data.rateDate).toLocaleDateString():"?"} so ROAS is accurate.`}
       </div>}
 
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:20}}>
         <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px"}}>
           <div style={{color:C.mut,fontSize:11,marginBottom:4}}>{sr?"Ukupan spend":"Total spend"}</div>
           <div style={{color:C.txt,fontSize:18,fontWeight:800}}>{fmtMoney(data.totalSpend,data.gadsCurrency)}</div>
+          {data.currencyMismatch&&<div style={{color:C.mut,fontSize:11,marginTop:2}}>≈ {fmtMoney(data.totalSpendConverted,data.currency)}</div>}
         </div>
         <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px"}}>
           <div style={{color:C.mut,fontSize:11,marginBottom:4}}>{sr?"Ukupan prihod":"Total revenue"}</div>
@@ -3673,7 +3674,10 @@ function CampaignsMod({t,lang}){
               <td style={{padding:"8px 4px",color:C.txt}}>{c.campaign_name} <span style={{color:C.mut}}>({c.campaign_id})</span></td>
               <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{c.clicks.toLocaleString()}</td>
               <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{c.impressions.toLocaleString()}</td>
-              <td style={{padding:"8px 4px",textAlign:"right",color:C.txt}}>{fmtMoney(c.spend,data.gadsCurrency)}</td>
+              <td style={{padding:"8px 4px",textAlign:"right",color:C.txt}}>
+                {fmtMoney(c.spend,data.gadsCurrency)}
+                {data.currencyMismatch&&<div style={{color:C.mut,fontSize:10}}>≈ {fmtMoney(c.spendConverted,data.currency)}</div>}
+              </td>
               <td style={{padding:"8px 4px",textAlign:"right",color:C.grn}}>{fmtMoney(c.revenue,data.currency)}</td>
               <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{c.conversions.toFixed(1)}</td>
               <td style={{padding:"8px 4px",textAlign:"right",fontWeight:700,color:c.roas>=1?C.grn:C.red}}>{c.roas.toFixed(2)}x</td>
