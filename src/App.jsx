@@ -3605,11 +3605,12 @@ function CampaignsMod({t,lang}){
 
   const periodQS=()=>customFrom&&customTo&&period==="custom" ? `from=${customFrom}&to=${customTo}` : `days=${period}`;
 
-  const load=async(client)=>{
+  const load=async(client,qsOverride)=>{
+    const qs=qsOverride||periodQS();
     setLoading(true); setErr(""); setData(null);
     resetDrill();
     try{
-      const res=await fetch(`/api/campaigns?client_id=${client.id}&${periodQS()}`);
+      const res=await fetch(`/api/campaigns?client_id=${client.id}&${qs}`);
       const d=await res.json();
       if(res.status===404){ setErr(d.error==="no_gads"?"no_gads":"no_ga4"); setLoading(false); return; }
       if(!res.ok) throw new Error(d.error||(sr?"Greška pri učitavanju":"Loading error"));
@@ -3623,49 +3624,66 @@ function CampaignsMod({t,lang}){
     setDrillAdGroup(null); setAds(null); setProductSearch(""); setProductVisibleCount(50);
   };
 
-  const applyPeriod=(p)=>{
-    setPeriod(p);
-    if(p!=="custom"&&selectedClient) load(selectedClient);
-  };
-  const applyCustom=()=>{
-    if(selectedClient&&customFrom&&customTo) load(selectedClient);
+  // Kad se period promeni, osvežavamo SVE što je trenutno relevantno (top kampanje + otvoren tab), sa TAČNIM,
+  // upravo-izabranim periodom (ne oslanjamo se na "period" state jer setState nije odmah dostupan u istom pozivu - "stale closure").
+  const reloadAllForPeriod=(qs)=>{
+    if(!selectedClient) return;
+    load(selectedClient,qs);
+    if(mode==="byProduct"&&byProductQuery.trim()) runProductSearch(qs);
+    if(mode==="byCategory"){
+      if(categoryList) loadCategoryList(qs);
+    }
+    setSelectedCategory(null); setCategoryData(null);
   };
 
-  const openCampaign=async(camp)=>{
+  const applyPeriod=(p)=>{
+    setPeriod(p);
+    if(p==="custom") return;
+    reloadAllForPeriod(`days=${p}`);
+  };
+  const applyCustom=()=>{
+    if(!selectedClient||!customFrom||!customTo) return;
+    reloadAllForPeriod(`from=${customFrom}&to=${customTo}`);
+  };
+
+  const openCampaign=async(camp,qsOverride)=>{
+    const qs=qsOverride||periodQS();
     resetDrill();
     setDrillCampaign(camp);
     setCampaignProductsLoading(true);
     setAdGroupsLoading(true);
     try{
-      const r=await fetch(`/api/campaign-products?client_id=${selectedClient.id}&campaign_id=${camp.campaign_id}&${periodQS()}`);
+      const r=await fetch(`/api/campaign-products?client_id=${selectedClient.id}&campaign_id=${camp.campaign_id}&${qs}`);
       const d=await r.json();
       setCampaignProducts(r.ok?d:{products:[],currency:data.currency});
     }catch(e){ setCampaignProducts({products:[],currency:data.currency}); }
     setCampaignProductsLoading(false);
     try{
-      const r2=await fetch(`/api/google-ads-drilldown?client_id=${selectedClient.id}&campaign_id=${camp.campaign_id}&${periodQS()}`);
+      const r2=await fetch(`/api/google-ads-drilldown?client_id=${selectedClient.id}&campaign_id=${camp.campaign_id}&${qs}`);
       const d2=await r2.json();
       setAdGroups(r2.ok?d2:null);
     }catch(e){ setAdGroups(null); }
     setAdGroupsLoading(false);
   };
 
-  const openAdGroup=async(ag)=>{
+  const openAdGroup=async(ag,qsOverride)=>{
+    const qs=qsOverride||periodQS();
     setDrillAdGroup(ag);
     setAdsLoading(true);
     try{
-      const r=await fetch(`/api/google-ads-drilldown?client_id=${selectedClient.id}&campaign_id=${drillCampaign.campaign_id}&ad_group_id=${ag.id}&${periodQS()}`);
+      const r=await fetch(`/api/google-ads-drilldown?client_id=${selectedClient.id}&campaign_id=${drillCampaign.campaign_id}&ad_group_id=${ag.id}&${qs}`);
       const d=await r.json();
       setAds(r.ok?d:null);
     }catch(e){ setAds(null); }
     setAdsLoading(false);
   };
 
-  const runProductSearch=async()=>{
+  const runProductSearch=async(qsOverride)=>{
+    const qs=qsOverride||periodQS();
     if(!byProductQuery.trim()) return;
     setByProductLoading(true); setByProductErr(""); setByProductData(null);
     try{
-      const r=await fetch(`/api/products-by-campaign?client_id=${selectedClient.id}&q=${encodeURIComponent(byProductQuery.trim())}&${periodQS()}`);
+      const r=await fetch(`/api/products-by-campaign?client_id=${selectedClient.id}&q=${encodeURIComponent(byProductQuery.trim())}&${qs}`);
       const d=await r.json();
       if(r.status===404){ setByProductErr(d.error==="no_gads"?"no_gads":"no_ga4"); setByProductLoading(false); return; }
       if(!r.ok) throw new Error(d.error||"Error");
@@ -3674,21 +3692,23 @@ function CampaignsMod({t,lang}){
     setByProductLoading(false);
   };
 
-  const loadCategoryList=async()=>{
+  const loadCategoryList=async(qsOverride)=>{
+    const qs=qsOverride||periodQS();
     setCategoryListLoading(true);
     try{
-      const r=await fetch(`/api/products-by-category?client_id=${selectedClient.id}&${periodQS()}`);
+      const r=await fetch(`/api/products-by-category?client_id=${selectedClient.id}&${qs}`);
       const d=await r.json();
       setCategoryList(r.ok?d:null);
     }catch(e){ setCategoryList(null); }
     setCategoryListLoading(false);
   };
 
-  const openCategory=async(catName)=>{
+  const openCategory=async(catName,qsOverride)=>{
+    const qs=qsOverride||periodQS();
     setSelectedCategory(catName);
     setCategoryDataLoading(true); setCategoryData(null);
     try{
-      const r=await fetch(`/api/products-by-category?client_id=${selectedClient.id}&category=${encodeURIComponent(catName)}&${periodQS()}`);
+      const r=await fetch(`/api/products-by-category?client_id=${selectedClient.id}&category=${encodeURIComponent(catName)}&${qs}`);
       const d=await r.json();
       setCategoryData(r.ok?d:null);
     }catch(e){ setCategoryData(null); }
@@ -3818,7 +3838,7 @@ function CampaignsMod({t,lang}){
                 <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Impresije":"Impressions"}</th>
                 <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>Spend</th>
                 <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Prihod":"Revenue"}</th>
-                <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Konverzije":"Conversions"}</th>
+                <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Kupovine":"Purchases"}</th>
                 <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>ROAS</th>
               </tr>
             </thead>
@@ -3844,7 +3864,7 @@ function CampaignsMod({t,lang}){
         <div style={{color:C.mut,fontSize:11,marginBottom:16}}>{sr?"Klikni na kampanju za detalje (proizvodi, ad grupe).":"Click a campaign for details (products, ad groups)."}</div>
 
         {(data.unattributed.revenue>0||data.unattributed.conversions>0)&&<div style={{background:"rgba(255,255,255,0.02)",border:`1px solid ${C.brd}`,borderRadius:12,padding:"12px 16px",color:C.mut,fontSize:12}}>
-          ℹ️ {sr?"Neraspoređeno":"Unattributed"}: {fmtMoney(data.unattributed.revenueEUR,"EUR")}{data.showRevenueNative?` (≈ ${fmtMoney(data.unattributed.revenue,data.currency)})`:""} {sr?"prihoda i":"revenue and"} {data.unattributed.conversions.toFixed(1)} {sr?"konverzija iz GA4 saobraćaja koji nije mogao da se poveže sa konkretnom kampanjom.":"conversions from GA4 traffic that couldn't be matched to a specific campaign."}
+          ℹ️ {sr?"Neraspoređeno":"Unattributed"}: {fmtMoney(data.unattributed.revenueEUR,"EUR")}{data.showRevenueNative?` (≈ ${fmtMoney(data.unattributed.revenue,data.currency)})`:""} {sr?"prihoda i":"revenue and"} {data.unattributed.conversions.toFixed(1)} {sr?"kupovina iz Google Ads saobraćaja (Paid Search/Shopping/Video/PMax) koji nije mogao da se poveže sa konkretnom kampanjom.":"purchases from Google Ads traffic (Paid Search/Shopping/Video/PMax) that couldn't be matched to a specific campaign."}
         </div>}
       </>}
 
