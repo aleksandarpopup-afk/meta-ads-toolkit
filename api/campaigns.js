@@ -33,6 +33,15 @@ async function ga4Fetch(propertyId, accessToken, body) {
   return data;
 }
 
+// Konverzija preko EUR kao "pivot" valute (kurseve čuvamo kao EUR -> sve ostalo)
+function convert(amount, fromCur, toCur, rates) {
+  if (fromCur === toCur) return amount;
+  const rFrom = fromCur === "EUR" ? 1 : rates[fromCur];
+  const rTo = toCur === "EUR" ? 1 : rates[toCur];
+  if (!rFrom || !rTo) return null;
+  return amount * (rTo / rFrom);
+}
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -112,14 +121,29 @@ export default async function handler(req, res) {
       };
     }
 
+    // 4.5 Kursevi valuta (ako su Google Ads i GA4 u različitim valutama)
+    let rates = null;
+    let rateDate = null;
+    if (currencyMismatch) {
+      const rateR = await fetch(`${SUPABASE_URL}/rest/v1/exchange_rates?id=eq.1&select=rates,updated_at`, { headers: supaHeaders });
+      const rateData = await rateR.json();
+      if (rateData.length) {
+        rates = rateData[0].rates;
+        rateDate = rateData[0].updated_at;
+      }
+    }
+
     // 5. Spajanje - svaka kampanja sa spend-om dobija svoj GA4 revenue (0 ako nema)
+    // Ako se valute razlikuju, spend se konvertuje u GA4 valutu da ROAS bude tačan
     const campaigns = Object.values(byCampaign).map((c) => {
       const ga4Data = revenueByCampaignId[c.campaign_id] || { revenue: 0, conversions: 0 };
+      const spendConverted = currencyMismatch&&rates ? convert(c.spend, gadsCurrency, ga4Currency, rates) : c.spend;
       return {
         ...c,
         revenue: ga4Data.revenue,
         conversions: ga4Data.conversions,
-        roas: c.spend > 0 ? ga4Data.revenue / c.spend : 0
+        spendConverted,
+        roas: spendConverted>0 ? ga4Data.revenue / spendConverted : 0
       };
     }).sort((a, b) => b.spend - a.spend);
 
@@ -136,6 +160,7 @@ export default async function handler(req, res) {
     );
 
     const totalSpend = campaigns.reduce((s, c) => s + c.spend, 0);
+    const totalSpendConverted = campaigns.reduce((s, c) => s + (c.spendConverted ?? c.spend), 0);
     const totalRevenue = campaigns.reduce((s, c) => s + c.revenue, 0);
 
     return res.status(200).json({
@@ -143,11 +168,13 @@ export default async function handler(req, res) {
       currency: ga4Currency,
       gadsCurrency,
       currencyMismatch,
+      rateDate,
       campaigns,
       unattributed,
       totalSpend,
+      totalSpendConverted,
       totalRevenue,
-      totalRoas: totalSpend > 0 ? totalRevenue / totalSpend : 0
+      totalRoas: totalSpendConverted > 0 ? totalRevenue / totalSpendConverted : 0
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });
