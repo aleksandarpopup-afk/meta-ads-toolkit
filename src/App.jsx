@@ -3562,6 +3562,7 @@ function CampaignsMod({t,lang}){
   const [adsLoading,setAdsLoading]=useState(false);
   const [productSearch,setProductSearch]=useState("");
   const [productSort,setProductSort]=useState({key:"revenue",dir:"desc"});
+  const [campaignSearch,setCampaignSearch]=useState("");
   const [productVisibleCount,setProductVisibleCount]=useState(50);
 
   // "Po proizvodu" tab
@@ -3607,7 +3608,7 @@ function CampaignsMod({t,lang}){
 
   const load=async(client,qsOverride)=>{
     const qs=qsOverride||periodQS();
-    setLoading(true); setErr(""); setData(null);
+    setLoading(true); setErr(""); setData(null); setCampaignSearch("");
     resetDrill();
     try{
       const res=await fetch(`/api/campaigns?client_id=${client.id}&${qs}`);
@@ -3722,6 +3723,13 @@ function CampaignsMod({t,lang}){
 
   const periods=[{v:"7",l:sr?"7 dana":"7 days"},{v:"30",l:sr?"30 dana":"30 days"},{v:"90",l:sr?"90 dana":"90 days"},{v:"custom",l:sr?"Prilagođeno":"Custom"}];
 
+  const filteredCampaigns=()=>{
+    if(!data) return [];
+    if(!campaignSearch.trim()) return data.campaigns;
+    const q=campaignSearch.trim().toLowerCase();
+    return data.campaigns.filter(c=>c.campaign_name.toLowerCase().includes(q)||String(c.campaign_id).toLowerCase().includes(q));
+  };
+
   const sortedCampaignProducts=()=>{
     if(!campaignProducts) return [];
     let list=[...campaignProducts.products];
@@ -3829,6 +3837,8 @@ function CampaignsMod({t,lang}){
 
         {data.campaigns.length===0&&<div style={{color:C.mut,fontSize:13,textAlign:"center",padding:"20px 0"}}>{sr?"Nema kampanja sa potrošnjom u ovom periodu.":"No campaigns with spend in this period."}</div>}
 
+        {data.campaigns.length>0&&<input value={campaignSearch} onChange={e=>setCampaignSearch(e.target.value)} placeholder={sr?"🔍 Pretraži kampanju...":"🔍 Search campaign..."} style={{width:"100%",padding:"9px 12px",borderRadius:10,border:`1px solid ${C.brd}`,background:"rgba(255,255,255,0.03)",color:C.txt,fontSize:13,marginBottom:10,boxSizing:"border-box"}}/>}
+
         {data.campaigns.length>0&&<div style={{overflowX:"auto",marginBottom:16}}>
           <table style={{width:"100%",fontSize:12,borderCollapse:"collapse"}}>
             <thead>
@@ -3839,11 +3849,12 @@ function CampaignsMod({t,lang}){
                 <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>Spend</th>
                 <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Prihod":"Revenue"}</th>
                 <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Kupovine":"Purchases"}</th>
+                <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Kupljeno":"Items bought"}</th>
                 <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>ROAS</th>
               </tr>
             </thead>
             <tbody>
-              {data.campaigns.map((c,i)=><tr key={i} onClick={()=>openCampaign(c)} style={{borderTop:`1px solid ${C.brd}`,cursor:"pointer"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.02)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+              {filteredCampaigns().map((c,i)=><tr key={i} onClick={()=>openCampaign(c)} style={{borderTop:`1px solid ${C.brd}`,cursor:"pointer"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.02)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
                 <td style={{padding:"8px 4px",color:C.acl,textDecoration:"underline"}}>{c.campaign_name} <span style={{color:C.mut}}>({c.campaign_id})</span></td>
                 <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{c.clicks.toLocaleString()}</td>
                 <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{c.impressions.toLocaleString()}</td>
@@ -3856,12 +3867,15 @@ function CampaignsMod({t,lang}){
                   {data.showRevenueNative&&<div style={{color:C.mut,fontSize:10}}>≈ {fmtMoney(c.revenue,data.currency)}</div>}
                 </td>
                 <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{c.conversions.toFixed(1)}</td>
+                <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{c.itemsPurchased.toLocaleString()}</td>
                 <td style={{padding:"8px 4px",textAlign:"right",fontWeight:700,color:c.roas>=1?C.grn:C.red}}>{c.roas.toFixed(2)}x</td>
               </tr>)}
             </tbody>
           </table>
         </div>}
+        {filteredCampaigns().length===0&&campaignSearch.trim()&&<div style={{color:C.mut,fontSize:13,textAlign:"center",padding:"10px 0"}}>{sr?"Nema kampanja koje odgovaraju pretrazi.":"No campaigns match the search."}</div>}
         <div style={{color:C.mut,fontSize:11,marginBottom:16}}>{sr?"Klikni na kampanju za detalje (proizvodi, ad grupe).":"Click a campaign for details (products, ad groups)."}</div>
+
 
         {(data.unattributed.revenue>0||data.unattributed.conversions>0)&&<div style={{background:"rgba(255,255,255,0.02)",border:`1px solid ${C.brd}`,borderRadius:12,padding:"12px 16px",color:C.mut,fontSize:12}}>
           ℹ️ {sr?"Neraspoređeno":"Unattributed"}: {fmtMoney(data.unattributed.revenueEUR,"EUR")}{data.showRevenueNative?` (≈ ${fmtMoney(data.unattributed.revenue,data.currency)})`:""} {sr?"prihoda i":"revenue and"} {data.unattributed.conversions.toFixed(1)} {sr?"kupovina iz Google Ads saobraćaja (Paid Search/Shopping/Video/PMax) koji nije mogao da se poveže sa konkretnom kampanjom.":"purchases from Google Ads traffic (Paid Search/Shopping/Video/PMax) that couldn't be matched to a specific campaign."}
@@ -3886,6 +3900,7 @@ function CampaignsMod({t,lang}){
                 <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Impresije":"Impressions"}</th>
                 <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>Spend</th>
                 <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Prihod":"Revenue"}</th>
+                <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Kupovine":"Purchases"}</th>
                 <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>ROAS</th>
               </tr>
             </thead>
@@ -3896,6 +3911,7 @@ function CampaignsMod({t,lang}){
                 <td style={{padding:"7px 4px",textAlign:"right",color:C.mut}}>{ag.impressions.toLocaleString()}</td>
                 <td style={{padding:"7px 4px",textAlign:"right",color:C.txt}}>{fmtMoney(ag.spendEUR,"EUR")}</td>
                 <td style={{padding:"7px 4px",textAlign:"right",color:C.grn}}>{fmtMoney(ag.revenueEUR,"EUR")}</td>
+                <td style={{padding:"7px 4px",textAlign:"right",color:C.mut}}>{ag.conversions.toFixed(1)}</td>
                 <td style={{padding:"7px 4px",textAlign:"right",fontWeight:700,color:ag.roas>=1?C.grn:C.red}}>{ag.roas.toFixed(2)}x</td>
               </tr>)}
             </tbody>
