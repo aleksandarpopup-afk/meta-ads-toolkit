@@ -147,7 +147,7 @@ export default async function handler(req, res) {
       }
       items = items.map((i) => {
         const rd = revenueById[i.id] || { revenue: 0, conversions: 0 };
-        return { ...i, revenue: rd.revenue, conversions: rd.conversions, roas: i.spend > 0 ? rd.revenue / i.spend : 0 };
+        return { ...i, revenue: rd.revenue, conversions: rd.conversions };
       });
     }
 
@@ -160,11 +160,11 @@ export default async function handler(req, res) {
       const rateData = await rateR.json();
       if (rateData.length) rates = rateData[0].rates;
     }
-    items = items.map((i) => ({
-      ...i,
-      spendEUR: rates ? convert(i.spend, gadsCurrency || "EUR", "EUR", rates) : i.spend,
-      revenueEUR: rates ? convert(i.revenue, ga4Currency || "EUR", "EUR", rates) : i.revenue
-    }));
+    items = items.map((i) => {
+      const spendEUR = rates ? convert(i.spend, gadsCurrency || "EUR", "EUR", rates) : i.spend;
+      const revenueEUR = rates ? convert(i.revenue, ga4Currency || "EUR", "EUR", rates) : i.revenue;
+      return { ...i, spendEUR, revenueEUR, roas: spendEUR > 0 ? revenueEUR / spendEUR : 0 };
+    });
 
     items.sort((a, b) => b.spend - a.spend);
 
