@@ -3,6 +3,24 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 
+// Supabase/PostgREST podrazumevano vraća samo prvih ~1000 redova po pozivu - za klijenta sa
+// puno kampanja x dugačak period to se lako pređe, pa moramo eksplicitno da "paginiramo" (Range zaglavlje)
+// da sigurno pokupimo SVE redove, ne samo prvih 1000.
+async function fetchAllSupabaseRows(url, headers) {
+  let allRows = [];
+  let offset = 0;
+  const pageSize = 1000;
+  while (true) {
+    const r = await fetch(url, { headers: { ...headers, Range: `${offset}-${offset + pageSize - 1}` } });
+    const rows = await r.json();
+    if (!Array.isArray(rows)) break;
+    allRows = allRows.concat(rows);
+    if (rows.length < pageSize) break;
+    offset += pageSize;
+  }
+  return allRows;
+}
+
 async function refreshAccessToken(refresh_token) {
   const r = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -94,11 +112,10 @@ export default async function handler(req, res) {
     const ga4Currency = currency_code || "EUR";
 
     // 3. Spend/klikovi/impresije - IZ NAŠE BAZE (već sinhronizovano cron poslom, brzo, bez novog API poziva)
-    const spendR = await fetch(
+    const spendRows = await fetchAllSupabaseRows(
       `${SUPABASE_URL}/rest/v1/google_ads_daily_spend?client_id=eq.${client_id}&date=gte.${startStr}&date=lte.${endStr}&select=campaign_id,campaign_name,spend,clicks,impressions`,
-      { headers: supaHeaders }
+      supaHeaders
     );
-    const spendRows = await spendR.json();
 
     const byCampaign = {};
     for (const row of spendRows) {
