@@ -33,6 +33,14 @@ async function ga4Fetch(propertyId, accessToken, body) {
   return data;
 }
 
+function convert(amount, fromCur, toCur, rates) {
+  if (fromCur === toCur) return amount;
+  const rFrom = fromCur === "EUR" ? 1 : rates[fromCur];
+  const rTo = toCur === "EUR" ? 1 : rates[toCur];
+  if (!rFrom || !rTo) return null;
+  return amount * (rTo / rFrom);
+}
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -68,6 +76,21 @@ export default async function handler(req, res) {
     const currency = currency_code || "EUR";
     const accessToken = await refreshAccessToken(refresh_token);
 
+    const gadsConnR = await fetch(
+      `${SUPABASE_URL}/rest/v1/google_ads_connections?client_id=eq.${client_id}&select=currency_code`,
+      { headers: supaHeaders }
+    );
+    const gadsConnData = await gadsConnR.json();
+    const gadsCurrency = gadsConnData.length ? (gadsConnData[0].currency_code || "EUR") : "EUR";
+    const showSpendNative = gadsCurrency !== "EUR";
+    const showRevenueNative = currency !== "EUR";
+    let rates = null;
+    if (showSpendNative || showRevenueNative) {
+      const rateR = await fetch(`${SUPABASE_URL}/rest/v1/exchange_rates?id=eq.1&select=rates`, { headers: supaHeaders });
+      const rateData = await rateR.json();
+      if (rateData.length) rates = rateData[0].rates;
+    }
+
     // BEZ ?category= - vraćamo listu SVIH kategorija (za picker)
     if (!category) {
       const catReport = await ga4Fetch(property_id, accessToken, {
@@ -77,14 +100,18 @@ export default async function handler(req, res) {
         orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }],
         limit: 50
       });
-      const categories = (catReport.rows || []).map((row) => ({
-        name: row.dimensionValues[0].value,
-        revenue: parseFloat(row.metricValues[0].value) || 0,
-        purchased: parseInt(row.metricValues[1].value) || 0
-      }));
+      const categories = (catReport.rows || []).map((row) => {
+        const revenue = parseFloat(row.metricValues[0].value) || 0;
+        return {
+          name: row.dimensionValues[0].value,
+          revenue,
+          revenueEUR: rates ? convert(revenue, currency, "EUR", rates) : revenue,
+          purchased: parseInt(row.metricValues[1].value) || 0
+        };
+      });
       const realCategories = categories.filter((c) => c.name && c.name !== "(not set)");
       const hasCategories = realCategories.length > 0;
-      return res.status(200).json({ currency, categories: hasCategories ? realCategories : [], hasCategories });
+      return res.status(200).json({ currency, gadsCurrency, showSpendNative, showRevenueNative, categories: hasCategories ? realCategories : [], hasCategories });
     }
 
     // SA ?category= - raščlanjenje TE kategorije po kampanjama (isti obrazac kao products-by-campaign.js)
@@ -158,6 +185,9 @@ export default async function handler(req, res) {
       const p = catByCampaignId[id];
       const info = campaignInfo[id] || { campaign_name: `Kampanja ${id}`, totalSpend: 0 };
       const totalRev = campaignTotalRevenue[id] || 0;
+      const spendEUR = rates ? convert(info.totalSpend, gadsCurrency, "EUR", rates) : info.totalSpend;
+      const totalRevEUR = rates ? convert(totalRev, currency, "EUR", rates) : totalRev;
+      const categoryRevenueEUR = rates ? convert(p.revenue, currency, "EUR", rates) : p.revenue;
       return {
         campaign_id: id,
         campaign_name: info.campaign_name,
@@ -165,13 +195,16 @@ export default async function handler(req, res) {
         categoryAddedToCart: p.addedToCart,
         categoryPurchased: p.purchased,
         categoryRevenue: p.revenue,
+        categoryRevenueEUR,
         campaignTotalSpend: info.totalSpend,
+        campaignTotalSpendEUR: spendEUR,
         campaignTotalRevenue: totalRev,
-        campaignRoas: info.totalSpend > 0 ? totalRev / info.totalSpend : 0
+        campaignTotalRevenueEUR: totalRevEUR,
+        campaignRoas: spendEUR > 0 ? totalRevEUR / spendEUR : 0
       };
     }).sort((a, b) => b.categoryRevenue - a.categoryRevenue);
 
-    return res.status(200).json({ currency, results, unattributed, noMatch: false });
+    return res.status(200).json({ currency, gadsCurrency, showSpendNative, showRevenueNative, results, unattributed, noMatch: false });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
