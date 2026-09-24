@@ -76,7 +76,6 @@ export default async function handler(req, res) {
     }
     const { property_id, refresh_token, currency_code } = ga4ConnData[0];
     const ga4Currency = currency_code || "EUR";
-    const currencyMismatch = gadsCurrency !== ga4Currency;
 
     // 3. Spend/klikovi/impresije - IZ NAŠE BAZE (već sinhronizovano cron poslom, brzo, bez novog API poziva)
     const today = new Date();
@@ -121,10 +120,11 @@ export default async function handler(req, res) {
       };
     }
 
-    // 4.5 Kursevi valuta (ako su Google Ads i GA4 u različitim valutama)
+    // 4.5 Kursevi valuta (potrebni ako Spend ili Revenue nije već u EUR - EUR je naša "glavna" prikazna valuta)
+    const needsRates = gadsCurrency !== "EUR" || ga4Currency !== "EUR";
     let rates = null;
     let rateDate = null;
-    if (currencyMismatch) {
+    if (needsRates) {
       const rateR = await fetch(`${SUPABASE_URL}/rest/v1/exchange_rates?id=eq.1&select=rates,updated_at`, { headers: supaHeaders });
       const rateData = await rateR.json();
       if (rateData.length) {
@@ -134,16 +134,18 @@ export default async function handler(req, res) {
     }
 
     // 5. Spajanje - svaka kampanja sa spend-om dobija svoj GA4 revenue (0 ako nema)
-    // Ako se valute razlikuju, spend se konvertuje u GA4 valutu da ROAS bude tačan
+    // Spend i Revenue se uvek prikazuju u EUR (glavno), original valuta ostaje kao referenca
     const campaigns = Object.values(byCampaign).map((c) => {
       const ga4Data = revenueByCampaignId[c.campaign_id] || { revenue: 0, conversions: 0 };
-      const spendConverted = currencyMismatch&&rates ? convert(c.spend, gadsCurrency, ga4Currency, rates) : c.spend;
+      const spendEUR = rates ? convert(c.spend, gadsCurrency, "EUR", rates) : c.spend;
+      const revenueEUR = rates ? convert(ga4Data.revenue, ga4Currency, "EUR", rates) : ga4Data.revenue;
       return {
         ...c,
         revenue: ga4Data.revenue,
+        revenueEUR,
         conversions: ga4Data.conversions,
-        spendConverted,
-        roas: spendConverted>0 ? ga4Data.revenue / spendConverted : 0
+        spendEUR,
+        roas: spendEUR>0 ? revenueEUR / spendEUR : 0
       };
     }).sort((a, b) => b.spend - a.spend);
 
@@ -158,23 +160,27 @@ export default async function handler(req, res) {
       }),
       { revenue: 0, conversions: 0 }
     );
+    unattributed.revenueEUR = rates ? convert(unattributed.revenue, ga4Currency, "EUR", rates) : unattributed.revenue;
 
     const totalSpend = campaigns.reduce((s, c) => s + c.spend, 0);
-    const totalSpendConverted = campaigns.reduce((s, c) => s + (c.spendConverted ?? c.spend), 0);
+    const totalSpendEUR = campaigns.reduce((s, c) => s + c.spendEUR, 0);
     const totalRevenue = campaigns.reduce((s, c) => s + c.revenue, 0);
+    const totalRevenueEUR = campaigns.reduce((s, c) => s + c.revenueEUR, 0);
 
     return res.status(200).json({
       periodDays,
       currency: ga4Currency,
       gadsCurrency,
-      currencyMismatch,
       rateDate,
+      showSpendNative: gadsCurrency !== "EUR",
+      showRevenueNative: ga4Currency !== "EUR",
       campaigns,
       unattributed,
       totalSpend,
-      totalSpendConverted,
+      totalSpendEUR,
       totalRevenue,
-      totalRoas: totalSpendConverted > 0 ? totalRevenue / totalSpendConverted : 0
+      totalRevenueEUR,
+      totalRoas: totalSpendEUR > 0 ? totalRevenueEUR / totalSpendEUR : 0
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });
