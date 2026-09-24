@@ -3198,7 +3198,8 @@ ${summary}`;
     {v:"spikes",l:sr?"Skokovi":"Spikes"},
     {v:"drops",l:sr?"Padovi":"Drops"},
     {v:"abandoned",l:sr?"Napuštene korpe":"Abandoned carts"},
-    {v:"sources",l:sr?"Izvori":"Sources"}
+    {v:"sources",l:sr?"Izvori":"Sources"},
+    {v:"categories",l:sr?"Kategorije":"Categories"}
   ];
   const measures={
     viewed:{min:20,label:sr?"Pregledi":"Viewed",field:"viewed",changeField:"viewedChangePct",prevField:"previousViewed"},
@@ -3219,7 +3220,7 @@ ${summary}`;
     else { setSortKey(key); setSortDir("desc"); }
   };
 
-  const isExplorable=filter==="all"||(filter==="sources"&&paidOrganic&&sourcePlatform);
+  const isExplorable=filter==="all"||filter==="categories"||(filter==="sources"&&paidOrganic&&sourcePlatform);
 
   const rawRows=()=>{
     if(!data) return [];
@@ -3238,6 +3239,7 @@ ${summary}`;
     }
     if(filter==="abandoned") return [...data.catalog].filter(i=>i.addedToCart>=10&&i.conversionRate<5).sort((a,b)=>b.addedToCart-a.addedToCart).slice(0,10);
     if(filter==="sources") return (paidOrganic&&sourcePlatform)?(data.sourceCatalog[paidOrganic][sourcePlatform]||[]):[];
+    if(filter==="categories") return data.categories||[];
     return data.catalog;
   };
 
@@ -3246,7 +3248,7 @@ ${summary}`;
     if(isExplorable){
       if(search.trim()){
         const q=search.trim().toLowerCase();
-        r=r.filter(i=>i.name.toLowerCase().includes(q)||String(i.id).toLowerCase().includes(q));
+        r=r.filter(i=>i.name.toLowerCase().includes(q)||(i.id!==undefined&&String(i.id).toLowerCase().includes(q)));
       }
       r=sortRows(r);
     }
@@ -3367,7 +3369,9 @@ ${summary}`;
 
       {isExplorable&&<input value={search} onChange={e=>{setSearch(e.target.value);setVisibleCount(50);}} placeholder={sr?"🔍 Pretraži po nazivu ili ID-u...":"🔍 Search by name or ID..."} style={{width:"100%",padding:"10px 14px",borderRadius:10,border:`1px solid ${C.brd}`,background:"rgba(255,255,255,0.03)",color:C.txt,fontSize:13,marginBottom:14,boxSizing:"border-box"}}/>}
 
-      {rows.length===0&&(filter!=="sources"||(paidOrganic&&sourcePlatform))&&<div style={{color:C.mut,fontSize:13,textAlign:"center",padding:"20px 0"}}>{sr?"Nema proizvoda u ovoj kategoriji za izabrani period.":"No products in this category for the selected period."}</div>}
+      {filter==="categories"&&data.hasCategories===false&&<div style={{color:C.mut,fontSize:13,textAlign:"center",padding:"20px 0"}}>{sr?"Ovaj klijent nema podešene kategorije proizvoda u GA4-u.":"This client doesn't have product categories set up in GA4."}</div>}
+
+      {rows.length===0&&filter!=="categories"&&(filter!=="sources"||(paidOrganic&&sourcePlatform))&&<div style={{color:C.mut,fontSize:13,textAlign:"center",padding:"20px 0"}}>{sr?"Nema proizvoda u ovoj kategoriji za izabrani period.":"No products in this category for the selected period."}</div>}
 
       {visibleRows.length>0&&<div style={{overflowX:"auto"}}>
         <table style={{width:"100%",fontSize:12,borderCollapse:"collapse"}}>
@@ -3386,7 +3390,7 @@ ${summary}`;
           </thead>
           <tbody>
             {visibleRows.map((r,i)=><tr key={i} style={{borderTop:`1px solid ${C.brd}`}}>
-              <td style={{padding:"8px 4px",color:C.txt}}>{r.name} <span style={{color:C.mut}}>({r.id})</span></td>
+              <td style={{padding:"8px 4px",color:C.txt}}>{r.name}{r.id!==undefined&&<span style={{color:C.mut}}> ({r.id})</span>}</td>
               <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{r.viewed.toLocaleString()}</td>
               <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{r.addedToCart.toLocaleString()}</td>
               <td style={{padding:"8px 4px",textAlign:"right",fontWeight:600,color:C.txt}}>{r.purchased.toLocaleString()}</td>
@@ -3537,12 +3541,40 @@ function CampaignsMod({t,lang}){
   const [clients,setClients]=useState([]);
   const [selectedClient,setSelectedClient]=useState(null);
   const [period,setPeriod]=useState("30");
+  const [customFrom,setCustomFrom]=useState("");
+  const [customTo,setCustomTo]=useState("");
+  const [mode,setMode]=useState("byCampaign"); // byCampaign | byProduct | byCategory
   const [loading,setLoading]=useState(false);
   const [data,setData]=useState(null);
   const [err,setErr]=useState("");
   const [newClientOpen,setNewClientOpen]=useState(false);
   const [newClientName,setNewClientName]=useState("");
   const [creatingClient,setCreatingClient]=useState(false);
+
+  // Drill-down (samo unutar "Po kampanji")
+  const [drillCampaign,setDrillCampaign]=useState(null);
+  const [campaignProducts,setCampaignProducts]=useState(null);
+  const [campaignProductsLoading,setCampaignProductsLoading]=useState(false);
+  const [adGroups,setAdGroups]=useState(null);
+  const [adGroupsLoading,setAdGroupsLoading]=useState(false);
+  const [drillAdGroup,setDrillAdGroup]=useState(null);
+  const [ads,setAds]=useState(null);
+  const [adsLoading,setAdsLoading]=useState(false);
+  const [productSearch,setProductSearch]=useState("");
+  const [productSort,setProductSort]=useState({key:"revenue",dir:"desc"});
+
+  // "Po proizvodu" tab
+  const [byProductQuery,setByProductQuery]=useState("");
+  const [byProductData,setByProductData]=useState(null);
+  const [byProductLoading,setByProductLoading]=useState(false);
+  const [byProductErr,setByProductErr]=useState("");
+
+  // "Po kategoriji" tab
+  const [categoryList,setCategoryList]=useState(null);
+  const [categoryListLoading,setCategoryListLoading]=useState(false);
+  const [selectedCategory,setSelectedCategory]=useState(null);
+  const [categoryData,setCategoryData]=useState(null);
+  const [categoryDataLoading,setCategoryDataLoading]=useState(false);
 
   useEffect(()=>{
     const uid=localStorage.getItem("mat_user_id");
@@ -3570,10 +3602,13 @@ function CampaignsMod({t,lang}){
     setCreatingClient(false);
   };
 
-  const load=async(client,p)=>{
+  const periodQS=()=>customFrom&&customTo&&period==="custom" ? `from=${customFrom}&to=${customTo}` : `days=${period}`;
+
+  const load=async(client)=>{
     setLoading(true); setErr(""); setData(null);
+    resetDrill();
     try{
-      const res=await fetch(`/api/campaigns?client_id=${client.id}&days=${p}`);
+      const res=await fetch(`/api/campaigns?client_id=${client.id}&${periodQS()}`);
       const d=await res.json();
       if(res.status===404){ setErr(d.error==="no_gads"?"no_gads":"no_ga4"); setLoading(false); return; }
       if(!res.ok) throw new Error(d.error||(sr?"Greška pri učitavanju":"Loading error"));
@@ -3582,7 +3617,106 @@ function CampaignsMod({t,lang}){
     setLoading(false);
   };
 
-  const periods=[{v:"7",l:sr?"7 dana":"7 days"},{v:"30",l:sr?"30 dana":"30 days"},{v:"90",l:sr?"90 dana":"90 days"}];
+  const resetDrill=()=>{
+    setDrillCampaign(null); setCampaignProducts(null); setAdGroups(null);
+    setDrillAdGroup(null); setAds(null); setProductSearch("");
+  };
+
+  const applyPeriod=(p)=>{
+    setPeriod(p);
+    if(p!=="custom"&&selectedClient) load(selectedClient);
+  };
+  const applyCustom=()=>{
+    if(selectedClient&&customFrom&&customTo) load(selectedClient);
+  };
+
+  const openCampaign=async(camp)=>{
+    resetDrill();
+    setDrillCampaign(camp);
+    setCampaignProductsLoading(true);
+    setAdGroupsLoading(true);
+    try{
+      const r=await fetch(`/api/campaign-products?client_id=${selectedClient.id}&campaign_id=${camp.campaign_id}&${periodQS()}`);
+      const d=await r.json();
+      setCampaignProducts(r.ok?d:{products:[],currency:data.currency});
+    }catch(e){ setCampaignProducts({products:[],currency:data.currency}); }
+    setCampaignProductsLoading(false);
+    try{
+      const r2=await fetch(`/api/google-ads-drilldown?client_id=${selectedClient.id}&campaign_id=${camp.campaign_id}&${periodQS()}`);
+      const d2=await r2.json();
+      setAdGroups(r2.ok?d2:null);
+    }catch(e){ setAdGroups(null); }
+    setAdGroupsLoading(false);
+  };
+
+  const openAdGroup=async(ag)=>{
+    setDrillAdGroup(ag);
+    setAdsLoading(true);
+    try{
+      const r=await fetch(`/api/google-ads-drilldown?client_id=${selectedClient.id}&campaign_id=${drillCampaign.campaign_id}&ad_group_id=${ag.id}&${periodQS()}`);
+      const d=await r.json();
+      setAds(r.ok?d:null);
+    }catch(e){ setAds(null); }
+    setAdsLoading(false);
+  };
+
+  const runProductSearch=async()=>{
+    if(!byProductQuery.trim()) return;
+    setByProductLoading(true); setByProductErr(""); setByProductData(null);
+    try{
+      const r=await fetch(`/api/products-by-campaign?client_id=${selectedClient.id}&q=${encodeURIComponent(byProductQuery.trim())}&${periodQS()}`);
+      const d=await r.json();
+      if(r.status===404){ setByProductErr(d.error==="no_gads"?"no_gads":"no_ga4"); setByProductLoading(false); return; }
+      if(!r.ok) throw new Error(d.error||"Error");
+      setByProductData(d);
+    }catch(e){ setByProductErr(e.message); }
+    setByProductLoading(false);
+  };
+
+  const loadCategoryList=async()=>{
+    setCategoryListLoading(true);
+    try{
+      const r=await fetch(`/api/products-by-category?client_id=${selectedClient.id}&${periodQS()}`);
+      const d=await r.json();
+      setCategoryList(r.ok?d:null);
+    }catch(e){ setCategoryList(null); }
+    setCategoryListLoading(false);
+  };
+
+  const openCategory=async(catName)=>{
+    setSelectedCategory(catName);
+    setCategoryDataLoading(true); setCategoryData(null);
+    try{
+      const r=await fetch(`/api/products-by-category?client_id=${selectedClient.id}&category=${encodeURIComponent(catName)}&${periodQS()}`);
+      const d=await r.json();
+      setCategoryData(r.ok?d:null);
+    }catch(e){ setCategoryData(null); }
+    setCategoryDataLoading(false);
+  };
+
+  const switchMode=(m)=>{
+    setMode(m);
+    if(m==="byCategory"&&!categoryList) loadCategoryList();
+  };
+
+  const periods=[{v:"7",l:sr?"7 dana":"7 days"},{v:"30",l:sr?"30 dana":"30 days"},{v:"90",l:sr?"90 dana":"90 days"},{v:"custom",l:sr?"Prilagođeno":"Custom"}];
+
+  const sortedCampaignProducts=()=>{
+    if(!campaignProducts) return [];
+    let list=[...campaignProducts.products];
+    if(productSearch.trim()){
+      const q=productSearch.trim().toLowerCase();
+      list=list.filter(p=>p.name.toLowerCase().includes(q)||String(p.id).toLowerCase().includes(q));
+    }
+    list.sort((a,b)=>{
+      const av=a[productSort.key],bv=b[productSort.key];
+      return productSort.dir==="desc"?bv-av:av-bv;
+    });
+    return list;
+  };
+  const toggleProductSort=(key)=>{
+    setProductSort(s=>s.key===key?{key,dir:s.dir==="desc"?"asc":"desc"}:{key,dir:"desc"});
+  };
 
   // IZBOR KLIJENTA
   if(!selectedClient) return <div>
@@ -3601,12 +3735,18 @@ function CampaignsMod({t,lang}){
         {sr?"Nema klijenata još. Dodaj jednog iznad.":"No clients yet. Add one above."}
       </div>
       :<div style={{display:"flex",flexDirection:"column",gap:8}}>
-        {clients.map(c=><button key={c.id} onClick={()=>{setSelectedClient(c);load(c,period);}} style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:10,padding:"12px 16px",textAlign:"left",cursor:"pointer",color:C.txt,fontWeight:600,fontSize:13}}>
+        {clients.map(c=><button key={c.id} onClick={()=>{setSelectedClient(c);load(c);}} style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:10,padding:"12px 16px",textAlign:"left",cursor:"pointer",color:C.txt,fontWeight:600,fontSize:13}}>
           👤 {c.name}
         </button>)}
       </div>
     }
   </div>;
+
+  const modes=[
+    {v:"byCampaign",l:sr?"📢 Po kampanji":"📢 By campaign"},
+    {v:"byProduct",l:sr?"🔍 Po proizvodu":"🔍 By product"},
+    {v:"byCategory",l:sr?"📁 Po kategoriji":"📁 By category"}
+  ];
 
   // KONTROLNA TABLA
   return <div>
@@ -3615,85 +3755,283 @@ function CampaignsMod({t,lang}){
         <button onClick={()=>{setSelectedClient(null);setData(null);}} style={{background:"none",border:"none",color:C.mut,cursor:"pointer",fontSize:12,padding:0,marginBottom:4}}>{sr?"← Svi klijenti":"← All clients"}</button>
         <h2 style={{fontSize:18,fontWeight:800,margin:0}}>{selectedClient.name}</h2>
       </div>
-      <div style={{display:"flex",gap:6}}>
-        {periods.map(p=><button key={p.v} onClick={()=>{setPeriod(p.v);load(selectedClient,p.v);}} style={{padding:"6px 12px",borderRadius:8,border:`1px solid ${period===p.v?"rgba(99,102,241,0.6)":C.brd}`,background:period===p.v?"rgba(99,102,241,0.2)":"transparent",color:period===p.v?C.acl:C.mut,fontSize:12,fontWeight:600,cursor:"pointer"}}>{p.l}</button>)}
+      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        {periods.map(p=><button key={p.v} onClick={()=>applyPeriod(p.v)} style={{padding:"6px 12px",borderRadius:8,border:`1px solid ${period===p.v?"rgba(99,102,241,0.6)":C.brd}`,background:period===p.v?"rgba(99,102,241,0.2)":"transparent",color:period===p.v?C.acl:C.mut,fontSize:12,fontWeight:600,cursor:"pointer"}}>{p.l}</button>)}
       </div>
     </div>
 
-    {loading&&<div style={{textAlign:"center",padding:"40px 0"}}>
-      <div style={{fontSize:36,marginBottom:16}}>📢</div>
-      <div style={{color:C.acl,fontWeight:700,fontSize:15}}>{sr?"Učitavam podatke...":"Loading data..."}</div>
+    {period==="custom"&&<div style={{display:"flex",gap:10,alignItems:"flex-end",marginBottom:16,flexWrap:"wrap",background:"rgba(255,255,255,0.02)",border:`1px solid ${C.brd}`,borderRadius:12,padding:"12px 14px"}}>
+      <div style={{flex:1,minWidth:140}}><Lbl c={sr?"Od":"From"}/><DIn v={customFrom} ch={setCustomFrom}/></div>
+      <div style={{flex:1,minWidth:140}}><Lbl c={sr?"Do":"To"}/><DIn v={customTo} ch={setCustomTo}/></div>
+      <button onClick={applyCustom} disabled={!customFrom||!customTo} style={{padding:"12px 18px",borderRadius:10,border:"none",background:!customFrom||!customTo?"rgba(99,102,241,0.3)":"linear-gradient(135deg,#6366F1,#4f46e5)",color:"#fff",fontSize:13,fontWeight:700,cursor:!customFrom||!customTo?"default":"pointer"}}>{sr?"Primeni":"Apply"}</button>
     </div>}
 
-    {err==="no_gads"&&!loading&&<div style={{background:"rgba(0,212,255,0.08)",border:"1px solid rgba(0,212,255,0.2)",borderRadius:12,padding:"16px",color:C.txt,fontSize:13,marginBottom:16}}>
-      🔗 {sr?"Google Ads nije povezan za ovog klijenta. Idi u":"Google Ads is not connected for this client. Go to"} <b>{sr?"Moji klijenti":"My Clients"}</b> {sr?"da ga povežeš.":"to connect it."}
-    </div>}
-    {err==="no_ga4"&&!loading&&<div style={{background:"rgba(0,212,255,0.08)",border:"1px solid rgba(0,212,255,0.2)",borderRadius:12,padding:"16px",color:C.txt,fontSize:13,marginBottom:16}}>
-      🔗 {sr?"GA4 nije povezan za ovog klijenta. Idi u":"GA4 is not connected for this client. Go to"} <b>{sr?"Moji klijenti":"My Clients"}</b> {sr?"da ga povežeš.":"to connect it."}
-    </div>}
-    {err&&err!=="no_gads"&&err!=="no_ga4"&&!loading&&<div style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:12,padding:"16px",color:C.red,fontSize:13,marginBottom:16}}>⚠️ {err}</div>}
+    <div style={{display:"flex",gap:6,marginBottom:18,flexWrap:"wrap"}}>
+      {modes.map(m=><button key={m.v} onClick={()=>switchMode(m.v)} style={{padding:"8px 14px",borderRadius:10,border:`1px solid ${mode===m.v?"rgba(99,102,241,0.6)":C.brd}`,background:mode===m.v?"rgba(99,102,241,0.2)":"transparent",color:mode===m.v?C.acl:C.mut,fontSize:13,fontWeight:600,cursor:"pointer"}}>{m.l}</button>)}
+    </div>
 
-    {data&&!loading&&<>
-      {(data.showSpendNative||data.showRevenueNative)&&<div style={{background:"rgba(245,158,11,0.08)",border:"1px solid rgba(245,158,11,0.25)",borderRadius:12,padding:"12px 16px",color:C.yel,fontSize:12,marginBottom:16}}>
-        ℹ️ {sr?`Prikazano u EUR kao glavnoj valuti (originalna valuta ispod, malim slovima), konvertovano po kursu iz ${data.rateDate?new Date(data.rateDate).toLocaleDateString("sr-RS"):"?"}.`:`Shown in EUR as the primary currency (original currency below, in small text), converted using the exchange rate from ${data.rateDate?new Date(data.rateDate).toLocaleDateString():"?"}.`}
+    {mode==="byCampaign"&&<>
+      {loading&&<div style={{textAlign:"center",padding:"40px 0"}}>
+        <div style={{fontSize:36,marginBottom:16}}>📢</div>
+        <div style={{color:C.acl,fontWeight:700,fontSize:15}}>{sr?"Učitavam podatke...":"Loading data..."}</div>
       </div>}
 
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:20}}>
-        <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px"}}>
-          <div style={{color:C.mut,fontSize:11,marginBottom:4}}>{sr?"Ukupan spend":"Total spend"}</div>
-          <div style={{color:C.txt,fontSize:18,fontWeight:800}}>{fmtMoney(data.totalSpendEUR,"EUR")}</div>
-          {data.showSpendNative&&<div style={{color:C.mut,fontSize:11,marginTop:2}}>≈ {fmtMoney(data.totalSpend,data.gadsCurrency)}</div>}
-        </div>
-        <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px"}}>
-          <div style={{color:C.mut,fontSize:11,marginBottom:4}}>{sr?"Ukupan prihod":"Total revenue"}</div>
-          <div style={{color:C.grn,fontSize:18,fontWeight:800}}>{fmtMoney(data.totalRevenueEUR,"EUR")}</div>
-          {data.showRevenueNative&&<div style={{color:C.mut,fontSize:11,marginTop:2}}>≈ {fmtMoney(data.totalRevenue,data.currency)}</div>}
-        </div>
-        <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px"}}>
-          <div style={{color:C.mut,fontSize:11,marginBottom:4}}>ROAS</div>
-          <div style={{color:C.acl,fontSize:18,fontWeight:800}}>{data.totalRoas.toFixed(2)}x</div>
-        </div>
-      </div>
+      {err==="no_gads"&&!loading&&<div style={{background:"rgba(0,212,255,0.08)",border:"1px solid rgba(0,212,255,0.2)",borderRadius:12,padding:"16px",color:C.txt,fontSize:13,marginBottom:16}}>
+        🔗 {sr?"Google Ads nije povezan za ovog klijenta. Idi u":"Google Ads is not connected for this client. Go to"} <b>{sr?"Moji klijenti":"My Clients"}</b> {sr?"da ga povežeš.":"to connect it."}
+      </div>}
+      {err==="no_ga4"&&!loading&&<div style={{background:"rgba(0,212,255,0.08)",border:"1px solid rgba(0,212,255,0.2)",borderRadius:12,padding:"16px",color:C.txt,fontSize:13,marginBottom:16}}>
+        🔗 {sr?"GA4 nije povezan za ovog klijenta. Idi u":"GA4 is not connected for this client. Go to"} <b>{sr?"Moji klijenti":"My Clients"}</b> {sr?"da ga povežeš.":"to connect it."}
+      </div>}
+      {err&&err!=="no_gads"&&err!=="no_ga4"&&!loading&&<div style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:12,padding:"16px",color:C.red,fontSize:13,marginBottom:16}}>⚠️ {err}</div>}
 
-      {data.campaigns.length===0&&<div style={{color:C.mut,fontSize:13,textAlign:"center",padding:"20px 0"}}>{sr?"Nema kampanja sa potrošnjom u ovom periodu.":"No campaigns with spend in this period."}</div>}
+      {data&&!loading&&!drillCampaign&&<>
+        {(data.showSpendNative||data.showRevenueNative)&&<div style={{background:"rgba(245,158,11,0.08)",border:"1px solid rgba(245,158,11,0.25)",borderRadius:12,padding:"12px 16px",color:C.yel,fontSize:12,marginBottom:16}}>
+          ℹ️ {sr?`Prikazano u EUR kao glavnoj valuti (originalna valuta ispod, malim slovima), konvertovano po kursu iz ${data.rateDate?new Date(data.rateDate).toLocaleDateString("sr-RS"):"?"}.`:`Shown in EUR as the primary currency (original currency below, in small text), converted using the exchange rate from ${data.rateDate?new Date(data.rateDate).toLocaleDateString():"?"}.`}
+        </div>}
 
-      {data.campaigns.length>0&&<div style={{overflowX:"auto",marginBottom:16}}>
-        <table style={{width:"100%",fontSize:12,borderCollapse:"collapse"}}>
-          <thead>
-            <tr style={{color:C.mut,textAlign:"left"}}>
-              <th style={{padding:"6px 4px",fontWeight:600}}>{sr?"Kampanja":"Campaign"}</th>
-              <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Klikovi":"Clicks"}</th>
-              <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Impresije":"Impressions"}</th>
-              <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>Spend</th>
-              <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Prihod":"Revenue"}</th>
-              <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Konverzije":"Conversions"}</th>
-              <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>ROAS</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.campaigns.map((c,i)=><tr key={i} style={{borderTop:`1px solid ${C.brd}`}}>
-              <td style={{padding:"8px 4px",color:C.txt}}>{c.campaign_name} <span style={{color:C.mut}}>({c.campaign_id})</span></td>
-              <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{c.clicks.toLocaleString()}</td>
-              <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{c.impressions.toLocaleString()}</td>
-              <td style={{padding:"8px 4px",textAlign:"right",color:C.txt}}>
-                {fmtMoney(c.spendEUR,"EUR")}
-                {data.showSpendNative&&<div style={{color:C.mut,fontSize:10}}>≈ {fmtMoney(c.spend,data.gadsCurrency)}</div>}
-              </td>
-              <td style={{padding:"8px 4px",textAlign:"right",color:C.grn}}>
-                {fmtMoney(c.revenueEUR,"EUR")}
-                {data.showRevenueNative&&<div style={{color:C.mut,fontSize:10}}>≈ {fmtMoney(c.revenue,data.currency)}</div>}
-              </td>
-              <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{c.conversions.toFixed(1)}</td>
-              <td style={{padding:"8px 4px",textAlign:"right",fontWeight:700,color:c.roas>=1?C.grn:C.red}}>{c.roas.toFixed(2)}x</td>
-            </tr>)}
-          </tbody>
-        </table>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:20}}>
+          <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px"}}>
+            <div style={{color:C.mut,fontSize:11,marginBottom:4}}>{sr?"Ukupan spend":"Total spend"}</div>
+            <div style={{color:C.txt,fontSize:18,fontWeight:800}}>{fmtMoney(data.totalSpendEUR,"EUR")}</div>
+            {data.showSpendNative&&<div style={{color:C.mut,fontSize:11,marginTop:2}}>≈ {fmtMoney(data.totalSpend,data.gadsCurrency)}</div>}
+          </div>
+          <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px"}}>
+            <div style={{color:C.mut,fontSize:11,marginBottom:4}}>{sr?"Ukupan prihod":"Total revenue"}</div>
+            <div style={{color:C.grn,fontSize:18,fontWeight:800}}>{fmtMoney(data.totalRevenueEUR,"EUR")}</div>
+            {data.showRevenueNative&&<div style={{color:C.mut,fontSize:11,marginTop:2}}>≈ {fmtMoney(data.totalRevenue,data.currency)}</div>}
+          </div>
+          <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px"}}>
+            <div style={{color:C.mut,fontSize:11,marginBottom:4}}>ROAS</div>
+            <div style={{color:C.acl,fontSize:18,fontWeight:800}}>{data.totalRoas.toFixed(2)}x</div>
+          </div>
+        </div>
+
+        {data.campaigns.length===0&&<div style={{color:C.mut,fontSize:13,textAlign:"center",padding:"20px 0"}}>{sr?"Nema kampanja sa potrošnjom u ovom periodu.":"No campaigns with spend in this period."}</div>}
+
+        {data.campaigns.length>0&&<div style={{overflowX:"auto",marginBottom:16}}>
+          <table style={{width:"100%",fontSize:12,borderCollapse:"collapse"}}>
+            <thead>
+              <tr style={{color:C.mut,textAlign:"left"}}>
+                <th style={{padding:"6px 4px",fontWeight:600}}>{sr?"Kampanja":"Campaign"}</th>
+                <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Klikovi":"Clicks"}</th>
+                <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Impresije":"Impressions"}</th>
+                <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>Spend</th>
+                <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Prihod":"Revenue"}</th>
+                <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Konverzije":"Conversions"}</th>
+                <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>ROAS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.campaigns.map((c,i)=><tr key={i} onClick={()=>openCampaign(c)} style={{borderTop:`1px solid ${C.brd}`,cursor:"pointer"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.02)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                <td style={{padding:"8px 4px",color:C.acl,textDecoration:"underline"}}>{c.campaign_name} <span style={{color:C.mut}}>({c.campaign_id})</span></td>
+                <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{c.clicks.toLocaleString()}</td>
+                <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{c.impressions.toLocaleString()}</td>
+                <td style={{padding:"8px 4px",textAlign:"right",color:C.txt}}>
+                  {fmtMoney(c.spendEUR,"EUR")}
+                  {data.showSpendNative&&<div style={{color:C.mut,fontSize:10}}>≈ {fmtMoney(c.spend,data.gadsCurrency)}</div>}
+                </td>
+                <td style={{padding:"8px 4px",textAlign:"right",color:C.grn}}>
+                  {fmtMoney(c.revenueEUR,"EUR")}
+                  {data.showRevenueNative&&<div style={{color:C.mut,fontSize:10}}>≈ {fmtMoney(c.revenue,data.currency)}</div>}
+                </td>
+                <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{c.conversions.toFixed(1)}</td>
+                <td style={{padding:"8px 4px",textAlign:"right",fontWeight:700,color:c.roas>=1?C.grn:C.red}}>{c.roas.toFixed(2)}x</td>
+              </tr>)}
+            </tbody>
+          </table>
+        </div>}
+        <div style={{color:C.mut,fontSize:11,marginBottom:16}}>{sr?"Klikni na kampanju za detalje (proizvodi, ad grupe).":"Click a campaign for details (products, ad groups)."}</div>
+
+        {(data.unattributed.revenue>0||data.unattributed.conversions>0)&&<div style={{background:"rgba(255,255,255,0.02)",border:`1px solid ${C.brd}`,borderRadius:12,padding:"12px 16px",color:C.mut,fontSize:12}}>
+          ℹ️ {sr?"Neraspoređeno":"Unattributed"}: {fmtMoney(data.unattributed.revenueEUR,"EUR")}{data.showRevenueNative?` (≈ ${fmtMoney(data.unattributed.revenue,data.currency)})`:""} {sr?"prihoda i":"revenue and"} {data.unattributed.conversions.toFixed(1)} {sr?"konverzija iz GA4 saobraćaja koji nije mogao da se poveže sa konkretnom kampanjom.":"conversions from GA4 traffic that couldn't be matched to a specific campaign."}
+        </div>}
+      </>}
+
+      {/* DRILL: KAMPANJA DETALJI */}
+      {drillCampaign&&!drillAdGroup&&<div>
+        <button onClick={resetDrill} style={{background:"none",border:"none",color:C.mut,cursor:"pointer",fontSize:12,padding:0,marginBottom:10}}>{sr?"← Sve kampanje":"← All campaigns"}</button>
+        <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 4px"}}>{drillCampaign.campaign_name}</h3>
+        <div style={{color:C.mut,fontSize:12,marginBottom:16}}>{drillCampaign.campaign_id} · {fmtMoney(drillCampaign.spendEUR,"EUR")} spend · {drillCampaign.roas.toFixed(2)}x ROAS</div>
+
+        <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:8}}>{sr?"Proizvodi prodati preko ove kampanje":"Products sold via this campaign"}</div>
+        {campaignProductsLoading&&<div style={{color:C.mut,fontSize:12,marginBottom:16}}>{sr?"Učitavam...":"Loading..."}</div>}
+        {!campaignProductsLoading&&campaignProducts&&<>
+          <input value={productSearch} onChange={e=>setProductSearch(e.target.value)} placeholder={sr?"🔍 Pretraži proizvod...":"🔍 Search product..."} style={{width:"100%",padding:"9px 12px",borderRadius:10,border:`1px solid ${C.brd}`,background:"rgba(255,255,255,0.03)",color:C.txt,fontSize:13,marginBottom:10,boxSizing:"border-box"}}/>
+          {sortedCampaignProducts().length===0&&<div style={{color:C.mut,fontSize:12,marginBottom:16}}>{sr?"Nema proizvoda za ovaj period.":"No products for this period."}</div>}
+          {sortedCampaignProducts().length>0&&<div style={{overflowX:"auto",marginBottom:20}}>
+            <table style={{width:"100%",fontSize:12,borderCollapse:"collapse"}}>
+              <thead>
+                <tr style={{color:C.mut,textAlign:"left"}}>
+                  <th onClick={()=>toggleProductSort("name")} style={{padding:"6px 4px",fontWeight:600,cursor:"pointer"}}>{sr?"Proizvod":"Product"}</th>
+                  <th onClick={()=>toggleProductSort("viewed")} style={{padding:"6px 4px",fontWeight:600,textAlign:"right",cursor:"pointer"}}>{sr?"Pregledi":"Viewed"}</th>
+                  <th onClick={()=>toggleProductSort("addedToCart")} style={{padding:"6px 4px",fontWeight:600,textAlign:"right",cursor:"pointer"}}>{sr?"Korpa":"Cart"}</th>
+                  <th onClick={()=>toggleProductSort("purchased")} style={{padding:"6px 4px",fontWeight:600,textAlign:"right",cursor:"pointer"}}>{sr?"Kupljeno":"Purchased"}</th>
+                  <th onClick={()=>toggleProductSort("revenue")} style={{padding:"6px 4px",fontWeight:600,textAlign:"right",cursor:"pointer"}}>{sr?"Prihod":"Revenue"}</th>
+                  <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Konverzija":"Conversion"}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedCampaignProducts().map((p,i)=><tr key={i} style={{borderTop:`1px solid ${C.brd}`}}>
+                  <td style={{padding:"7px 4px",color:C.txt}}>{p.name} <span style={{color:C.mut}}>({p.id})</span></td>
+                  <td style={{padding:"7px 4px",textAlign:"right",color:C.mut}}>{p.viewed.toLocaleString()}</td>
+                  <td style={{padding:"7px 4px",textAlign:"right",color:C.mut}}>{p.addedToCart.toLocaleString()}</td>
+                  <td style={{padding:"7px 4px",textAlign:"right",fontWeight:600,color:C.txt}}>{p.purchased.toLocaleString()}</td>
+                  <td style={{padding:"7px 4px",textAlign:"right",color:C.grn}}>{fmtMoney(p.revenue,campaignProducts.currency)}</td>
+                  <td style={{padding:"7px 4px",textAlign:"right",color:C.yel}}>{p.conversionRate.toFixed(1)}%</td>
+                </tr>)}
+              </tbody>
+            </table>
+          </div>}
+        </>}
+
+        <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:8}}>{sr?"Ad grupe":"Ad groups"}</div>
+        {adGroupsLoading&&<div style={{color:C.mut,fontSize:12}}>{sr?"Učitavam...":"Loading..."}</div>}
+        {!adGroupsLoading&&adGroups&&adGroups.items.length===0&&<div style={{color:C.mut,fontSize:12}}>{sr?"Nema ad grupa sa potrošnjom u ovom periodu.":"No ad groups with spend in this period."}</div>}
+        {!adGroupsLoading&&adGroups&&adGroups.items.length>0&&<div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",fontSize:12,borderCollapse:"collapse"}}>
+            <thead>
+              <tr style={{color:C.mut,textAlign:"left"}}>
+                <th style={{padding:"6px 4px",fontWeight:600}}>{sr?"Ad grupa":"Ad group"}</th>
+                <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Klikovi":"Clicks"}</th>
+                <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Impresije":"Impressions"}</th>
+                <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>Spend</th>
+                <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Prihod":"Revenue"}</th>
+                <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>ROAS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {adGroups.items.map((ag,i)=><tr key={i} onClick={()=>openAdGroup(ag)} style={{borderTop:`1px solid ${C.brd}`,cursor:"pointer"}}>
+                <td style={{padding:"7px 4px",color:C.acl,textDecoration:"underline"}}>{ag.name}</td>
+                <td style={{padding:"7px 4px",textAlign:"right",color:C.mut}}>{ag.clicks.toLocaleString()}</td>
+                <td style={{padding:"7px 4px",textAlign:"right",color:C.mut}}>{ag.impressions.toLocaleString()}</td>
+                <td style={{padding:"7px 4px",textAlign:"right",color:C.txt}}>{fmtMoney(ag.spendEUR,"EUR")}</td>
+                <td style={{padding:"7px 4px",textAlign:"right",color:C.grn}}>{fmtMoney(ag.revenueEUR,"EUR")}</td>
+                <td style={{padding:"7px 4px",textAlign:"right",fontWeight:700,color:ag.roas>=1?C.grn:C.red}}>{ag.roas.toFixed(2)}x</td>
+              </tr>)}
+            </tbody>
+          </table>
+        </div>}
       </div>}
 
-      {(data.unattributed.revenue>0||data.unattributed.conversions>0)&&<div style={{background:"rgba(255,255,255,0.02)",border:`1px solid ${C.brd}`,borderRadius:12,padding:"12px 16px",color:C.mut,fontSize:12}}>
-        ℹ️ {sr?"Neraspoređeno":"Unattributed"}: {fmtMoney(data.unattributed.revenueEUR,"EUR")}{data.showRevenueNative?` (≈ ${fmtMoney(data.unattributed.revenue,data.currency)})`:""} {sr?"prihoda i":"revenue and"} {data.unattributed.conversions.toFixed(1)} {sr?"konverzija iz GA4 saobraćaja koji nije mogao da se poveže sa konkretnom kampanjom.":"conversions from GA4 traffic that couldn't be matched to a specific campaign."}
+      {/* DRILL: AD GRUPA DETALJI (OGLASI) */}
+      {drillAdGroup&&<div>
+        <button onClick={()=>{setDrillAdGroup(null);setAds(null);}} style={{background:"none",border:"none",color:C.mut,cursor:"pointer",fontSize:12,padding:0,marginBottom:10}}>{sr?`← Nazad na ${drillCampaign.campaign_name}`:`← Back to ${drillCampaign.campaign_name}`}</button>
+        <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 16px"}}>{drillAdGroup.name}</h3>
+
+        <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:8}}>{sr?"Oglasi":"Ads"}</div>
+        {adsLoading&&<div style={{color:C.mut,fontSize:12}}>{sr?"Učitavam...":"Loading..."}</div>}
+        {!adsLoading&&ads&&ads.items.length===0&&<div style={{color:C.mut,fontSize:12}}>{sr?"Nema oglasa sa potrošnjom u ovom periodu.":"No ads with spend in this period."}</div>}
+        {!adsLoading&&ads&&ads.items.length>0&&<div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",fontSize:12,borderCollapse:"collapse"}}>
+            <thead>
+              <tr style={{color:C.mut,textAlign:"left"}}>
+                <th style={{padding:"6px 4px",fontWeight:600}}>{sr?"Oglas":"Ad"}</th>
+                <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Klikovi":"Clicks"}</th>
+                <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Impresije":"Impressions"}</th>
+                <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>Spend</th>
+                <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Prihod":"Revenue"}</th>
+                <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>ROAS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ads.items.map((a,i)=><tr key={i} style={{borderTop:`1px solid ${C.brd}`}}>
+                <td style={{padding:"7px 4px",color:C.txt}}>{a.name}</td>
+                <td style={{padding:"7px 4px",textAlign:"right",color:C.mut}}>{a.clicks.toLocaleString()}</td>
+                <td style={{padding:"7px 4px",textAlign:"right",color:C.mut}}>{a.impressions.toLocaleString()}</td>
+                <td style={{padding:"7px 4px",textAlign:"right",color:C.txt}}>{fmtMoney(a.spendEUR,"EUR")}</td>
+                <td style={{padding:"7px 4px",textAlign:"right",color:C.grn}}>{fmtMoney(a.revenueEUR,"EUR")}</td>
+                <td style={{padding:"7px 4px",textAlign:"right",fontWeight:700,color:a.roas>=1?C.grn:C.red}}>{a.roas.toFixed(2)}x</td>
+              </tr>)}
+            </tbody>
+          </table>
+        </div>}
       </div>}
     </>}
+
+    {mode==="byProduct"&&<div>
+      <div style={{display:"flex",gap:8,marginBottom:16}}>
+        <input value={byProductQuery} onChange={e=>setByProductQuery(e.target.value)} onKeyDown={e=>e.key==="Enter"&&runProductSearch()} placeholder={sr?"Ukucaj naziv proizvoda...":"Type product name..."} style={{flex:1,padding:"10px 14px",borderRadius:10,border:`1px solid ${C.brd}`,background:"rgba(255,255,255,0.03)",color:C.txt,fontSize:13,boxSizing:"border-box"}}/>
+        <button onClick={runProductSearch} disabled={byProductLoading||!byProductQuery.trim()} style={{padding:"10px 20px",borderRadius:10,border:"none",background:byProductLoading||!byProductQuery.trim()?"rgba(99,102,241,0.3)":"linear-gradient(135deg,#6366F1,#4f46e5)",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>{sr?"Pretraži":"Search"}</button>
+      </div>
+
+      {byProductLoading&&<div style={{color:C.mut,fontSize:13,textAlign:"center",padding:"20px 0"}}>{sr?"Tražim...":"Searching..."}</div>}
+      {byProductErr==="no_gads"&&<div style={{background:"rgba(0,212,255,0.08)",border:"1px solid rgba(0,212,255,0.2)",borderRadius:12,padding:"16px",color:C.txt,fontSize:13}}>🔗 {sr?"Google Ads nije povezan za ovog klijenta.":"Google Ads is not connected for this client."}</div>}
+      {byProductErr==="no_ga4"&&<div style={{background:"rgba(0,212,255,0.08)",border:"1px solid rgba(0,212,255,0.2)",borderRadius:12,padding:"16px",color:C.txt,fontSize:13}}>🔗 {sr?"GA4 nije povezan za ovog klijenta.":"GA4 is not connected for this client."}</div>}
+
+      {byProductData&&byProductData.noMatch&&<div style={{color:C.mut,fontSize:13,textAlign:"center",padding:"20px 0"}}>{sr?"Nema podudaranja za taj proizvod u ovom periodu.":"No matches for that product in this period."}</div>}
+
+      {byProductData&&!byProductData.noMatch&&<>
+        <div style={{color:C.mut,fontSize:11,marginBottom:12}}>{sr?"Prihod prikazan je za PRETRAŽENI proizvod. \"ROAS kampanje\" je za CELU kampanju, ne za ovaj proizvod (Google Ads ne prati trošak po pojedinačnom proizvodu).":"Revenue shown is for the SEARCHED product. \"Campaign ROAS\" is for the WHOLE campaign, not this product (Google Ads doesn't track cost per individual product)."}</div>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",fontSize:12,borderCollapse:"collapse"}}>
+            <thead>
+              <tr style={{color:C.mut,textAlign:"left"}}>
+                <th style={{padding:"6px 4px",fontWeight:600}}>{sr?"Kampanja":"Campaign"}</th>
+                <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Pregledi (proizvod)":"Viewed (product)"}</th>
+                <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Kupljeno (proizvod)":"Purchased (product)"}</th>
+                <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Prihod (proizvod)":"Revenue (product)"}</th>
+                <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"ROAS kampanje":"Campaign ROAS"}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {byProductData.results.map((r,i)=><tr key={i} style={{borderTop:`1px solid ${C.brd}`}}>
+                <td style={{padding:"7px 4px",color:C.txt}}>{r.campaign_name} <span style={{color:C.mut}}>({r.campaign_id})</span></td>
+                <td style={{padding:"7px 4px",textAlign:"right",color:C.mut}}>{r.productViewed.toLocaleString()}</td>
+                <td style={{padding:"7px 4px",textAlign:"right",fontWeight:600,color:C.txt}}>{r.productPurchased.toLocaleString()}</td>
+                <td style={{padding:"7px 4px",textAlign:"right",color:C.grn}}>{fmtMoney(r.productRevenue,byProductData.currency)}</td>
+                <td style={{padding:"7px 4px",textAlign:"right",fontWeight:700,color:r.campaignRoas>=1?C.grn:C.red}}>{r.campaignRoas.toFixed(2)}x</td>
+              </tr>)}
+            </tbody>
+          </table>
+        </div>
+      </>}
+    </div>}
+
+    {mode==="byCategory"&&<div>
+      {categoryListLoading&&<div style={{color:C.mut,fontSize:13,textAlign:"center",padding:"20px 0"}}>{sr?"Učitavam kategorije...":"Loading categories..."}</div>}
+      {!categoryListLoading&&categoryList&&!categoryList.hasCategories&&<div style={{color:C.mut,fontSize:13,textAlign:"center",padding:"20px 0"}}>{sr?"Ovaj klijent nema podešene kategorije proizvoda u GA4-u.":"This client doesn't have product categories set up in GA4."}</div>}
+
+      {!categoryListLoading&&categoryList&&categoryList.hasCategories&&!selectedCategory&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {categoryList.categories.map((c,i)=><button key={i} onClick={()=>openCategory(c.name)} style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:10,padding:"12px 16px",textAlign:"left",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{color:C.txt,fontWeight:600,fontSize:13}}>{c.name}</span>
+          <span style={{color:C.grn,fontSize:13,fontWeight:700}}>{fmtMoney(c.revenue,categoryList.currency)}</span>
+        </button>)}
+      </div>}
+
+      {selectedCategory&&<div>
+        <button onClick={()=>{setSelectedCategory(null);setCategoryData(null);}} style={{background:"none",border:"none",color:C.mut,cursor:"pointer",fontSize:12,padding:0,marginBottom:10}}>{sr?"← Sve kategorije":"← All categories"}</button>
+        <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 16px"}}>{selectedCategory}</h3>
+
+        {categoryDataLoading&&<div style={{color:C.mut,fontSize:13,textAlign:"center",padding:"20px 0"}}>{sr?"Učitavam...":"Loading..."}</div>}
+        {categoryData&&categoryData.noMatch&&<div style={{color:C.mut,fontSize:13,textAlign:"center",padding:"20px 0"}}>{sr?"Nema podudaranja za ovu kategoriju u ovom periodu.":"No matches for this category in this period."}</div>}
+
+        {categoryData&&!categoryData.noMatch&&<>
+          <div style={{color:C.mut,fontSize:11,marginBottom:12}}>{sr?"Prihod prikazan je za ovu KATEGORIJU. \"ROAS kampanje\" je za CELU kampanju, ne samo za ovu kategoriju.":"Revenue shown is for this CATEGORY. \"Campaign ROAS\" is for the WHOLE campaign, not just this category."}</div>
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",fontSize:12,borderCollapse:"collapse"}}>
+              <thead>
+                <tr style={{color:C.mut,textAlign:"left"}}>
+                  <th style={{padding:"6px 4px",fontWeight:600}}>{sr?"Kampanja":"Campaign"}</th>
+                  <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Pregledi (kat.)":"Viewed (cat.)"}</th>
+                  <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Kupljeno (kat.)":"Purchased (cat.)"}</th>
+                  <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"Prihod (kat.)":"Revenue (cat.)"}</th>
+                  <th style={{padding:"6px 4px",fontWeight:600,textAlign:"right"}}>{sr?"ROAS kampanje":"Campaign ROAS"}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {categoryData.results.map((r,i)=><tr key={i} style={{borderTop:`1px solid ${C.brd}`}}>
+                  <td style={{padding:"7px 4px",color:C.txt}}>{r.campaign_name} <span style={{color:C.mut}}>({r.campaign_id})</span></td>
+                  <td style={{padding:"7px 4px",textAlign:"right",color:C.mut}}>{r.categoryViewed.toLocaleString()}</td>
+                  <td style={{padding:"7px 4px",textAlign:"right",fontWeight:600,color:C.txt}}>{r.categoryPurchased.toLocaleString()}</td>
+                  <td style={{padding:"7px 4px",textAlign:"right",color:C.grn}}>{fmtMoney(r.categoryRevenue,categoryData.currency)}</td>
+                  <td style={{padding:"7px 4px",textAlign:"right",fontWeight:700,color:r.campaignRoas>=1?C.grn:C.red}}>{r.campaignRoas.toFixed(2)}x</td>
+                </tr>)}
+              </tbody>
+            </table>
+          </div>
+        </>}
+      </div>}
+    </div>}
   </div>;
 }
 
