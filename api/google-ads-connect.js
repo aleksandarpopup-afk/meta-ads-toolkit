@@ -26,7 +26,7 @@ async function gadsSearch(customerId, accessToken, query, loginCustomerId) {
   let allResults = [];
   let pageToken;
   do {
-    const body = { query, pageSize: 10000 };
+    const body = { query };
     if (pageToken) body.pageToken = pageToken;
     const r = await fetch(`https://googleads.googleapis.com/${GADS_VERSION}/customers/${customerId}/googleAds:search`, {
       method: "POST",
