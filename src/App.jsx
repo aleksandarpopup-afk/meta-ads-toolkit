@@ -3634,19 +3634,20 @@ function CampaignsMod({t,lang}){
     {err&&err!=="no_gads"&&err!=="no_ga4"&&!loading&&<div style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:12,padding:"16px",color:C.red,fontSize:13,marginBottom:16}}>⚠️ {err}</div>}
 
     {data&&!loading&&<>
-      {data.currencyMismatch&&<div style={{background:"rgba(245,158,11,0.08)",border:"1px solid rgba(245,158,11,0.25)",borderRadius:12,padding:"12px 16px",color:C.yel,fontSize:12,marginBottom:16}}>
-        ℹ️ {sr?`Google Ads koristi ${data.gadsCurrency}, a GA4 ${data.currency} - spend je konvertovan po kursu iz ${data.rateDate?new Date(data.rateDate).toLocaleDateString("sr-RS"):"?"} da bi ROAS bio tačan.`:`Google Ads uses ${data.gadsCurrency}, GA4 uses ${data.currency} - spend was converted using the exchange rate from ${data.rateDate?new Date(data.rateDate).toLocaleDateString():"?"} so ROAS is accurate.`}
+      {(data.showSpendNative||data.showRevenueNative)&&<div style={{background:"rgba(245,158,11,0.08)",border:"1px solid rgba(245,158,11,0.25)",borderRadius:12,padding:"12px 16px",color:C.yel,fontSize:12,marginBottom:16}}>
+        ℹ️ {sr?`Prikazano u EUR kao glavnoj valuti (originalna valuta ispod, malim slovima), konvertovano po kursu iz ${data.rateDate?new Date(data.rateDate).toLocaleDateString("sr-RS"):"?"}.`:`Shown in EUR as the primary currency (original currency below, in small text), converted using the exchange rate from ${data.rateDate?new Date(data.rateDate).toLocaleDateString():"?"}.`}
       </div>}
 
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:20}}>
         <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px"}}>
           <div style={{color:C.mut,fontSize:11,marginBottom:4}}>{sr?"Ukupan spend":"Total spend"}</div>
-          <div style={{color:C.txt,fontSize:18,fontWeight:800}}>{fmtMoney(data.totalSpend,data.gadsCurrency)}</div>
-          {data.currencyMismatch&&<div style={{color:C.mut,fontSize:11,marginTop:2}}>≈ {fmtMoney(data.totalSpendConverted,data.currency)}</div>}
+          <div style={{color:C.txt,fontSize:18,fontWeight:800}}>{fmtMoney(data.totalSpendEUR,"EUR")}</div>
+          {data.showSpendNative&&<div style={{color:C.mut,fontSize:11,marginTop:2}}>≈ {fmtMoney(data.totalSpend,data.gadsCurrency)}</div>}
         </div>
         <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px"}}>
           <div style={{color:C.mut,fontSize:11,marginBottom:4}}>{sr?"Ukupan prihod":"Total revenue"}</div>
-          <div style={{color:C.grn,fontSize:18,fontWeight:800}}>{fmtMoney(data.totalRevenue,data.currency)}</div>
+          <div style={{color:C.grn,fontSize:18,fontWeight:800}}>{fmtMoney(data.totalRevenueEUR,"EUR")}</div>
+          {data.showRevenueNative&&<div style={{color:C.mut,fontSize:11,marginTop:2}}>≈ {fmtMoney(data.totalRevenue,data.currency)}</div>}
         </div>
         <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px"}}>
           <div style={{color:C.mut,fontSize:11,marginBottom:4}}>ROAS</div>
@@ -3675,10 +3676,13 @@ function CampaignsMod({t,lang}){
               <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{c.clicks.toLocaleString()}</td>
               <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{c.impressions.toLocaleString()}</td>
               <td style={{padding:"8px 4px",textAlign:"right",color:C.txt}}>
-                {fmtMoney(c.spend,data.gadsCurrency)}
-                {data.currencyMismatch&&<div style={{color:C.mut,fontSize:10}}>≈ {fmtMoney(c.spendConverted,data.currency)}</div>}
+                {fmtMoney(c.spendEUR,"EUR")}
+                {data.showSpendNative&&<div style={{color:C.mut,fontSize:10}}>≈ {fmtMoney(c.spend,data.gadsCurrency)}</div>}
               </td>
-              <td style={{padding:"8px 4px",textAlign:"right",color:C.grn}}>{fmtMoney(c.revenue,data.currency)}</td>
+              <td style={{padding:"8px 4px",textAlign:"right",color:C.grn}}>
+                {fmtMoney(c.revenueEUR,"EUR")}
+                {data.showRevenueNative&&<div style={{color:C.mut,fontSize:10}}>≈ {fmtMoney(c.revenue,data.currency)}</div>}
+              </td>
               <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{c.conversions.toFixed(1)}</td>
               <td style={{padding:"8px 4px",textAlign:"right",fontWeight:700,color:c.roas>=1?C.grn:C.red}}>{c.roas.toFixed(2)}x</td>
             </tr>)}
@@ -3687,7 +3691,7 @@ function CampaignsMod({t,lang}){
       </div>}
 
       {(data.unattributed.revenue>0||data.unattributed.conversions>0)&&<div style={{background:"rgba(255,255,255,0.02)",border:`1px solid ${C.brd}`,borderRadius:12,padding:"12px 16px",color:C.mut,fontSize:12}}>
-        ℹ️ {sr?"Neraspoređeno":"Unattributed"}: {fmtMoney(data.unattributed.revenue,data.currency)} {sr?"prihoda i":"revenue and"} {data.unattributed.conversions.toFixed(1)} {sr?"konverzija iz GA4 saobraćaja koji nije mogao da se poveže sa konkretnom kampanjom.":"conversions from GA4 traffic that couldn't be matched to a specific campaign."}
+        ℹ️ {sr?"Neraspoređeno":"Unattributed"}: {fmtMoney(data.unattributed.revenueEUR,"EUR")}{data.showRevenueNative?` (≈ ${fmtMoney(data.unattributed.revenue,data.currency)})`:""} {sr?"prihoda i":"revenue and"} {data.unattributed.conversions.toFixed(1)} {sr?"konverzija iz GA4 saobraćaja koji nije mogao da se poveže sa konkretnom kampanjom.":"conversions from GA4 traffic that couldn't be matched to a specific campaign."}
       </div>}
     </>}
   </div>;
