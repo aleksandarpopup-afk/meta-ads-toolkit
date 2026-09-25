@@ -2578,10 +2578,10 @@ function MyClientsMod({t,lang,goMod}){
   };
 
   const addClient=async()=>{
-    const uid=localStorage.getItem("mat_user_id");
-    if(!uid||!newClientName.trim()) return;
+    if(!newClientName.trim()) return;
     setCreatingClient(true);
     try{
+      const uid=await getOrCreateUser();
       const r=await fetch("/api/clients",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
@@ -2592,8 +2592,12 @@ function MyClientsMod({t,lang,goMod}){
         setClients(prev=>[c,...prev]);
         setNewClientName("");
         setNewClientOpen(false);
+      } else {
+        alert(lang==="sr"?"Klijent nije sačuvan. Pokušaj ponovo.":"Client was not saved. Please try again.");
       }
-    }catch(e){}
+    }catch(e){
+      alert(lang==="sr"?"Klijent nije sačuvan. Proveri internet vezu i pokušaj ponovo.":"Client was not saved. Check your connection and try again.");
+    }
     setCreatingClient(false);
   };
 
@@ -3097,10 +3101,10 @@ function ProductIntelligenceMod({t,lang}){
   },[]);
 
   const addClient=async()=>{
-    const uid=localStorage.getItem("mat_user_id");
-    if(!uid||!newClientName.trim()) return;
+    if(!newClientName.trim()) return;
     setCreatingClient(true);
     try{
+      const uid=await getOrCreateUser();
       const r=await fetch("/api/clients",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
@@ -3111,8 +3115,12 @@ function ProductIntelligenceMod({t,lang}){
         setClients(prev=>[c,...prev]);
         setNewClientName("");
         setNewClientOpen(false);
+      } else {
+        alert(lang==="sr"?"Klijent nije sačuvan. Pokušaj ponovo.":"Client was not saved. Please try again.");
       }
-    }catch(e){}
+    }catch(e){
+      alert(lang==="sr"?"Klijent nije sačuvan. Proveri internet vezu i pokušaj ponovo.":"Client was not saved. Check your connection and try again.");
+    }
     setCreatingClient(false);
   };
 
@@ -3439,10 +3447,10 @@ function AskDataMod({t,lang}){
   },[messages,sending]);
 
   const addClient=async()=>{
-    const uid=localStorage.getItem("mat_user_id");
-    if(!uid||!newClientName.trim()) return;
+    if(!newClientName.trim()) return;
     setCreatingClient(true);
     try{
+      const uid=await getOrCreateUser();
       const r=await fetch("/api/clients",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
@@ -3453,8 +3461,12 @@ function AskDataMod({t,lang}){
         setClients(prev=>[c,...prev]);
         setNewClientName("");
         setNewClientOpen(false);
+      } else {
+        alert(lang==="sr"?"Klijent nije sačuvan. Pokušaj ponovo.":"Client was not saved. Please try again.");
       }
-    }catch(e){}
+    }catch(e){
+      alert(lang==="sr"?"Klijent nije sačuvan. Proveri internet vezu i pokušaj ponovo.":"Client was not saved. Check your connection and try again.");
+    }
     setCreatingClient(false);
   };
 
@@ -3585,10 +3597,10 @@ function CampaignsMod({t,lang}){
   },[]);
 
   const addClient=async()=>{
-    const uid=localStorage.getItem("mat_user_id");
-    if(!uid||!newClientName.trim()) return;
+    if(!newClientName.trim()) return;
     setCreatingClient(true);
     try{
+      const uid=await getOrCreateUser();
       const r=await fetch("/api/clients",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
@@ -3599,8 +3611,12 @@ function CampaignsMod({t,lang}){
         setClients(prev=>[c,...prev]);
         setNewClientName("");
         setNewClientOpen(false);
+      } else {
+        alert(lang==="sr"?"Klijent nije sačuvan. Pokušaj ponovo.":"Client was not saved. Please try again.");
       }
-    }catch(e){}
+    }catch(e){
+      alert(lang==="sr"?"Klijent nije sačuvan. Proveri internet vezu i pokušaj ponovo.":"Client was not saved. Check your connection and try again.");
+    }
     setCreatingClient(false);
   };
 
@@ -4186,6 +4202,8 @@ export default function App(){
         window.history.replaceState({},"",window.location.pathname);
       }
     }
+    // Svaki novi posetilac odmah dobija svoj ID (ako ga vec nema)
+    getOrCreateUser();
   },[]);
 
   // Generate QR code when modal opens
