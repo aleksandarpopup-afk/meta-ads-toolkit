@@ -3606,18 +3606,39 @@ function CampaignsMod({t,lang}){
 
   const periodQS=()=>customFrom&&customTo&&period==="custom" ? `from=${customFrom}&to=${customTo}` : `days=${period}`;
 
+  const lastLoadRef=useRef(null);
+
+  const fetchWithTimeout=async(url,ms=40000)=>{
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),ms);
+    try{
+      const res=await fetch(url,{signal:controller.signal});
+      clearTimeout(timer);
+      return res;
+    }catch(e){
+      clearTimeout(timer);
+      if(e.name==="AbortError") throw new Error("timeout");
+      throw e;
+    }
+  };
+
   const load=async(client,qsOverride)=>{
     const qs=qsOverride||periodQS();
+    lastLoadRef.current={client,qs};
     setLoading(true); setErr(""); setData(null); setCampaignSearch("");
     resetDrill();
     try{
-      const res=await fetch(`/api/campaigns?client_id=${client.id}&${qs}`);
+      const res=await fetchWithTimeout(`/api/campaigns?client_id=${client.id}&${qs}`);
       const d=await res.json();
       if(res.status===404){ setErr(d.error==="no_gads"?"no_gads":"no_ga4"); setLoading(false); return; }
       if(!res.ok) throw new Error(d.error||(sr?"Greška pri učitavanju":"Loading error"));
       setData(d);
-    }catch(e){ setErr(e.message); }
+    }catch(e){ setErr(e.message==="timeout"?"timeout":e.message); }
     setLoading(false);
+  };
+
+  const retryLoad=()=>{
+    if(lastLoadRef.current) load(lastLoadRef.current.client,lastLoadRef.current.qs);
   };
 
   const resetDrill=()=>{
@@ -3811,7 +3832,12 @@ function CampaignsMod({t,lang}){
       {err==="no_ga4"&&!loading&&<div style={{background:"rgba(0,212,255,0.08)",border:"1px solid rgba(0,212,255,0.2)",borderRadius:12,padding:"16px",color:C.txt,fontSize:13,marginBottom:16}}>
         🔗 {sr?"GA4 nije povezan za ovog klijenta. Idi u":"GA4 is not connected for this client. Go to"} <b>{sr?"Moji klijenti":"My Clients"}</b> {sr?"da ga povežeš.":"to connect it."}
       </div>}
-      {err&&err!=="no_gads"&&err!=="no_ga4"&&!loading&&<div style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:12,padding:"16px",color:C.red,fontSize:13,marginBottom:16}}>⚠️ {err}</div>}
+      {err==="timeout"&&!loading&&<div style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:12,padding:"16px",marginBottom:16}}>
+        <div style={{color:C.red,fontSize:13,fontWeight:700,marginBottom:6}}>⚠️ {sr?"Učitavanje podataka traje duže nego obično.":"Loading is taking longer than usual."}</div>
+        <div style={{color:C.mut,fontSize:12,marginBottom:12}}>{sr?"Pokušaj sa kraćim periodom (npr. 7 dana), ili pokušaj ponovo.":"Try a shorter period (e.g. 7 days), or try again."}</div>
+        <button onClick={retryLoad} style={{background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:8,color:C.red,fontSize:12,fontWeight:700,padding:"8px 16px",cursor:"pointer"}}>{sr?"🔄 Pokušaj ponovo":"🔄 Try again"}</button>
+      </div>}
+      {err&&err!=="no_gads"&&err!=="no_ga4"&&err!=="timeout"&&!loading&&<div style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:12,padding:"16px",color:C.red,fontSize:13,marginBottom:16}}>⚠️ {err}</div>}
 
       {data&&!loading&&!drillCampaign&&<>
         {(data.showSpendNative||data.showRevenueNative)&&<div style={{background:"rgba(245,158,11,0.08)",border:"1px solid rgba(245,158,11,0.25)",borderRadius:12,padding:"12px 16px",color:C.yel,fontSize:12,marginBottom:16}}>
