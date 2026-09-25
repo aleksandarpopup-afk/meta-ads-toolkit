@@ -2343,9 +2343,9 @@ Be specific. Use actual numbers from the screenshot.`;
               if(e.target.value==="__new__"){ setShowNewClientInput(true); setClientName(""); }
               else setClientName(e.target.value);
             }} style={{width:"100%",padding:"13px 12px",background:"rgba(255,255,255,0.06)",border:`1px solid ${C.brd}`,borderRadius:10,color:C.txt,fontSize:14,outline:"none",boxSizing:"border-box"}}>
-            <option value="">{sr?"— Bez klijenta —":"— No client —"}</option>
-            {clientsList.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}
-            <option value="__new__">+ {sr?"Novi klijent...":"New client..."}</option>
+            <option value="" style={{color:"#111"}}>{sr?"— Bez klijenta —":"— No client —"}</option>
+            {clientsList.map(c=><option key={c.id} value={c.name} style={{color:"#111"}}>{c.name}</option>)}
+            <option value="__new__" style={{color:"#111"}}>+ {sr?"Novi klijent...":"New client..."}</option>
           </select>}
           {showNewClientInput&&<div style={{display:"flex",gap:8}}>
             <div style={{flex:1}}><TIn v={clientName} ch={setClientName} ph={sr?"npr. Sport Reality MNE":"e.g. Sport Reality MNE"}/></div>
