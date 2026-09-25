@@ -3,24 +3,6 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 
-// Supabase/PostgREST podrazumevano vraća samo prvih ~1000 redova po pozivu - za klijenta sa
-// puno kampanja x dugačak period to se lako pređe, pa moramo eksplicitno da "paginiramo" (Range zaglavlje)
-// da sigurno pokupimo SVE redove, ne samo prvih 1000.
-async function fetchAllSupabaseRows(url, headers) {
-  let allRows = [];
-  let offset = 0;
-  const pageSize = 1000;
-  while (true) {
-    const r = await fetch(url, { headers: { ...headers, Range: `${offset}-${offset + pageSize - 1}` } });
-    const rows = await r.json();
-    if (!Array.isArray(rows)) break;
-    allRows = allRows.concat(rows);
-    if (rows.length < pageSize) break;
-    offset += pageSize;
-  }
-  return allRows;
-}
-
 async function refreshAccessToken(refresh_token) {
   const r = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -111,20 +93,26 @@ export default async function handler(req, res) {
     const { property_id, refresh_token, currency_code } = ga4ConnData[0];
     const ga4Currency = currency_code || "EUR";
 
-    // 3. Spend/klikovi/impresije - IZ NAŠE BAZE (već sinhronizovano cron poslom, brzo, bez novog API poziva)
-    const spendRows = await fetchAllSupabaseRows(
-      `${SUPABASE_URL}/rest/v1/google_ads_daily_spend?client_id=eq.${client_id}&date=gte.${startStr}&date=lte.${endStr}&select=campaign_id,campaign_name,spend,clicks,impressions`,
-      supaHeaders
-    );
+    // 3. Spend/klikovi/impresije PO KAMPANJI - VEĆ SABRANO u bazi (Postgres funkcija), ne povlačimo
+    // hiljade pojedinačnih dnevnih redova da bismo ih ručno sabirali u JS-u (to je bio uzrok sporosti
+    // kod klijenata sa puno kampanja x dug period - i do nekoliko minuta, ponekad i timeout).
+    const spendRpcR = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_campaign_spend_totals`, {
+      method: "POST",
+      headers: { ...supaHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify({ p_client_id: parseInt(client_id), p_start: startStr, p_end: endStr })
+    });
+    const spendTotals = await spendRpcR.json();
+    if (!spendRpcR.ok) throw new Error(JSON.stringify(spendTotals));
 
     const byCampaign = {};
-    for (const row of spendRows) {
-      if (!byCampaign[row.campaign_id]) {
-        byCampaign[row.campaign_id] = { campaign_id: row.campaign_id, campaign_name: row.campaign_name, spend: 0, clicks: 0, impressions: 0 };
-      }
-      byCampaign[row.campaign_id].spend += parseFloat(row.spend) || 0;
-      byCampaign[row.campaign_id].clicks += parseInt(row.clicks) || 0;
-      byCampaign[row.campaign_id].impressions += parseInt(row.impressions) || 0;
+    for (const row of spendTotals) {
+      byCampaign[row.campaign_id] = {
+        campaign_id: row.campaign_id,
+        campaign_name: row.campaign_name,
+        spend: parseFloat(row.total_spend) || 0,
+        clicks: parseInt(row.total_clicks) || 0,
+        impressions: parseInt(row.total_impressions) || 0
+      };
     }
 
     // 4. Revenue/kupovine PO KAMPANJI - ŽIVO iz GA4, filtrirano po sessionGoogleAdsCampaignId (auto-tagging, ne UTM)
