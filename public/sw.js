@@ -15,8 +15,30 @@ self.addEventListener("activate", e => {
 
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
+
+  const url = new URL(e.request.url);
+
+  // API pozivi su UVEK živi, dinamički podaci - NIKAD ih ne služimo iz cache-a.
+  // Ako mreža otkaže/istekne, vraćamo PRAVU Response grešku (ne undefined!) - to je bio uzrok
+  // "TypeError: Failed to convert value to 'Response'" bag-a koji je zamrzavao app u beskonačnom loaderu.
+  if (url.pathname.startsWith("/api/")) {
+    e.respondWith(
+      fetch(e.request).catch(() =>
+        new Response(JSON.stringify({ error: "network_error" }), {
+          status: 503,
+          headers: { "Content-Type": "application/json" }
+        })
+      )
+    );
+    return;
+  }
+
+  // Za sve ostalo (statični fajlovi, navigacija) - mreža prvo, cache kao rezerva,
+  // a ako ni cache nema taj fajl, vraćamo index.html umesto undefined (SPA fallback).
   e.respondWith(
-    fetch(e.request).catch(() => caches.match(e.request))
+    fetch(e.request).catch(() =>
+      caches.match(e.request).then(cached => cached || caches.match("/index.html"))
+    )
   );
 });
 
