@@ -46,11 +46,13 @@ async function bulkUpsertSpend(rows, headers) {
   const chunkSize = 500;
   for (let i = 0; i < rows.length; i += chunkSize) {
     const chunk = rows.slice(i, i + chunkSize);
-    await fetch(`${SUPABASE_URL}/rest/v1/google_ads_daily_spend?on_conflict=client_id,campaign_id,date`, {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/google_ads_daily_spend?on_conflict=client_id,campaign_id,date`, {
       method: "POST",
       headers: { ...headers, Prefer: "resolution=merge-duplicates" },
       body: JSON.stringify(chunk)
     });
+    // Ranije se greska upisa tiho ignorisala; sada se prijavljuje u rezultatu sync-a
+    if (!r.ok) throw new Error(`Upsert failed: ${r.status} ${await r.text()}`);
   }
 }
 
@@ -106,6 +108,12 @@ export default async function handler(req, res) {
           }));
 
         await bulkUpsertSpend(rows, headers);
+        // Oznaka uspesnog sync-a (koristi Budget Pacing da zna do kog dana su podaci sveži)
+        await fetch(`${SUPABASE_URL}/rest/v1/google_ads_connections?id=eq.${conn.id}`, {
+          method: "PATCH",
+          headers,
+          body: JSON.stringify({ last_synced_at: new Date().toISOString() })
+        }).catch(() => {});
         synced++;
       } catch (e) {
         errors.push({ client_id: conn.client_id, error: e.message });
