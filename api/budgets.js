@@ -30,6 +30,86 @@ async function sb(path, opts = {}) {
 
 const isNum = (v) => typeof v === "number" && isFinite(v) && v >= 0;
 
+// Datum "YYYY-MM-DD" u UTC (Vercel radi u UTC; jutarnji sync u 05:05 UTC je isti dan i u Srbiji)
+const utcDay = (d) => d.toISOString().slice(0, 10);
+const addDays = (s, n) => { const d = new Date(s + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return utcDay(d); };
+
+// Konverzija preko EUR kao pivot valute (isti princip kao u ostatku app-a)
+function convert(amount, from, to, rates) {
+  if (!from || !to || from === to) return { value: amount, ok: true };
+  const rf = from === "EUR" ? 1 : rates && rates[from];
+  const rt = to === "EUR" ? 1 : rates && rates[to];
+  if (!rf || !rt) return { value: amount, ok: false };
+  return { value: (amount / rf) * rt, ok: true };
+}
+
+// Google Ads budzeti povezanih klijenata: potrosnja se racuna automatski iz google_ads_daily_spend.
+// Za svaki dan se pravi kumulativni "unos", pa grafikon i racunica rade isto kao kod rucnog unosa.
+async function attachGoogleAdsSpend(budgets) {
+  const gBudgets = budgets.filter((b) => b.platform === "google_ads");
+  if (!gBudgets.length) return budgets;
+  const clientIds = [...new Set(gBudgets.map((b) => Number(b.client_id)))];
+  const conns = await sb(
+    `google_ads_connections?client_id=in.(${clientIds.join(",")})&select=client_id,currency_code,last_synced_at,updated_at&order=updated_at.desc`
+  );
+  const connByClient = {};
+  (conns || []).forEach((c) => { if (!connByClient[c.client_id]) connByClient[c.client_id] = c; });
+  if (!Object.keys(connByClient).length) return budgets;
+
+  let rates = null;
+  try {
+    const fx = await sb("exchange_rates?id=eq.1&select=rates");
+    rates = fx && fx[0] ? fx[0].rates : null;
+  } catch (e) { rates = null; }
+
+  const todayUtc = utcDay(new Date());
+  const yesterday = addDays(todayUtc, -1);
+
+  for (const b of gBudgets) {
+    const conn = connByClient[b.client_id];
+    if (!conn) continue; // klijent nije povezan sa Google Ads -> rucni unos kao do sada
+    // Sync koji se desio dana D ima podatke zakljucno sa D-1
+    const syncedDay = conn.last_synced_at ? utcDay(new Date(conn.last_synced_at)) : null;
+    const dataThrough = syncedDay ? addDays(syncedDay, -1) : yesterday;
+    const stale = dataThrough < yesterday && todayUtc <= b.end_date;
+    const end = dataThrough < b.end_date ? dataThrough : b.end_date;
+    const auto = { source: "google_ads", data_through: dataThrough, stale, fx_ok: true, overlap: false };
+    b.budget_spend_entries = [];
+    if (end >= b.start_date) {
+      const daily = await sb("rpc/get_budget_gads_daily", {
+        method: "POST",
+        body: JSON.stringify({
+          p_client_id: Number(b.client_id), p_start: b.start_date, p_end: end,
+          p_filter: b.campaign_filter ? String(b.campaign_filter) : null,
+        }),
+      });
+      const byDay = {};
+      (daily || []).forEach((r) => { byDay[String(r.day).slice(0, 10)] = Number(r.spend) || 0; });
+      let cum = 0;
+      for (let d = b.start_date; d <= end; d = addDays(d, 1)) {
+        const c = convert(byDay[d] || 0, conn.currency_code || "EUR", b.currency || "EUR", rates);
+        if (!c.ok) auto.fx_ok = false;
+        cum += c.value;
+        b.budget_spend_entries.push({ entry_date: d, spent: Math.round(cum * 100) / 100, through_today: true, auto: true });
+      }
+    }
+    b.auto = auto;
+  }
+
+  // Upozorenje ako se dva Google Ads budzeta istog klijenta preklapaju (ista potrosnja bi se brojala dvaput)
+  const autoB = gBudgets.filter((b) => b.auto);
+  for (let i = 0; i < autoB.length; i++) {
+    for (let j = i + 1; j < autoB.length; j++) {
+      const a = autoB[i], c = autoB[j];
+      if (a.client_id !== c.client_id) continue;
+      if (a.end_date < c.start_date || c.end_date < a.start_date) continue;
+      const fa = (a.campaign_filter || "").toLowerCase(), fc = (c.campaign_filter || "").toLowerCase();
+      if (!fa || !fc || fa.includes(fc) || fc.includes(fa)) { a.auto.overlap = true; c.auto.overlap = true; }
+    }
+  }
+  return budgets;
+}
+
 // Proverava i cisti podatke jednog budzeta. Vraca {ok, value} ili {ok:false, error}.
 function cleanBudget(b, partial = false) {
   const out = {};
@@ -64,6 +144,10 @@ function cleanBudget(b, partial = false) {
     out.currency = cur;
   }
   if (b.note !== undefined) out.note = b.note ? String(b.note).slice(0, 200) : null;
+  if (b.campaign_filter !== undefined) {
+    const f = b.campaign_filter ? String(b.campaign_filter).trim().slice(0, 100) : "";
+    out.campaign_filter = f || null;
+  }
   return { ok: true, value: out };
 }
 
@@ -97,7 +181,14 @@ export default async function handler(req, res) {
         `&select=*,clients(id,name),budget_spend_entries(id,entry_date,spent,through_today)` +
         `&order=start_date.asc&budget_spend_entries.order=entry_date.asc`
       );
-      return res.status(200).json(Array.isArray(rows) ? rows : []);
+      const list = Array.isArray(rows) ? rows : [];
+      try {
+        await attachGoogleAdsSpend(list);
+      } catch (e) {
+        // Ako automatika ne uspe, budzeti se i dalje prikazuju sa rucnim unosima
+        list.forEach((b) => { if (b.platform === "google_ads" && !b.auto) b.auto_error = true; });
+      }
+      return res.status(200).json(list);
     }
 
     // ── POST: novi budzeti (action "create") ili dnevni unos potrosnje (action "entries")
@@ -135,7 +226,7 @@ export default async function handler(req, res) {
           if (!DATE_RE.test(e.entry_date || "")) return res.status(400).json({ error: "Invalid entry_date" });
           clean.push({ budget_id: bid, spent, entry_date: e.entry_date, through_today: !!e.through_today });
         }
-        // Samo budzeti ovog korisnika
+        // Samo budzeti ovog korisnika (automatski Google Ads budzeti se ne unose rucno, ali ni ne smetaju)
         const ids = [...new Set(clean.map((e) => e.budget_id))];
         const owned = await sb(`budgets?user_id=eq.${userId}&id=in.(${ids.join(",")})&select=id`);
         const ownedSet = new Set((owned || []).map((r) => Number(r.id)));
