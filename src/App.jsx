@@ -61,11 +61,8 @@ const T={
     appTitle:"Meta Ads Toolkit", appSub:"Profesionalni alati za performance marketing",
     sel:"Odaberi alat", selSub:"Svaki alat možeš koristiti nezavisno", back:"← Nazad",
     m1t:"Health Check", m1s:"Brza dijagnoza kampanje iz screenshota ili CSV-a",
-    m8t:"Report Generator", m8s:"Profesionalni izveštaj sa PDF exportom",
-    m9t:"Uvoz podataka", m9s:"Analiza uvezenih podataka",
     m2t:"Budget Pacing", m2s:"Tempo potrošnje po klijentu, underspend i overspend na prvi pogled",
     m10t:"Clients", m10s:"Svi klijenti i povezani GA4 i Google Ads nalozi",
-    m11t:"Time Machine", m11s:"Izveštaj i grafikon za period",
     m12t:"Product Intelligence", m12s:"Svaki proizvod, od pregleda do prodaje",
     m13t:"Ask Your Data", m13s:"Pitaj bilo šta o podacima klijenta, odgovor za par sekundi",
     m14t:"Campaign Intelligence", m14s:"Šta svaka kampanja stvarno donosi",
@@ -74,52 +71,6 @@ const T={
     analyze:"Analiziraj →", 
     newA:"← Nova analiza", poor:"Kritično", ok:"Prosečno", good:"Odlično",
     nxt:"Dalje →", prv:"←", res:"Rezultati", s1:"Osnove", s2:"Metrike", s3:"Targeting & Kreativa",
-    bm_step3:"Uvezeni podaci za analizu",
-    bm_noData:"Još uvek nema uvezenih podataka.",
-    bm_noDataSub:"Za analizu screenshota ili CSV-a koristi Report Generator.",
-    bm_dataTitle:"Uvezeni podaci",
-    bm_source:"Izvor",
-    bm_date:"Datum uvoza",
-    bm_dateRange:"Period",
-    bm_tables:"Tabele",
-    bm_rows:"redova",
-    bm_analyze:"Analiziraj uvezene podatke →",
-    bm_clear:"Obriši podatke",
-    bm_analyzing:"Analizira uvezene podatke...",
-    rg_title:"Report Generator",
-    rg_sub:"Profesionalni izveštaj za klijenta sa PDF exportom",
-    rg_single:"Single Period Report",
-    rg_single_s:"Jedan screenshot – kompletan izveštaj",
-    rg_compare:"Period Comparison",
-    rg_compare_s:"Dva screenshota – poređenje perioda",
-    rg_client:"Naziv klijenta / naloga",
-    rg_clientPh:"npr. Fashion Brand d.o.o.",
-    rg_period:"Period",
-    rg_periodPh:"npr. Jun 2025",
-    rg_periodA:"Period A (stariji)",
-    rg_periodAPh:"npr. Jun 2024",
-    rg_periodB:"Period B (noviji)",
-    rg_periodBPh:"npr. Jun 2025",
-    rg_upload:"Upload screenshot",
-    rg_uploadA:"Upload screenshot – Period A",
-    rg_uploadB:"Upload screenshot – Period B",
-    rg_drag:"Prevuci screenshot ovde",
-    rg_dragSub:"ili klikni da odabereš fajl",
-    rg_generate:"Generiši izveštaj →",
-    rg_generating:"Generišem izveštaj...",
-    rg_pdf:"📥 Izvezi kao PDF",
-    rg_newReport:"← Novi izveštaj",
-    rg_execSum:"Executive Summary",
-    rg_metricsFound:"Identifikovane metrike",
-    rg_issues:"Ključni problemi",
-    rg_good:"Šta radi dobro",
-    rg_actions:"Prioritetne akcije",
-    rg_strategic:"Strateške preporuke",
-    rg_comparison:"Poređenje perioda",
-    rg_metric:"Metrika",
-    rg_change:"Promena",
-    rg_aiComment:"Komentar",
-    rg_generatedBy:"Generisano putem Meta Ads Toolkit",
     hTitle:"Dijagnoza Meta kampanje", hSub:"Unesi podatke i dobij profesionalnu analizu sa konkretnim preporukama.",
     hName:"Naziv kampanje", hNamePh:"npr. Retargeting – Jun 2025",
     hGoal:"Cilj kampanje", hGoals:["Konverzije / Prodaja","Lead Generation","Traffic","Brand Awareness","Katalog / DPA"],
@@ -147,17 +98,13 @@ const T={
     hMAN:"Analiza metrika", hTAN:"Analiza targetiranja", hCAN:"Analiza kreative",
     hPRI:"Prioritetne akcije – uradi odmah", hSTR:"Strateške preporuke",
     hGl:"Cilj", hMsub:"analiziranih metrika",
-    bIS:"Idealna potrošnja do danas", 
   },
   en:{
     appTitle:"Meta Ads Toolkit", appSub:"Professional tools for performance marketing",
     sel:"Select a tool", selSub:"Each tool can be used independently", back:"← Back",
     m1t:"Health Check", m1s:"Quick campaign diagnosis from a screenshot or CSV",
-    m8t:"Report Generator", m8s:"Professional report with PDF export",
-    m9t:"Data import", m9s:"Analysis of imported data",
     m2t:"Budget Pacing", m2s:"Spend pace per client, underspend and overspend at a glance",
     m10t:"Clients", m10s:"All clients and connected GA4 and Google Ads accounts",
-    m11t:"Time Machine", m11s:"Report and chart for any period",
     m12t:"Product Intelligence", m12s:"Every product, from view to sale",
     m13t:"Ask Your Data", m13s:"Ask anything about your client's data, answers in seconds",
     m14t:"Campaign Intelligence", m14s:"What every campaign really delivers",
@@ -166,18 +113,6 @@ const T={
     analyze:"Analyze →", 
     newA:"← New Analysis", poor:"Critical", ok:"Average", good:"Excellent",
     nxt:"Next →", prv:"←", res:"Results", s1:"Basics", s2:"Metrics", s3:"Targeting & Creative",
-    bm_step3:"Imported data to analyze",
-    bm_noData:"No imported data yet.",
-    bm_noDataSub:"To analyze a screenshot or CSV, use Report Generator.",
-    bm_dataTitle:"Imported Data",
-    bm_source:"Source",
-    bm_date:"Import date",
-    bm_dateRange:"Period",
-    bm_tables:"Tables",
-    bm_rows:"rows",
-    bm_analyze:"Analyze imported data →",
-    bm_clear:"Clear data",
-    bm_analyzing:"Analyzing imported data...",
     hTitle:"Diagnose your Meta campaign", hSub:"Enter your data and get a professional analysis with concrete recommendations.",
     hName:"Campaign Name", hNamePh:"e.g. Retargeting – June 2025",
     hGoal:"Campaign Objective", hGoals:["Conversions / Sales","Lead Generation","Traffic","Brand Awareness","Catalog / DPA"],
@@ -205,41 +140,6 @@ const T={
     hMAN:"Metrics Analysis", hTAN:"Targeting Analysis", hCAN:"Creative Analysis",
     hPRI:"Priority Actions – Do Now", hSTR:"Strategic Recommendations",
     hGl:"Goal", hMsub:"metrics analyzed",
-    bIS:"Ideal spend to date", 
-    rg_title:"AI Report Generator",
-    rg_sub:"Professional client report with PDF export",
-    rg_single:"Single Period Report",
-    rg_single_s:"One screenshot – complete report",
-    rg_compare:"Period Comparison",
-    rg_compare_s:"Two screenshots – period comparison",
-    rg_client:"Client / Account Name",
-    rg_clientPh:"e.g. Fashion Brand LLC",
-    rg_period:"Period",
-    rg_periodPh:"e.g. June 2025",
-    rg_periodA:"Period A (older)",
-    rg_periodAPh:"e.g. June 2024",
-    rg_periodB:"Period B (newer)",
-    rg_periodBPh:"e.g. June 2025",
-    rg_upload:"Upload screenshot",
-    rg_uploadA:"Upload screenshot – Period A",
-    rg_uploadB:"Upload screenshot – Period B",
-    rg_drag:"Drag screenshot here",
-    rg_dragSub:"or click to select file",
-    rg_generate:"Generate Report →",
-    rg_generating:"Generating report...",
-    rg_pdf:"📥 Export as PDF",
-    rg_newReport:"← New Report",
-    rg_execSum:"Executive Summary",
-    rg_metricsFound:"Identified Metrics",
-    rg_issues:"Key Issues",
-    rg_good:"What's Working",
-    rg_actions:"Priority Actions",
-    rg_strategic:"Strategic Recommendations",
-    rg_comparison:"Period Comparison",
-    rg_metric:"Metric",
-    rg_change:"Change",
-    rg_aiComment:"Comment",
-    rg_generatedBy:"Generated by Meta Ads Toolkit",
   }
 };
 
@@ -1450,9 +1350,320 @@ function rsPdfDoc({rep,kpis,camps,unattr,ai,sr,chartImg}){
   };
 }
 
+// ── REPORT STUDIO: UVOZ IZ SCREENSHOTA / FAJLA ──────────────────────────────
+const RS_SOURCES=[{k:"meta",l:"Meta"},{k:"google_ads",l:"Google Ads"},{k:"ga4",l:"GA4"},{k:"looker",l:"Looker Studio"},{k:"other",l:"Other"}];
+const rsSourceName=(k,sr)=>k==="other"?(sr?"Ostalo":"Other"):(RS_SOURCES.find(s=>s.k===k)||{l:k}).l;
+
+// Smanjuje sliku (najvise 2000 px) i vraca base64 JPEG bez prefiksa, da zahtev ne bude prevelik
+function rsImageToJpeg(dataUrl){
+  return new Promise((resolve,reject)=>{
+    const img=new Image();
+    img.onload=()=>{
+      const max=2000, sc=Math.min(1,max/Math.max(img.width,img.height));
+      const cv=document.createElement("canvas"); cv.width=Math.round(img.width*sc); cv.height=Math.round(img.height*sc);
+      const g=cv.getContext("2d"); g.fillStyle="#fff"; g.fillRect(0,0,cv.width,cv.height); g.drawImage(img,0,0,cv.width,cv.height);
+      resolve(cv.toDataURL("image/jpeg",0.88).split(",")[1]);
+    };
+    img.onerror=reject;
+    img.src=dataUrl;
+  });
+}
+
+// Markdown (naslovi, tacke, tabele, pasusi) -> pdfmake elementi
+function rsMdToPdf(md){
+  const out=[]; const lines=String(md||"").split("\n"); let i=0;
+  const isSep=l=>/^\|?\s*:?-{2,}/.test(l.trim())&&/^[|:\-\s]+$/.test(l.trim());
+  const cells=l=>l.trim().replace(/^\|/,"").replace(/\|$/,"").split("|").map(c=>c.trim());
+  while(i<lines.length){
+    const l=lines[i];
+    if(/^---+$/.test(l.trim())){i++;continue;}
+    if(l.trim().startsWith("|")){
+      const rows=[];
+      while(i<lines.length&&lines[i].trim().startsWith("|")){ if(!isSep(lines[i])) rows.push(cells(lines[i])); i++; }
+      if(rows.length){
+        const n=Math.max(...rows.map(r=>r.length));
+        const body=rows.map((r,ri)=>{const rr=[...r]; while(rr.length<n) rr.push(""); return rr.map((c,ci)=>({text:rsRich(c),bold:ri===0,color:ri===0?"#374151":"#1f2937",fillColor:ri===0?"#f3f4f6":(ri%2===0?"#fafafa":null),alignment:ci>0&&/^[\d\s.,%€$+\-−x]+$/.test(c.replace(/\*\*/g,""))?"right":"left"}));});
+        out.push({table:{headerRows:1,dontBreakRows:true,widths:Array(n).fill("*"),body},fontSize:8.5,
+          layout:{hLineWidth:(k,node)=>k===0||k===node.table.body.length?0:0.5,vLineWidth:()=>0,hLineColor:()=>"#e5e7eb",paddingTop:()=>4,paddingBottom:()=>4},margin:[0,2,0,8]});
+      }
+      continue;
+    }
+    if(/^#{1,3} /.test(l)) out.push({text:rsRich(l.replace(/^#{1,3} /,"")).map(p=>typeof p==="string"?p:p.text),style:"h2"});
+    else if(/^[-*] /.test(l)) out.push({text:["•  ",...rsRich(l.slice(2))],margin:[4,0,0,3]});
+    else if(/^\d+\. /.test(l)) out.push({text:rsRich(l),margin:[4,0,0,3]});
+    else if(l.trim()) out.push({text:rsRich(l),margin:[0,0,0,5]});
+    i++;
+  }
+  return out;
+}
+
+function rsPdfDocMd({title,clientName,subtitle,md,sr}){
+  const created=new Date().toLocaleDateString(sr?"sr-RS":"en-GB");
+  return {
+    pageSize:"A4", pageMargins:[36,36,36,46],
+    info:{title:`${clientName} – ${title}`},
+    defaultStyle:{font:"Roboto",fontSize:9.5,color:"#1f2937",lineHeight:1.2},
+    styles:{h2:{fontSize:9.5,bold:true,color:"#4338ca",characterSpacing:0.8,margin:[0,14,0,6]}},
+    footer:(cur,total)=>({columns:[
+      {text:`${sr?"Napravljeno":"Created"} ${created}`,fontSize:7.5,color:"#9ca3af"},
+      {text:`${cur} / ${total}`,alignment:"right",fontSize:7.5,color:"#9ca3af",width:50},
+    ],margin:[36,14,36,0]}),
+    content:[
+      {table:{widths:["*"],body:[[{stack:[
+        {text:title.toUpperCase(),fontSize:8,bold:true,color:"#c7d2fe",characterSpacing:1.2},
+        {text:clientName,fontSize:19,bold:true,color:"#ffffff",margin:[0,3,0,4]},
+        {text:subtitle,fontSize:9,color:"#e0e7ff"},
+      ],fillColor:"#1e1b4b",margin:[14,12,14,12]}]]},layout:"noBorders"},
+      ...rsMdToPdf(md),
+    ],
+  };
+}
+
+function RsImports({sr,lang,mob,clientId,clientName}){
+  const [listKey,setListKey]=useState("30");
+  const [listCustom,setListCustom]=useState(()=>rsPeriodRange("30",{}));
+  const [items,setItems]=useState([]);
+  const [loading,setLoading]=useState(false);
+  const [checked,setChecked]=useState({});
+  const [expanded,setExpanded]=useState(null);
+  const [compare,setCompare]=useState(false);
+  // novi uvoz
+  const [formOpen,setFormOpen]=useState(false);
+  const [source,setSource]=useState("meta");
+  const [pFrom,setPFrom]=useState("");
+  const [pTo,setPTo]=useState("");
+  const [file,setFile]=useState(null); // {kind:"image"|"csv", data, name, preview}
+  const [analyzing,setAnalyzing]=useState(false);
+  const [formErr,setFormErr]=useState("");
+  const [drag,setDrag]=useState(false);
+  // izvestaj
+  const [report,setReport]=useState("");
+  const [reportLoading,setReportLoading]=useState(false);
+  const [reportMeta,setReportMeta]=useState(null);
+  const [pdfBusy,setPdfBusy]=useState(false);
+  const fileRef=useRef(null);
+
+  const range=rsPeriodRange(listKey,listCustom);
+  const load=async()=>{
+    const uid=localStorage.getItem("mat_user_id");
+    if(!uid||!clientId||!range.from||!range.to){ setItems([]); return; }
+    setLoading(true);
+    try{
+      const r=await fetch(`/api/imports?user_id=${uid}&client_id=${clientId}&from=${range.from}&to=${range.to}`);
+      const d=await r.json();
+      setItems(r.ok&&Array.isArray(d)?d:[]);
+    }catch(e){ setItems([]); }
+    setChecked({}); setLoading(false);
+  };
+  useEffect(()=>{ load(); setReport(""); },[clientId,listKey,listCustom.from,listCustom.to]);
+
+  const takeFile=async f=>{
+    if(!f) return;
+    setFormErr(""); setFormOpen(true);
+    const isCsv=/\.csv$/i.test(f.name||"")||f.type==="text/csv";
+    if(isCsv){
+      const txt=await f.text();
+      setFile({kind:"csv",data:txt.slice(0,50000),name:f.name||"data.csv",preview:null});
+      return;
+    }
+    if(!(f.type||"").startsWith("image/")){ setFormErr(sr?"Podržani su slike (screenshot) i CSV fajlovi.":"Images (screenshots) and CSV files are supported."); return; }
+    const dataUrl=await new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.onerror=rej;fr.readAsDataURL(f);});
+    try{ const jpg=await rsImageToJpeg(dataUrl); setFile({kind:"image",data:jpg,name:f.name||"screenshot",preview:dataUrl}); }
+    catch(e){ setFormErr(sr?"Slika nije mogla da se učita.":"The image could not be loaded."); }
+  };
+
+  // Ctrl+V bilo gde u ovom delu: ako je u clipboard-u slika, ona postaje novi uvoz
+  useEffect(()=>{
+    const h=e=>{
+      const it=[...(e.clipboardData?.items||[])].find(x=>x.kind==="file"&&x.type.startsWith("image/"));
+      if(!it) return;
+      e.preventDefault();
+      takeFile(it.getAsFile());
+    };
+    document.addEventListener("paste",h);
+    return()=>document.removeEventListener("paste",h);
+  },[]);
+
+  const quick=k=>{ const r=rsPeriodRange(k,{}); setPFrom(r.from); setPTo(r.to); };
+
+  const analyzeAndSave=async()=>{
+    setFormErr("");
+    if(!clientId){ setFormErr(sr?"Izaberi klijenta.":"Choose a client."); return; }
+    if(!file){ setFormErr(sr?"Nalepi screenshot (Ctrl+V), prevuci fajl ili izaberi fajl.":"Paste a screenshot (Ctrl+V), drop a file or choose a file."); return; }
+    if(!pFrom||!pTo||pTo<pFrom){ setFormErr(sr?"Unesi period od–do koji podaci pokrivaju (obavezno).":"Enter the from–to period the data covers (required)."); return; }
+    const uid=await getOrCreateUser();
+    setAnalyzing(true);
+    const src=rsSourceName(source,sr);
+    const what=file.kind==="image"?(sr?"Na slici je izveštaj":"The image shows a report"):(sr?"Ispod su CSV podaci izveštaja":"Below is report CSV data");
+    const prompt=sr
+      ?`Ti si iskusan analitičar digitalnog marketinga. ${what}. Izvor: ${src}. Period koji podaci pokrivaju: ${rsDate(pFrom,true)} – ${rsDate(pTo,true)}.\n\n1) Pročitaj podatke i prepiši ključne brojeve u Markdown tabelu (ukupno i po kampanjama/redovima, najviše 25 redova). Prepiši samo ono što stvarno piše, ništa ne izmišljaj i ne računaj metrike kojih nema.\n2) Napiši kratku analizu u 3–5 tačaka.\n\nOdgovori na srpskom (latinica), tačno u ovom formatu:\n## Podaci\n(tabela)\n## Brza analiza\n- ...\n\nAko podatke ne možeš da pročitaš, napiši to jasno u jednoj rečenici.`
+      :`You are an experienced digital marketing analyst. ${what}. Source: ${src}. Period the data covers: ${rsDate(pFrom,false)} – ${rsDate(pTo,false)}.\n\n1) Read the data and copy the key figures into a Markdown table (totals and per campaign/row, at most 25 rows). Copy only what is actually shown, don't invent anything and don't calculate metrics that aren't there.\n2) Write a short analysis in 3–5 bullet points.\n\nAnswer in English, exactly in this format:\n## Data\n(table)\n## Quick analysis\n- ...\n\nIf you can't read the data, say so clearly in one sentence.`;
+    const content=file.kind==="image"
+      ?[{type:"image",source:{type:"base64",media_type:"image/jpeg",data:file.data}},{type:"text",text:prompt}]
+      :[{type:"text",text:`${prompt}\n\nCSV:\n${file.data}`}];
+    try{
+      const res=await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content}]})});
+      const d=await res.json();
+      const text=d.content?.[0]?.text||"";
+      if(!res.ok||!text) throw new Error("analyze");
+      const r=await fetch("/api/imports",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:uid,client_id:Number(clientId),period_from:pFrom,period_to:pTo,source,analysis_text:text})});
+      const saved=await r.json();
+      if(!r.ok) throw new Error("save");
+      setFile(null); setFormOpen(false);
+      await load();
+      if(saved&&saved.id) setExpanded(saved.id);
+    }catch(e){
+      setFormErr(sr?"Uvoz nije sačuvan. Pokušaj ponovo.":"The import was not saved. Please try again.");
+    }
+    setAnalyzing(false);
+  };
+
+  const remove=async it=>{
+    if(!window.confirm(sr?"Obrisati ovaj uvoz?":"Delete this import?")) return;
+    const uid=localStorage.getItem("mat_user_id");
+    try{ const r=await fetch(`/api/imports?id=${it.id}&user_id=${uid}`,{method:"DELETE"}); if(!r.ok) throw new Error(); await load(); }
+    catch(e){ alert(sr?"Uvoz nije obrisan. Pokušaj ponovo.":"The import was not deleted. Please try again."); }
+  };
+
+  const sel=items.filter(it=>checked[it.id]);
+  const canCompare=sel.length===2;
+
+  const makeReport=async()=>{
+    if(!sel.length) return;
+    setReportLoading(true); setReport("");
+    const ordered=[...sel].sort((a,b)=>a.period_from<b.period_from?-1:1);
+    const block=(it,label)=>`### ${label}${rsSourceName(it.metrics?.source,sr)} · ${rsDate(it.period_from,sr)} – ${rsDate(it.period_to,sr)}\n${it.analysis_text}`;
+    const doCompare=compare&&canCompare;
+    const data=doCompare
+      ?`${block(ordered[0],sr?"Period A: ":"Period A: ")}\n\n${block(ordered[1],sr?"Period B: ":"Period B: ")}`
+      :ordered.map(it=>block(it,"")).join("\n\n");
+    const prompt=sr
+      ?(doCompare
+        ?`Ti si iskusan konsultant za digitalni marketing. Napravi profesionalan izveštaj za klijenta "${clientName}" koji poredi dva perioda. Koristi SAMO podatke ispod, ništa ne izmišljaj.\n\n${data}\n\nNapiši na srpskom (latinica), u Markdown formatu, sa delovima: "## Rezime" (2–3 rečenice), "## Poređenje ključnih brojeva" (tabela sa kolonama Metrika | Period A | Period B | Promena), "## Šta se poboljšalo", "## Šta se pogoršalo", "## Preporuke" (3–5 konkretnih koraka). Ne pominji da si AI.`
+        :`Ti si iskusan konsultant za digitalni marketing. Napravi profesionalan izveštaj za klijenta "${clientName}" na osnovu podataka ispod. Koristi SAMO te podatke, ništa ne izmišljaj.\n\n${data}\n\nNapiši na srpskom (latinica), u Markdown formatu, sa delovima: "## Rezime" (2–3 rečenice), "## Ključni brojevi" (tabela), "## Šta ide dobro", "## Šta treba poboljšati", "## Preporuke" (3–5 konkretnih koraka). Ne pominji da si AI.`)
+      :(doCompare
+        ?`You are an experienced digital marketing consultant. Create a professional report for client "${clientName}" comparing two periods. Use ONLY the data below, don't invent anything.\n\n${data}\n\nWrite in English, in Markdown, with parts: "## Summary" (2–3 sentences), "## Key figures compared" (table with columns Metric | Period A | Period B | Change), "## What improved", "## What got worse", "## Recommendations" (3–5 concrete steps). Don't mention that you are an AI.`
+        :`You are an experienced digital marketing consultant. Create a professional report for client "${clientName}" based on the data below. Use ONLY that data, don't invent anything.\n\n${data}\n\nWrite in English, in Markdown, with parts: "## Summary" (2–3 sentences), "## Key figures" (table), "## What's working", "## What needs improvement", "## Recommendations" (3–5 concrete steps). Don't mention that you are an AI.`);
+    try{
+      const txt=await callClaude(prompt,lang);
+      setReport(txt||(sr?"Izveštaj nije napravljen. Pokušaj ponovo.":"The report could not be created. Please try again."));
+      const from=ordered[0].period_from, to=ordered.reduce((m,it)=>it.period_to>m?it.period_to:m,ordered[0].period_to);
+      const sources=[...new Set(ordered.map(it=>rsSourceName(it.metrics?.source,sr)))].join(", ");
+      setReportMeta({from,to,sources,compare:doCompare,a:doCompare?ordered[0]:null,b:doCompare?ordered[1]:null});
+    }catch(e){ setReport(sr?"Izveštaj nije napravljen. Pokušaj ponovo.":"The report could not be created. Please try again."); }
+    setReportLoading(false);
+  };
+
+  const downloadPdf=async()=>{
+    if(!report||!reportMeta||pdfBusy) return;
+    setPdfBusy(true);
+    const safe=s=>String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/đ/g,"dj").replace(/Đ/g,"Dj").replace(/[^A-Za-z0-9_-]+/g,"_").replace(/^_+|_+$/g,"");
+    const m=reportMeta;
+    const subtitle=m.compare
+      ?`${sr?"Period A":"Period A"}: ${rsDate(m.a.period_from,sr)} – ${rsDate(m.a.period_to,sr)}  ·  ${sr?"Period B":"Period B"}: ${rsDate(m.b.period_from,sr)} – ${rsDate(m.b.period_to,sr)}  ·  ${sr?"Izvor":"Source"}: ${m.sources}`
+      :`${rsDate(m.from,sr)} – ${rsDate(m.to,sr)}  ·  ${sr?"Izvor":"Source"}: ${m.sources}`;
+    try{
+      const pm=await rsLoadPdfMake();
+      pm.createPdf(rsPdfDocMd({title:sr?"Izveštaj":"Report",clientName:clientName||"",subtitle,md:report,sr})).download(`${safe(clientName)||"klijent"}_izvestaj_${m.from}_${m.to}.pdf`);
+    }catch(e){ alert(sr?"PDF nije napravljen. Proveri internet vezu i pokušaj ponovo.":"The PDF could not be created. Check your connection and try again."); }
+    setPdfBusy(false);
+  };
+
+  const L=({c})=><div style={{color:C.mut,fontSize:11,fontWeight:700,letterSpacing:"0.6px",textTransform:"uppercase",margin:"0 0 6px"}}>{c}</div>;
+  const pill=(on)=>({padding:"7px 13px",borderRadius:20,fontSize:12,fontWeight:600,cursor:"pointer",border:on?"1px solid #F59E0B":`1px solid ${C.brd}`,background:on?"rgba(245,158,11,0.15)":"transparent",color:on?"#fff":C.mut});
+
+  if(!clientId) return <div style={{color:C.mut,fontSize:13,padding:"8px 0"}}>{sr?"Izaberi klijenta iznad.":"Choose a client above."}</div>;
+
+  return <div>
+    {/* Novi uvoz */}
+    <div onDragOver={e=>{e.preventDefault();setDrag(true);}} onDragLeave={()=>setDrag(false)} onDrop={e=>{e.preventDefault();setDrag(false);takeFile(e.dataTransfer.files&&e.dataTransfer.files[0]);}}
+      style={{background:drag?"rgba(245,158,11,0.1)":C.sur,border:drag?"2px dashed #F59E0B":`1px solid ${C.brd}`,borderRadius:14,padding:"16px",marginBottom:16}}>
+      {!formOpen?<div style={{textAlign:"center",padding:"10px 0"}}>
+        <div style={{fontSize:28,marginBottom:6}}>📥</div>
+        <div style={{fontWeight:700,fontSize:14,marginBottom:4}}>{sr?"Nalepi screenshot (Ctrl+V) ili prevuci fajl ovde":"Paste a screenshot (Ctrl+V) or drop a file here"}</div>
+        <div style={{color:C.mut,fontSize:12,marginBottom:12}}>{sr?"Screenshot iz Meta Ads Managera, Looker-a, GA4... ili CSV fajl":"A screenshot from Meta Ads Manager, Looker, GA4... or a CSV file"}</div>
+        <button onClick={()=>fileRef.current&&fileRef.current.click()} style={bpBtn(false)}>{sr?"Izaberi fajl":"Choose file"}</button>
+      </div>:<div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          <div style={{fontWeight:800,fontSize:15}}>{sr?"Novi uvoz":"New import"}</div>
+          <button onClick={()=>{setFormOpen(false);setFile(null);setFormErr("");}} style={{...bpBtn(false),padding:"6px 10px"}} aria-label={sr?"Zatvori":"Close"}>✕</button>
+        </div>
+        {file?<div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12,background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:10,padding:"8px"}}>
+          {file.preview?<img src={file.preview} alt="" style={{width:90,height:60,objectFit:"cover",borderRadius:6}}/>:<div style={{fontSize:26,width:40,textAlign:"center"}}>📄</div>}
+          <div style={{flex:1,minWidth:0,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{file.name}</div>
+          <button onClick={()=>fileRef.current&&fileRef.current.click()} style={bpBtn(false)}>{sr?"Zameni":"Replace"}</button>
+        </div>:<div style={{color:C.mut,fontSize:13,marginBottom:12}}>{sr?"Nalepi screenshot (Ctrl+V), prevuci fajl ili":"Paste a screenshot (Ctrl+V), drop a file or"} <button onClick={()=>fileRef.current&&fileRef.current.click()} style={{...bpBtn(false),padding:"4px 10px"}}>{sr?"izaberi fajl":"choose a file"}</button></div>}
+        <L c={sr?"Izvor podataka":"Data source"}/>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
+          {RS_SOURCES.map(s=><button key={s.k} onClick={()=>setSource(s.k)} style={pill(source===s.k)}>{rsSourceName(s.k,sr)}</button>)}
+        </div>
+        <L c={sr?"Period koji podaci pokrivaju (obavezno)":"Period the data covers (required)"}/>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+          {[["7",sr?"Prošlih 7 dana":"Last 7 days"],["30",sr?"Prošlih 30 dana":"Last 30 days"],["month",sr?"Ovaj mesec":"This month"],["lastmonth",sr?"Prošli mesec":"Last month"]].map(([k,l])=><button key={k} onClick={()=>quick(k)} style={pill(false)}>{l}</button>)}
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+          <input type="date" value={pFrom} onChange={e=>setPFrom(e.target.value)} style={bpInp} aria-label={sr?"Od":"From"}/>
+          <input type="date" value={pTo} onChange={e=>setPTo(e.target.value)} style={bpInp} aria-label={sr?"Do":"To"}/>
+        </div>
+        {formErr&&<div style={{color:C.red,fontSize:13,marginBottom:10}}>{formErr}</div>}
+        <button onClick={analyzeAndSave} disabled={analyzing} style={{padding:"11px 16px",borderRadius:11,fontSize:14,fontWeight:700,cursor:analyzing?"not-allowed":"pointer",border:"none",background:"linear-gradient(135deg,#F59E0B,#D97706)",color:"#fff",opacity:analyzing?0.6:1}}>
+          {analyzing?(sr?"Analiziram i čuvam...":"Analyzing and saving..."):(sr?"Analiziraj i sačuvaj":"Analyze and save")}
+        </button>
+      </div>}
+      {!formOpen&&formErr&&<div style={{color:C.red,fontSize:13,marginTop:8,textAlign:"center"}}>{formErr}</div>}
+      <input ref={fileRef} type="file" accept="image/*,.csv,text/csv" style={{display:"none"}} onChange={e=>{takeFile(e.target.files&&e.target.files[0]); e.target.value="";}}/>
+    </div>
+
+    {/* Sacuvani uvozi */}
+    <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:14,padding:"16px",marginBottom:16}}>
+      <div style={{fontWeight:800,fontSize:15,marginBottom:10}}>{sr?"Sačuvani uvozi":"Saved imports"}</div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:listKey==="custom"?10:12}}>
+        {[["30",sr?"30 dana":"30 days"],["90",sr?"90 dana":"90 days"],["lastmonth",sr?"Prošli mesec":"Last month"],["custom",sr?"Proizvoljno":"Custom"]].map(([k,l])=><button key={k} onClick={()=>setListKey(k)} style={pill(listKey===k)}>{l}</button>)}
+      </div>
+      {listKey==="custom"&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+        <input type="date" value={listCustom.from||""} onChange={e=>setListCustom(p=>({...p,from:e.target.value}))} style={bpInp} aria-label={sr?"Od":"From"}/>
+        <input type="date" value={listCustom.to||""} onChange={e=>setListCustom(p=>({...p,to:e.target.value}))} style={bpInp} aria-label={sr?"Do":"To"}/>
+      </div>}
+      {loading&&<div style={{color:C.acl,fontSize:13}}>✦ {sr?"Učitavam uvoze...":"Loading imports..."}</div>}
+      {!loading&&items.length===0&&<div style={{color:C.mut,fontSize:13}}>{sr?"Nema uvoza u ovom periodu.":"No imports in this period."}</div>}
+      {!loading&&items.map(it=><div key={it.id} style={{border:`1px solid ${checked[it.id]?"rgba(245,158,11,0.5)":C.brd}`,borderRadius:10,padding:"10px 12px",marginBottom:8,background:checked[it.id]?"rgba(245,158,11,0.06)":"transparent"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+          <input type="checkbox" checked={!!checked[it.id]} onChange={e=>setChecked(p=>({...p,[it.id]:e.target.checked}))} aria-label={sr?"Uključi u izveštaj":"Include in report"}/>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontWeight:700,fontSize:13}}>{rsSourceName(it.metrics?.source,sr)} · {rsDate(it.period_from,sr)} – {rsDate(it.period_to,sr)}</div>
+            <div style={{color:C.dim,fontSize:11}}>{sr?"uvezeno":"imported"} {new Date(it.created_at).toLocaleDateString(sr?"sr-RS":"en-GB")}</div>
+          </div>
+          <button onClick={()=>setExpanded(expanded===it.id?null:it.id)} style={bpBtn(false)}>{expanded===it.id?(sr?"Sakrij":"Hide"):(sr?"Prikaži":"Show")}</button>
+          <button onClick={()=>remove(it)} style={{...bpBtn(false),color:C.red}} aria-label={sr?"Obriši uvoz":"Delete import"}>✕</button>
+        </div>
+        {expanded===it.id&&<div style={{marginTop:10}}><MD2 text={it.analysis_text}/></div>}
+      </div>)}
+      {!loading&&items.length>0&&<div style={{borderTop:`1px solid ${C.brd}`,marginTop:10,paddingTop:12}}>
+        <label style={{display:"flex",alignItems:"center",gap:8,fontSize:13,cursor:canCompare?"pointer":"default",opacity:canCompare?1:0.5,marginBottom:10}}>
+          <input type="checkbox" checked={compare&&canCompare} disabled={!canCompare} onChange={e=>setCompare(e.target.checked)}/>
+          {sr?"Uporedi dva izabrana uvoza (period A i period B)":"Compare the two selected imports (period A and period B)"}
+        </label>
+        <button onClick={makeReport} disabled={!sel.length||reportLoading} style={{padding:"11px 16px",borderRadius:11,fontSize:14,fontWeight:700,cursor:!sel.length||reportLoading?"not-allowed":"pointer",border:"none",background:"linear-gradient(135deg,#F59E0B,#D97706)",color:"#fff",opacity:!sel.length||reportLoading?0.5:1}}>
+          {reportLoading?(sr?"Pravim izveštaj...":"Creating report..."):(sr?`Napravi izveštaj${sel.length?` (${sel.length})`:""}`:`Create report${sel.length?` (${sel.length})`:""}`)}
+        </button>
+        {!sel.length&&<div style={{color:C.mut,fontSize:12,marginTop:6}}>{sr?"Čekiraj uvoze koje izveštaj treba da obuhvati.":"Check the imports the report should include."}</div>}
+      </div>}
+    </div>
+
+    {report&&<div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:14,padding:"16px"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:6}}>
+        <div style={{fontWeight:800,fontSize:15}}>{clientName} – {sr?"izveštaj":"report"}</div>
+        {reportMeta&&<button onClick={downloadPdf} disabled={pdfBusy} style={{...bpBtn(false),opacity:pdfBusy?0.6:1}}>📄 {pdfBusy?(sr?"Pravim PDF...":"Creating PDF..."):(sr?"Preuzmi PDF":"Download PDF")}</button>}
+      </div>
+      <MD2 text={report}/>
+    </div>}
+  </div>;
+}
+
 // ── MODULE 15: REPORT STUDIO ─────────────────────────────────────────────────
-function ReportStudioMod({t,lang}){
+function ReportStudioMod({t,lang,initialTab}){
   const sr=lang==="sr";
+  const [tab,setTab]=useState(initialTab==="import"?"import":"gads");
   const mob=useIsMobile();
   const [clients,setClients]=useState([]);
   const [clientsLoading,setClientsLoading]=useState(true);
@@ -1552,14 +1763,26 @@ function ReportStudioMod({t,lang}){
     <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>📑 Report Studio</h2>
     <p style={{color:C.mut,fontSize:13,margin:"0 0 18px"}}>{t.m15s}</p>
 
-    <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:14,padding:"16px",marginBottom:16}}>
+    {/* Klijent (zajednicki za oba dela) */}
+    <div style={{marginBottom:12}}>
       <div style={{color:C.mut,fontSize:11,fontWeight:700,letterSpacing:"0.6px",textTransform:"uppercase",margin:"0 0 6px"}}>{sr?"Klijent":"Client"}</div>
-      {clientsLoading?<div style={{color:C.acl,fontSize:13,marginBottom:12}}>✦ {sr?"Učitavam klijente...":"Loading clients..."}</div>:
-        clients.length===0?<div style={{color:C.mut,fontSize:13,marginBottom:12}}>{sr?"Nema klijenata još. Dodaj klijenta u Clients.":"No clients yet. Add a client in Clients."}</div>:
-        <select value={clientId} onChange={e=>setClientId(e.target.value)} style={{...bpInp,marginBottom:14}}>
+      {clientsLoading?<div style={{color:C.acl,fontSize:13}}>✦ {sr?"Učitavam klijente...":"Loading clients..."}</div>:
+        clients.length===0?<div style={{color:C.mut,fontSize:13}}>{sr?"Nema klijenata još. Dodaj klijenta u Clients.":"No clients yet. Add a client in Clients."}</div>:
+        <select value={clientId} onChange={e=>{setClientId(e.target.value);setRep(null);setAi("");setErr("");}} style={bpInp}>
           <option value="" style={{color:"#111"}}>{sr?"— izaberi klijenta —":"— choose a client —"}</option>
           {clients.map(c=><option key={c.id} value={String(c.id)} style={{color:"#111"}}>{c.name}</option>)}
         </select>}
+    </div>
+
+    {/* Dva dela: Google Ads izvestaj (glavni) i izvestaj iz screenshota/fajla */}
+    <div role="tablist" style={{display:"flex",gap:4,flexWrap:"wrap",borderBottom:`1px solid ${C.brd}`,marginBottom:14}}>
+      {[["gads",sr?"Google Ads izveštaj":"Google Ads report"],["import",sr?"Iz screenshota / fajla":"From screenshot / file"]].map(([k,l])=><button key={k} role="tab" aria-selected={tab===k} onClick={()=>setTab(k)} style={{padding:"9px 14px",fontSize:13,fontWeight:700,cursor:"pointer",background:"transparent",border:"none",borderBottom:tab===k?"2px solid #F59E0B":"2px solid transparent",color:tab===k?"#fff":C.mut,marginBottom:-1}}>{l}</button>)}
+    </div>
+
+    {tab==="import"&&<RsImports sr={sr} lang={lang} mob={mob} clientId={clientId} clientName={clients.find(c=>String(c.id)===String(clientId))?.name||""}/>}
+
+    {tab==="gads"&&<>
+    <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:14,padding:"16px",marginBottom:16}}>
       <div style={{color:C.mut,fontSize:11,fontWeight:700,letterSpacing:"0.6px",textTransform:"uppercase",margin:"0 0 6px"}}>{sr?"Period":"Period"}</div>
       <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:periodKey==="custom"?10:14}}>
         {periods.map(([k,l])=><button key={k} onClick={()=>setPeriodKey(k)} style={{padding:"7px 13px",borderRadius:20,fontSize:12,fontWeight:600,cursor:"pointer",border:periodKey===k?"1px solid #F59E0B":`1px solid ${C.brd}`,background:periodKey===k?"rgba(245,158,11,0.15)":"transparent",color:periodKey===k?"#fff":C.mut}}>{l}</button>)}
@@ -1629,6 +1852,7 @@ function ReportStudioMod({t,lang}){
         {unattr&&unattr.revenueEUR>0&&<div style={{color:C.mut,fontSize:12,marginTop:10}}>{sr?"Prihod iz Google Ads kanala bez prepoznate kampanje":"Revenue from Google Ads channels without a recognized campaign"}: {rsNum(unattr.revenueEUR)} €</div>}
       </div>
     </div>}
+    </>}
   </div>;
 }
 
@@ -1646,456 +1870,6 @@ async function callClaude(prompt, lang) {
   return data.content?.[0]?.text || "";
 }
 
-// ── MODULE 8: AI REPORT GENERATOR ────────────────────────────────────────────
-function ReportMod({t,lang}){
-  const sr=lang==="sr";
-  const [type,setType]=useState(null);
-  const [inputMode,setInputMode]=useState("screenshot"); // "screenshot" or "csv"
-  const [client,setClient]=useState("");
-  const [period,setPeriod]=useState("");
-  const [periodA,setPeriodA]=useState("");
-  const [periodB,setPeriodB]=useState("");
-  const [imgA,setImgA]=useState(null); const [prevA,setPrevA]=useState(null);
-  const [imgB,setImgB]=useState(null); const [prevB,setPrevB]=useState(null);
-  const [csvA,setCsvA]=useState(null); const [csvNameA,setCsvNameA]=useState("");
-  const [csvB,setCsvB]=useState(null); const [csvNameB,setCsvNameB]=useState("");
-  const [report,setReport]=useState(null);
-  const [loading,setLoading]=useState(false);
-  const [dragA,setDragA]=useState(false); const [dragB,setDragB]=useState(false);
-
-  const parseCSV=(text)=>{
-    const lines=text.split("\n").filter(l=>l.trim());
-    if(lines.length<2) return null;
-    const headers=lines[0].split(",").map(h=>h.replace(/"/g,"").trim());
-    const rows=lines.slice(1).map(line=>{
-      const vals=line.match(/(".*?"|[^,]+)/g)||[];
-      const row={};
-      headers.forEach((h,i)=>{ row[h]=(vals[i]||"").replace(/"/g,"").trim(); });
-      return row;
-    }).filter(r=>Object.values(r).some(v=>v));
-    return{headers,rows};
-  };
-
-  const handleCSV=(file,setCsv,setName)=>{
-    if(!file) return;
-    setName(file.name);
-    const reader=new FileReader();
-    reader.onload=e=>setCsv(e.target.result);
-    reader.readAsText(file,"UTF-8");
-  };
-
-  const handleFile=(file,setImg,setPrev)=>{
-    if(!file||!file.type.startsWith("image/")) return;
-    const reader=new FileReader();
-    reader.onload=e=>{ setImg(e.target.result.split(",")[1]); setPrev(e.target.result); };
-    reader.readAsDataURL(file);
-  };
-
-  const CSVBox=({csv,name,setCsv,setName,label,id})=>(
-    <div style={{marginBottom:16}}>
-      <Lbl c={label}/>
-      {!csv
-        ?<div onClick={()=>document.getElementById(id).click()}
-          style={{border:"2px dashed rgba(255,255,255,0.15)",borderRadius:14,padding:"30px 20px",textAlign:"center",cursor:"pointer",background:"rgba(255,255,255,0.02)",transition:"all 0.2s"}}
-          onMouseEnter={e=>e.currentTarget.style.borderColor="#6366F1"}
-          onMouseLeave={e=>e.currentTarget.style.borderColor="rgba(255,255,255,0.15)"}>
-          <div style={{fontSize:32,marginBottom:8}}>📊</div>
-          <div style={{color:C.txt,fontWeight:600,fontSize:14,marginBottom:4}}>{sr?"Klikni da odabereš CSV fajl":"Click to select CSV file"}</div>
-          <div style={{color:C.mut,fontSize:12}}>{sr?"Export iz Meta Ads Manager → Export table data → CSV":"Export from Meta Ads Manager → Export table data → CSV"}</div>
-        </div>
-        :<div style={{background:"rgba(52,211,153,0.08)",border:"1px solid rgba(52,211,153,0.2)",borderRadius:12,padding:"14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div><div style={{color:C.grn,fontWeight:700,fontSize:13}}>✅ {name}</div><div style={{color:C.mut,fontSize:11,marginTop:4}}>{sr?"CSV učitan":"CSV loaded"}</div></div>
-          <button onClick={()=>{setCsv(null);setName("");}} style={{background:"none",border:`1px solid ${C.brd}`,borderRadius:8,color:C.mut,fontSize:12,padding:"6px 12px",cursor:"pointer"}}>{sr?"Promeni":"Change"}</button>
-        </div>
-      }
-      <input id={id} type="file" accept=".csv,text/csv" style={{display:"none"}} onChange={e=>handleCSV(e.target.files[0],setCsv,setName)}/>
-    </div>
-  );
-
-  const UploadBox=({img,prev,setImg,setPrev,label,drag,setDrag,id})=>(
-    <div style={{marginBottom:16}}>
-      <Lbl c={label}/>
-      {!prev
-        ? <div
-            onDragOver={e=>{e.preventDefault();setDrag(true);}}
-            onDragLeave={()=>setDrag(false)}
-            onDrop={e=>{e.preventDefault();setDrag(false);handleFile(e.dataTransfer.files[0],setImg,setPrev);}}
-            onClick={()=>document.getElementById(id).click()}
-            style={{border:`2px dashed ${drag?"#6366F1":"rgba(255,255,255,0.15)"}`,borderRadius:14,padding:"30px 20px",textAlign:"center",cursor:"pointer",background:drag?"rgba(99,102,241,0.08)":"rgba(255,255,255,0.02)",transition:"all 0.2s"}}>
-            <div style={{fontSize:32,marginBottom:8}}>📂</div>
-            <div style={{color:C.txt,fontWeight:600,fontSize:14,marginBottom:4}}>{t.rg_drag}</div>
-            <div style={{color:C.mut,fontSize:12}}>{t.rg_dragSub}</div>
-          </div>
-        : <div>
-            <img src={prev} alt="" style={{width:"100%",borderRadius:10,border:`1px solid ${C.brd}`,marginBottom:8}}/>
-            <button onClick={()=>{setImg(null);setPrev(null);}} style={{background:"none",border:`1px solid ${C.brd}`,borderRadius:8,color:C.mut,fontSize:12,padding:"6px 14px",cursor:"pointer",width:"100%"}}>{sr?"Promeni sliku":"Change image"}</button>
-          </div>
-      }
-      <input id={id} type="file" accept="image/*" style={{display:"none"}} onChange={e=>handleFile(e.target.files[0],setImg,setPrev)}/>
-    </div>
-  );
-
-  const generate=async()=>{
-    setLoading(true); setReport(null);
-    try {
-      const content=[];
-      const isCsv=inputMode==="csv";
-
-      if(type==="single"){
-        const csvParsed=isCsv&&csvA?parseCSV(csvA):null;
-        const csvSummary=csvParsed?`Kolone: ${csvParsed.headers.join(", ")}\n\nPodaci:\n${csvParsed.rows.slice(0,50).map(r=>Object.values(r).join(" | ")).join("\n")}`:"";
-
-        if(!isCsv&&imgA) content.push({type:"image",source:{type:"base64",media_type:getImageMediaType(imgA),data:imgA}});
-        content.push({type:"text",text:sr
-          ?`Ti si senior marketing konsultant. Klijent: "${client||"Nije navedeno"}". Period: "${period||"Nije navedeno"}". Piši isključivo na srpskom jeziku, ekavski.
-
-${isCsv?`Analiziraj ovaj CSV export iz marketing alata:\n\n${csvSummary}`:"Analiziraj ovaj screenshot."}
-
-Napiši profesionalni izveštaj u JSON formatu:
-{
-  "execSummary": "2-3 rečenice executive summary za klijenta",
-  "metrics": [{"name":"naziv metrike","value":"vrednost"}],
-  "issues": ["problem 1","problem 2","problem 3"],
-  "good": ["pozitivna stvar 1","pozitivna stvar 2"],
-  "actions": ["akcija 1","akcija 2","akcija 3","akcija 4","akcija 5"],
-  "strategic": ["preporuka 1","preporuka 2","preporuka 3"]
-}
-Vrati SAMO JSON, bez teksta pre ili posle.`
-          :`You are a senior marketing consultant. Client: "${client||"Not specified"}". Period: "${period||"Not specified"}".
-
-${isCsv?`Analyze this CSV export from Meta Ads Manager:\n\n${csvSummary}`:"Analyze this screenshot."}
-
-Write a professional report in JSON format:
-{
-  "execSummary": "2-3 sentence executive summary",
-  "metrics": [{"name":"metric name","value":"value"}],
-  "issues": ["issue 1","issue 2","issue 3"],
-  "good": ["positive thing 1","positive thing 2"],
-  "actions": ["action 1","action 2","action 3","action 4","action 5"],
-  "strategic": ["recommendation 1","recommendation 2","recommendation 3"]
-}
-Return ONLY JSON, no text before or after.`});
-      } else {
-        const csvParsedA=isCsv&&csvA?parseCSV(csvA):null;
-        const csvParsedB=isCsv&&csvB?parseCSV(csvB):null;
-        const csvSumA=csvParsedA?`Kolone: ${csvParsedA.headers.join(", ")}\nPodaci:\n${csvParsedA.rows.slice(0,30).map(r=>Object.values(r).join(" | ")).join("\n")}`:"";
-        const csvSumB=csvParsedB?`Kolone: ${csvParsedB.headers.join(", ")}\nPodaci:\n${csvParsedB.rows.slice(0,30).map(r=>Object.values(r).join(" | ")).join("\n")}`:"";
-
-        if(!isCsv){
-          content.push({type:"image",source:{type:"base64",media_type:getImageMediaType(imgA),data:imgA}});
-          content.push({type:"text",text:sr?`Ovo je screenshot za Period A: ${periodA||"Period A"}`:`This is the screenshot for Period A: ${periodA||"Period A"}`});
-          content.push({type:"image",source:{type:"base64",media_type:getImageMediaType(imgB),data:imgB}});
-        }
-        content.push({type:"text",text:sr
-          ?`${isCsv?`Ovo su CSV podaci za Period A (${periodA||"Period A"}):\n${csvSumA}\n\nOvo su CSV podaci za Period B (${periodB||"Period B"}):\n${csvSumB}`:`Ovo je screenshot za Period B: ${periodB||"Period B"}`}. Klijent: "${client||"Nije navedeno"}". Piši isključivo na srpskom jeziku, ekavski.
-
-Uporedi ova dva perioda i vrati JSON:
-{
-  "execSummary": "2-3 rečenice executive summary poređenja",
-  "comparison": [{"metric":"naziv metrike","valueA":"vrednost period A","valueB":"vrednost period B","change":"npr. +25%","better":true}],
-  "issues": ["problem 1","problem 2"],
-  "good": ["poboljšanje 1","poboljšanje 2"],
-  "actions": ["akcija 1","akcija 2","akcija 3"],
-  "strategic": ["preporuka 1","preporuka 2"],
-  "aiComment": "3-4 rečenice komentara – šta se promenilo i zašto"
-}
-Za "better": true znači Period B bolji, false znači lošiji. Vrati SAMO JSON.`
-          :`${isCsv?`These are CSV data for Period A (${periodA||"Period A"}):\n${csvSumA}\n\nThese are CSV data for Period B (${periodB||"Period B"}):\n${csvSumB}`:`This is the screenshot for Period B: ${periodB||"Period B"}`}. Client: "${client||"Not specified"}".
-
-Compare these two periods and return JSON:
-{
-  "execSummary": "2-3 sentence executive summary of comparison",
-  "comparison": [{"metric":"metric name","valueA":"period A value","valueB":"period B value","change":"e.g. +25%","better":true}],
-  "issues": ["issue 1","issue 2"],
-  "good": ["improvement 1","improvement 2"],
-  "actions": ["action 1","action 2","action 3"],
-  "strategic": ["recommendation 1","recommendation 2"],
-  "aiComment": "3-4 sentence comment – what changed and why"
-}
-For "better": true means Period B is better, false means worse. Return ONLY JSON.`});
-      }
-      const res=await fetch("/api/analyze",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2500,messages:[{role:"user",content}]})
-      });
-      const data=await res.json();
-      const raw=data.content?.[0]?.text||"{}";
-      const clean=raw.replace(/```json|```/g,"").trim();
-      const parsed=JSON.parse(clean);
-      setReport({...parsed,client,period,periodA,periodB,type});
-      // Auto-save if client name provided
-      if(client&&parsed.execSummary){
-        const analysisText=`${parsed.execSummary}\n\n${(parsed.issues||[]).join("\n")}\n\n${(parsed.actions||[]).join("\n")}`;
-        let periodFrom=null, periodTo=null;
-        if(type==="compare"){
-          periodFrom=periodA||null;
-          periodTo=periodB||null;
-        } else {
-          periodFrom=period||null;
-          periodTo=periodB||null;
-        }
-        saveAnalysis({
-          clientName:client,
-          tool:type==="compare"?"report_compare":"report_single",
-          periodFrom,
-          periodTo,
-          analysisText,
-          metrics:parsed.metrics?Object.fromEntries(parsed.metrics.map(m=>[m.name,m.value])):null
-        });
-      }
-    } catch(e){ setReport({error:true}); }
-    setLoading(false);
-  };
-
-  const exportPDF=()=>{
-    const style=document.createElement("style");
-    style.textContent=`
-      @media print {
-        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-        body { background: #ffffff !important; color: #1a1a2e !important; font-family: Arial, sans-serif; margin: 0; padding: 0; }
-        .no-print { display: none !important; }
-        #report-content { padding: 24px; background: white; }
-        .report-section { margin-bottom: 16px; padding: 14px; border-radius: 8px; page-break-inside: avoid; }
-        /* Header */
-        #report-content > div:first-child { background: #eef2ff !important; border: 1px solid #c7d2fe !important; }
-        .report-title { color: #1e1b4b !important; font-size: 20px !important; font-weight: 900 !important; }
-        /* Executive summary */
-        #report-content [style*="rgba(99,102,241,0.06)"] { background: #f0f4ff !important; border: 1px solid #c7d2fe !important; }
-        /* Section labels */
-        [class*="section-label"] { color: #4338ca !important; }
-        /* All text */
-        [style*="rgba(255,255,255,0.85)"] { color: #1a1a2e !important; }
-        [style*="rgba(255,255,255,0.75)"] { color: #374151 !important; }
-        [style*="rgba(255,255,255,0.65)"] { color: #4b5563 !important; }
-        [style*="color: rgb(255, 255, 255)"] { color: #1a1a2e !important; }
-        /* Metric rows */
-        [style*="rgba(255,255,255,0.4)"] { color: #6b7280 !important; }
-        [style*="rgba(255,255,255,0.2)"] { color: #9ca3af !important; }
-        /* Borders */
-        [style*="rgba(255,255,255,0.08)"] { border-color: #e5e7eb !important; }
-        /* Green sections */
-        [style*="rgba(52,211,153,0.06)"] { background: #f0fdf4 !important; border: 1px solid #bbf7d0 !important; }
-        [style*="color: rgb(52, 211, 153)"] { color: #15803d !important; }
-        /* Red sections */
-        [style*="rgba(239,68,68,0.06)"] { background: #fef2f2 !important; border: 1px solid #fecaca !important; }
-        [style*="color: rgb(248, 113, 113)"] { color: #dc2626 !important; }
-        /* Yellow sections */
-        [style*="rgba(251,191,36,0.06)"] { background: #fffbeb !important; border: 1px solid #fde68a !important; }
-        [style*="color: rgb(251, 191, 36)"] { color: #d97706 !important; }
-        /* Purple/AI sections */
-        [style*="rgba(99,102,241,0.08)"] { background: #eef2ff !important; border: 1px solid #c7d2fe !important; }
-        [style*="color: rgb(165, 180, 252)"] { color: #4338ca !important; }
-        /* Comparison cards */
-        [style*="rgba(52,211,153,0.05)"] { background: #f0fdf4 !important; border: 1px solid #bbf7d0 !important; }
-        [style*="rgba(248,113,113,0.05)"] { background: #fef2f2 !important; border: 1px solid #fecaca !important; }
-        /* Surface */
-        [style*="rgba(255,255,255,0.04)"] { background: #f9fafb !important; border: 1px solid #e5e7eb !important; }
-        [style*="rgba(255,255,255,0.08)"] { background: #f3f4f6 !important; }
-        /* Footer */
-        [style*="rgba(255,255,255,0.2)"] { color: #9ca3af !important; }
-        /* Metric values */
-        [style*="fontWeight:700"] { color: #1a1a2e !important; }
-        [style*="fontWeight:800"] { color: #1a1a2e !important; }
-        [style*="fontWeight:900"] { color: #1a1a2e !important; }
-      }
-    `;
-    document.head.appendChild(style);
-    window.print();
-    setTimeout(()=>document.head.removeChild(style), 1000);
-  };
-
-  const reset=()=>{ setType(null);setClient("");setPeriod("");setPeriodA("");setPeriodB(""); setImgA(null);setPrevA(null);setImgB(null);setPrevB(null);setReport(null); };
-
-  // RESULTS
-  if(report) return <div>
-    <div className="no-print" style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-      <h2 style={{fontSize:20,fontWeight:800,margin:0}}>{t.rg_title}</h2>
-      <button onClick={exportPDF} style={{background:"linear-gradient(135deg,#6366F1,#8B5CF6)",border:"none",borderRadius:10,color:"#fff",fontSize:13,fontWeight:700,padding:"10px 18px",cursor:"pointer"}}>{t.rg_pdf}</button>
-    </div>
-
-    {report.error&&<div style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:12,padding:"16px",color:C.red,fontSize:13,marginBottom:16}}>{sr?"Greška pri generisanju izveštaja. Pokušaj ponovo.":"Error generating report. Please try again."}</div>}
-
-    {!report.error&&<div id="report-content">
-      {/* Header */}
-      <div className="report-section" style={{background:"rgba(99,102,241,0.08)",border:"1px solid rgba(99,102,241,0.25)",borderRadius:14,padding:"18px",marginBottom:16}}>
-        <div className="report-title" style={{color:C.txt,fontSize:18,fontWeight:900,marginBottom:4}}>📊 {report.client||"Marketing Report"}</div>
-        <div style={{color:C.mut,fontSize:12}}>{report.type==="compare"?`${report.periodA} vs ${report.periodB}`:report.period} · {new Date().toLocaleDateString("sr-RS")}</div>
-      </div>
-
-      {/* Executive Summary */}
-      {report.execSummary&&<div className="report-section" style={{background:"rgba(99,102,241,0.06)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:12,padding:"16px",marginBottom:14}}>
-        <div className="section-label" style={{color:C.acl,fontSize:10,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",marginBottom:8}}>{t.rg_execSum}</div>
-        <div style={{color:"rgba(255,255,255,0.85)",fontSize:13,lineHeight:1.8}}>{report.execSummary}</div>
-      </div>}
-
-      {/* Comparison table – kartice za mobilni */}
-      {report.comparison&&<div className="report-section" style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"16px",marginBottom:14}}>
-        <div className="section-label" style={{color:C.mut,fontSize:10,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",marginBottom:12}}>📊 {t.rg_comparison}</div>
-        <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          {/* Header */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 80px",gap:8,padding:"8px 10px",borderBottom:`1px solid ${C.brd}`}}>
-            {[t.rg_metric,report.periodA||"Period A",report.periodB||"Period B",t.rg_change].map((h,i)=>(
-              <div key={i} style={{color:C.mut,fontSize:10,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase"}}>{h}</div>
-            ))}
-          </div>
-          {/* Rows kao kartice */}
-          {report.comparison.map((row,i)=>(
-            <div key={i} style={{background:row.better?"rgba(52,211,153,0.05)":"rgba(248,113,113,0.05)",border:`1px solid ${row.better?"rgba(52,211,153,0.2)":"rgba(248,113,113,0.2)"}`,borderRadius:10,padding:"12px 10px"}}>
-              {/* Naziv metrike */}
-              <div style={{color:C.txt,fontWeight:700,fontSize:13,marginBottom:10}}>{row.metric}</div>
-              {/* Vrednosti */}
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 80px",gap:8,alignItems:"center"}}>
-                <div>
-                  <div style={{color:C.dim,fontSize:10,fontWeight:600,marginBottom:3}}>{report.periodA||"Period A"}</div>
-                  <div style={{color:C.mut,fontSize:13,fontWeight:600}}>{row.valueA}</div>
-                </div>
-                <div>
-                  <div style={{color:C.dim,fontSize:10,fontWeight:600,marginBottom:3}}>{report.periodB||"Period B"}</div>
-                  <div style={{color:C.txt,fontSize:13,fontWeight:700}}>{row.valueB}</div>
-                </div>
-                <div style={{textAlign:"center"}}>
-                  <div style={{color:row.better?C.grn:C.red,fontWeight:800,fontSize:14}}>{row.better?"▲":"▼"}</div>
-                  <div style={{color:row.better?C.grn:C.red,fontWeight:700,fontSize:12}}>{row.change}</div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-        {report.aiComment&&<div style={{marginTop:14,padding:"12px 14px",background:"rgba(99,102,241,0.08)",borderRadius:10,color:"rgba(255,255,255,0.75)",fontSize:12,lineHeight:1.7}}>
-          <span style={{color:C.acl,fontWeight:700}}>✦ {t.rg_aiComment}: </span>{report.aiComment}
-        </div>}
-      </div>}
-
-      {/* Metrics (single) */}
-      {report.metrics&&report.metrics.length>0&&<div className="report-section" style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"16px",marginBottom:14}}>
-        <div className="section-label" style={{color:C.mut,fontSize:10,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",marginBottom:10}}>{t.rg_metricsFound}</div>
-        {report.metrics.map((m,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:i<report.metrics.length-1?`1px solid ${C.brd}`:"none"}}>
-          <span style={{color:C.mut,fontSize:13}}>{m.name}</span>
-          <span style={{color:C.txt,fontWeight:700,fontSize:13}}>{m.value}</span>
-        </div>)}
-      </div>}
-
-      {/* Issues */}
-      {report.issues&&report.issues.length>0&&<div className="report-section" style={{background:"rgba(239,68,68,0.06)",border:"1px solid rgba(239,68,68,0.2)",borderRadius:12,padding:"16px",marginBottom:14}}>
-        <div className="section-label" style={{color:C.red,fontSize:10,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",marginBottom:10}}>{t.rg_issues}</div>
-        {report.issues.map((item,i)=><div key={i} style={{color:"rgba(255,255,255,0.75)",fontSize:12,lineHeight:1.7,padding:"5px 0",borderBottom:i<report.issues.length-1?`1px solid rgba(239,68,68,0.1)`:"none"}}>• {item}</div>)}
-      </div>}
-
-      {/* Good */}
-      {report.good&&report.good.length>0&&<div className="report-section" style={{background:"rgba(52,211,153,0.06)",border:"1px solid rgba(52,211,153,0.2)",borderRadius:12,padding:"16px",marginBottom:14}}>
-        <div className="section-label" style={{color:C.grn,fontSize:10,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",marginBottom:10}}>{t.rg_good}</div>
-        {report.good.map((item,i)=><div key={i} style={{color:"rgba(255,255,255,0.75)",fontSize:12,lineHeight:1.7,padding:"5px 0",borderBottom:i<report.good.length-1?`1px solid rgba(52,211,153,0.1)`:"none"}}>• {item}</div>)}
-      </div>}
-
-      {/* Actions */}
-      {report.actions&&report.actions.length>0&&<div className="report-section" style={{background:"rgba(251,191,36,0.06)",border:"1px solid rgba(251,191,36,0.2)",borderRadius:12,padding:"16px",marginBottom:14}}>
-        <div className="section-label" style={{color:C.yel,fontSize:10,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",marginBottom:10}}>{t.rg_actions}</div>
-        {report.actions.map((item,i)=><div key={i} style={{color:"rgba(255,255,255,0.75)",fontSize:12,lineHeight:1.7,padding:"6px 0",borderBottom:i<report.actions.length-1?`1px solid rgba(251,191,36,0.1)`:"none"}}><span style={{color:C.yel,fontWeight:700,marginRight:8}}>{i+1}.</span>{item}</div>)}
-      </div>}
-
-      {/* Strategic */}
-      {report.strategic&&report.strategic.length>0&&<div className="report-section" style={{background:"rgba(99,102,241,0.06)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:12,padding:"16px",marginBottom:20}}>
-        <div className="section-label" style={{color:C.acl,fontSize:10,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",marginBottom:10}}>{t.rg_strategic}</div>
-        {report.strategic.map((item,i)=><div key={i} style={{color:"rgba(255,255,255,0.75)",fontSize:12,lineHeight:1.7,padding:"5px 0",borderBottom:i<report.strategic.length-1?`1px solid rgba(99,102,241,0.1)`:"none"}}>• {item}</div>)}
-      </div>}
-
-      {/* Footer */}
-      <div style={{textAlign:"center",color:C.dim,fontSize:11,paddingTop:8,borderTop:`1px solid ${C.brd}`}}>{t.rg_generatedBy} · {new Date().toLocaleDateString()}</div>
-    </div>}
-
-    <div style={{marginTop:20,display:"flex",gap:10}}>
-      <Btn onClick={reset} sec>{t.rg_newReport}</Btn>
-      {!report.error&&<Btn onClick={exportPDF}>{t.rg_pdf}</Btn>}
-    </div>
-  </div>;
-
-  // LOADING
-  if(loading) return <div style={{textAlign:"center",padding:"40px 0"}}>
-    <div style={{fontSize:36,marginBottom:16}}>✦</div>
-    <div style={{color:C.acl,fontWeight:700,fontSize:15,marginBottom:8}}>{t.rg_generating}</div>
-    <div style={{color:C.mut,fontSize:13}}>{sr?"Ovo može trajati 20-40 sekundi...":"This may take 20-40 seconds..."}</div>
-    <div style={{marginTop:20,display:"flex",flexDirection:"column",gap:8}}>
-      {[1,2,3,4,5].map(i=><div key={i} style={{height:12,background:"rgba(255,255,255,0.06)",borderRadius:6,width:i===5?"50%":i===4?"75%":"100%"}}/>)}
-    </div>
-  </div>;
-
-  // TYPE SELECTION
-  if(!type) return <div>
-    <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>{t.rg_title}</h2>
-    <p style={{color:C.mut,fontSize:13,margin:"0 0 28px",lineHeight:1.6}}>{t.rg_sub}</p>
-    <div style={{display:"flex",flexDirection:"column",gap:14}}>
-      <button onClick={()=>setType("single")} style={{background:"linear-gradient(135deg,rgba(99,102,241,0.2),rgba(99,102,241,0.08))",border:"1px solid rgba(99,102,241,0.4)",borderRadius:16,padding:"20px",textAlign:"left",cursor:"pointer",WebkitTapHighlightColor:"transparent"}}>
-        <div style={{fontSize:28,marginBottom:10}}>📸</div>
-        <div style={{color:C.txt,fontWeight:700,fontSize:15,marginBottom:6}}>{t.rg_single}</div>
-        <div style={{color:C.mut,fontSize:13,lineHeight:1.5}}>{t.rg_single_s}</div>
-        <div style={{marginTop:12,color:C.acl,fontSize:12,fontWeight:700}}>📥 PDF →</div>
-      </button>
-      <button onClick={()=>setType("compare")} style={{background:"linear-gradient(135deg,rgba(16,185,129,0.15),rgba(16,185,129,0.05))",border:"1px solid rgba(16,185,129,0.3)",borderRadius:16,padding:"20px",textAlign:"left",cursor:"pointer",WebkitTapHighlightColor:"transparent"}}>
-        <div style={{fontSize:28,marginBottom:10}}>📊</div>
-        <div style={{color:C.txt,fontWeight:700,fontSize:15,marginBottom:6}}>{t.rg_compare}</div>
-        <div style={{color:C.mut,fontSize:13,lineHeight:1.5}}>{t.rg_compare_s}</div>
-        <div style={{marginTop:12,color:C.grn,fontSize:12,fontWeight:700}}>📥 PDF →</div>
-      </button>
-    </div>
-  </div>;
-
-  // FORM
-  return <div>
-    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
-      <button onClick={()=>setType(null)} style={{background:"none",border:"none",color:C.mut,cursor:"pointer",fontSize:13,fontWeight:600,padding:0}}>{t.prv}</button>
-      <h2 style={{fontSize:18,fontWeight:800,margin:0}}>{type==="single"?t.rg_single:t.rg_compare}</h2>
-    </div>
-
-    <Lbl c={t.rg_client}/>
-    <div style={{marginBottom:14}}><TIn v={client} ch={setClient} ph={t.rg_clientPh}/></div>
-
-    {type==="single"&&<div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
-      <div><Lbl c={sr?"Period od":"Period from"}/><DIn v={period} ch={setPeriod}/></div>
-      <div><Lbl c={sr?"Period do":"Period to"}/><DIn v={periodB} ch={setPeriodB}/></div>
-    </div>}
-    {type==="compare"&&<div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:16}}>
-      <div style={{background:"rgba(99,102,241,0.06)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:12,padding:"14px"}}>
-        <div style={{color:C.acl,fontWeight:700,fontSize:12,marginBottom:10}}>Period A</div>
-        <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          <div><Lbl c={sr?"Od":"From"}/><DIn v={periodA} ch={setPeriodA}/></div>
-          <div><Lbl c={sr?"Do":"To"}/><DIn v={periodB} ch={setPeriodB}/></div>
-        </div>
-      </div>
-    </div>}
-
-    {/* Input mode toggle */}
-    <div style={{display:"flex",gap:8,marginBottom:20}}>
-      <button onClick={()=>setInputMode("screenshot")} style={{flex:1,padding:"10px",borderRadius:10,border:`1px solid ${inputMode==="screenshot"?"rgba(99,102,241,0.6)":C.brd}`,background:inputMode==="screenshot"?"rgba(99,102,241,0.15)":"transparent",color:inputMode==="screenshot"?C.acl:C.mut,fontSize:13,fontWeight:600,cursor:"pointer"}}>
-        📸 {sr?"Screenshot":"Screenshot"}
-      </button>
-      <button onClick={()=>setInputMode("csv")} style={{flex:1,padding:"10px",borderRadius:10,border:`1px solid ${inputMode==="csv"?"rgba(16,185,129,0.6)":C.brd}`,background:inputMode==="csv"?"rgba(16,185,129,0.15)":"transparent",color:inputMode==="csv"?C.grn:C.mut,fontSize:13,fontWeight:600,cursor:"pointer"}}>
-        📊 CSV
-      </button>
-    </div>
-
-    {inputMode==="screenshot"&&<>
-      <UploadBox img={imgA} prev={prevA} setImg={setImgA} setPrev={setPrevA} label={type==="compare"?t.rg_uploadA:t.rg_upload} drag={dragA} setDrag={setDragA} id="rgUploadA"/>
-      {type==="compare"&&<UploadBox img={imgB} prev={prevB} setImg={setImgB} setPrev={setPrevB} label={t.rg_uploadB} drag={dragB} setDrag={setDragB} id="rgUploadB"/>}
-      <Btn onClick={generate} disabled={!imgA||(type==="compare"&&!imgB)}>{t.rg_generate}</Btn>
-    </>}
-
-    {inputMode==="csv"&&<>
-      {type==="compare"
-        ?<><CSVBox csv={csvA} name={csvNameA} setCsv={setCsvA} setName={setCsvNameA} label={sr?"CSV – Period A (stariji)":"CSV – Period A (older)"} id="csvUploadA"/>
-          <CSVBox csv={csvB} name={csvNameB} setCsv={setCsvB} setName={setCsvNameB} label={sr?"CSV – Period B (noviji)":"CSV – Period B (newer)"} id="csvUploadB"/>
-          <Btn onClick={generate} disabled={!csvA||!csvB}>{t.rg_generate}</Btn></>
-        :<><CSVBox csv={csvA} name={csvNameA} setCsv={setCsvA} setName={setCsvNameA} label={sr?"CSV Export iz Meta Ads Managera":"CSV Export from Meta Ads Manager"} id="csvUploadA"/>
-          <div style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px",marginBottom:16}}>
-            <div style={{color:C.mut,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:8}}>{sr?"Kako da exportuješ CSV:":"How to export CSV:"}</div>
-            {[sr?"Meta Ads Manager → Export → Export table data → CSV":"Meta Ads Manager → Export → Export table data → CSV",sr?"Looker Studio → Export → CSV":"Looker Studio → Export → CSV",sr?"Google Ads → Download → CSV":"Google Ads → Download → CSV",sr?"Whatagraph, GA4 i drugi alati – koristite njihov CSV export":"Whatagraph, GA4 and other tools – use their CSV export"].map((s,i)=><div key={i} style={{display:"flex",gap:10,marginBottom:6,alignItems:"flex-start"}}><span style={{color:C.acl,fontWeight:700,fontSize:12,minWidth:16}}>•</span><span style={{color:"rgba(255,255,255,0.6)",fontSize:12}}>{s}</span></div>)}
-          </div>
-          <Btn onClick={generate} disabled={!csvA}>{t.rg_generate}</Btn></>
-      }
-    </>}
-  </div>;
-}
-
 // ── USER UUID ────────────────────────────────────────────────────────────────
 async function getOrCreateUser(){
   let uid=localStorage.getItem("mat_user_id");
@@ -2111,22 +1885,6 @@ async function getOrCreateUser(){
   return null;
 }
 
-async function saveAnalysis({clientName,tool,periodFrom,periodTo,analysisText,metrics}){
-  try{
-    const userId=await getOrCreateUser();
-    if(!clientName||!analysisText) return;
-    // Get or create client
-    const cr=await fetch("/api/clients",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:userId,name:clientName})});
-    const client=await cr.json();
-    if(!client.id) return;
-    // Save analysis
-    await fetch("/api/analyses",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
-      client_id:client.id,user_id:userId,tool,
-      period_from:periodFrom||null,period_to:periodTo||null,
-      analysis_text:analysisText,metrics:metrics||null
-    })});
-  }catch(e){ console.log("Save analysis error:",e); }
-}
 
 // ── PUSH NOTIFICATIONS ────────────────────────────────────────────────────────
 const VAPID_PUBLIC_KEY="BNeZYihbfY4pd6cDVaD48xRthYXSfMN9CC-3-AjLLObt5RJYa6R5cqKI1OL8Fu2rZUg4B9rtryCpBAe-lxoHpJA";
@@ -2188,249 +1946,6 @@ async function requestNotificationPermission(){
   const perm=await Notification.requestPermission();
   if(perm==="granted"){ await subscribeToPush(); return true; }
   return false;
-}
-
-// ── MODULE 9: BOOKMARK CONNECTOR ─────────────────────────────────────────────
-function BookmarkMod({t,lang}){
-  const sr=lang==="sr";
-  const [importedData,setImportedData]=useState(null);
-  const [clientName,setClientName]=useState("");
-  const [periodFrom,setPeriodFrom]=useState("");
-  const [periodTo,setPeriodTo]=useState("");
-  const [analysis,setAnalysis]=useState("");
-  const [loading,setLoading]=useState(false);
-  const [fetchingData,setFetchingData]=useState(false);
-  const [clientsList,setClientsList]=useState([]);
-  const [showNewClientInput,setShowNewClientInput]=useState(false);
-
-  useEffect(()=>{
-    const uid=localStorage.getItem("mat_user_id");
-    if(!uid) return;
-    fetch(`/api/clients?user_id=${uid}`).then(r=>r.json()).then(d=>setClientsList(Array.isArray(d)?d:[])).catch(()=>{});
-  },[]);
-
-  useEffect(()=>{
-    const params=new URLSearchParams(window.location.search);
-    const importId=params.get("import_id");
-    const source=params.get("source");
-
-    if(importId){
-      setFetchingData(true);
-      window.history.replaceState({},"",window.location.pathname+"?mod=9");
-      fetch(`/api/temp-fetch?id=${importId}`)
-        .then(r=>r.json())
-        .then(result=>{
-          if(result.data){
-            setImportedData(result.data);
-            localStorage.setItem("mat_last_import",JSON.stringify({...result.data,screenshot:null}));
-          }
-          setFetchingData(false);
-        })
-        .catch(()=>setFetchingData(false));
-    } else if(source==="loading"){
-      // Waiting for redirect with import_id - start polling
-      setFetchingData(true);
-      window.history.replaceState({},"",window.location.pathname+"?mod=9");
-      // Poll every 2 seconds for up to 30 seconds
-      let attempts=0;
-      const maxAttempts=15;
-      const pollInterval=setInterval(async()=>{
-        attempts++;
-        // Check if URL has been updated with import_id
-        const currentParams=new URLSearchParams(window.location.search);
-        const newImportId=currentParams.get("import_id");
-        if(newImportId){
-          clearInterval(pollInterval);
-          try{
-            const r=await fetch(`/api/temp-fetch?id=${newImportId}`);
-            const result=await r.json();
-            if(result.data) setImportedData(result.data);
-          }catch(e){}
-          setFetchingData(false);
-          return;
-        }
-        // Also check sessionStorage
-        const stored=sessionStorage.getItem("mat_import");
-        if(stored){
-          clearInterval(pollInterval);
-          try{
-            const p=JSON.parse(stored);
-            sessionStorage.removeItem("mat_import");
-            setImportedData(p);
-          }catch(e){}
-          setFetchingData(false);
-          return;
-        }
-        if(attempts>=maxAttempts){
-          clearInterval(pollInterval);
-          setFetchingData(false);
-        }
-      },2000);
-    } else {
-      // Check localStorage for previous import
-      try{
-        const saved=localStorage.getItem("mat_last_import");
-        if(saved) setImportedData(JSON.parse(saved));
-      }catch(e){}
-    }
-  },[]);
-
-  const analyze=async()=>{
-    if(!importedData) return;
-    setLoading(true); setAnalysis("");
-    try{
-      const appUrl="/api/analyze";
-      const headers={"Content-Type":"application/json"};
-      
-      let messages;
-      
-      // If we have a screenshot, use vision
-      if(importedData.screenshot){
-        const prompt=sr
-          ?`Ti si senior Meta Ads ekspert. Analiziraj ovaj screenshot iz ${importedData.title||"marketing alata"}. Piši isključivo na srpskom jeziku, ekavski.
-${clientName?`\nKlijent: ${clientName}`:""}
-Izvor: ${importedData.source}
-Period: ${importedData.dateRange||"Nije detektovan"}
-
-Pročitaj sve podatke koji su vidljivi i napiši analizu. NE koristi Markdown. Koristi samo običan tekst:
-
-EXECUTIVE SUMMARY
-(Šta vidiš – o čemu se radi, koji je kontekst)
-
-KLJUČNI NALAZI
-(Najvažniji podaci – brojke, trendovi, kampanje koje se ističu)
-
-PROBLEMI I PRILIKE
-(Šta ne radi dobro, gde ima prostora za poboljšanje)
-
-PRIORITETNE PREPORUKE
-(3-5 konkretnih akcija na osnovu ovih podataka)
-
-Budi konkretan i profesionalan. Koristi stvarne brojke sa screenshota.`
-          :`You are a senior Meta Ads expert. Analyze this screenshot from ${importedData.title||"a marketing tool"}.
-
-Source: ${importedData.source}
-Period: ${importedData.dateRange||"Not detected"}
-
-Read all visible data and write an analysis. Do NOT use Markdown. Plain text only:
-
-EXECUTIVE SUMMARY
-KEY FINDINGS
-ISSUES AND OPPORTUNITIES
-PRIORITY RECOMMENDATIONS
-
-Be specific. Use actual numbers from the screenshot.`;
-
-        messages=[{role:"user",content:[
-          {type:"image",source:{type:"base64",media_type:getImageMediaType(importedData.screenshot),data:importedData.screenshot}},
-          {type:"text",text:prompt}
-        ]}];
-      } else {
-        // Use text data
-        const tablesSummary=importedData.tables.slice(0,3).map((tbl,i)=>{
-          return `Tabela ${i+1} (${tbl.rows.length} redova):\nKolone: ${tbl.headers.join(", ")}\nPodaci:\n${tbl.rows.slice(0,15).map(r=>Object.values(r).join(" | ")).join("\n")}`;
-        }).join("\n\n");
-        const prompt=sr
-          ?`Ti si senior Meta Ads ekspert. Analiziraj ove uvezene podatke. Piši isključivo na srpskom jeziku, ekavski. NE koristi Markdown.\n\nIzvor: ${importedData.source}\nPeriod: ${importedData.dateRange||"Nije detektovan"}\n\nPODACI:\n${tablesSummary}\n\nEXECUTIVE SUMMARY\nKLJUČNI NALAZI\nPROBLEMI I PRILIKE\nPRIORITETNE PREPORUKE`
-          :`You are a senior Meta Ads expert. Analyze this data. Plain text only.\n\nSource: ${importedData.source}\n\nDATA:\n${tablesSummary}\n\nEXECUTIVE SUMMARY\nKEY FINDINGS\nISSUES AND OPPORTUNITIES\nPRIORITY RECOMMENDATIONS`;
-        messages=[{role:"user",content:prompt}];
-      }
-
-      const res=await fetch(appUrl,{method:"POST",headers,body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,messages})});
-      const data=await res.json();
-      const result=data.content?.[0]?.text||"";
-      setAnalysis(result);
-      // Auto-save if client name provided
-      if(clientName&&result){
-        saveAnalysis({
-          clientName,tool:"bookmark",
-          periodFrom:periodFrom||null,
-          periodTo:periodTo||null,
-          analysisText:result
-        });
-      }
-    }catch(e){ setAnalysis(sr?"Greška pri analizi. Pokušaj ponovo.":"Error during analysis. Please try again."); }
-    setLoading(false);
-  };
-
-  const clear=()=>{ setImportedData(null); setAnalysis(""); localStorage.removeItem("mat_last_import"); };
-
-  if(fetchingData) return <div style={{textAlign:"center",padding:"60px 20px"}}>
-    <div style={{fontSize:48,marginBottom:20}}>📊</div>
-    <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 12px",color:C.txt}}>{sr?"Prikupljam podatke...":"Collecting data..."}</h2>
-    <p style={{color:C.mut,fontSize:14,margin:"0 0 32px",lineHeight:1.6}}>{sr?"Učitavam uvezene podatke. Sačekaj trenutak.":"Loading imported data. Please wait a moment."}</p>
-    <div style={{maxWidth:300,margin:"0 auto"}}>
-      {[1,2,3,4].map(i=><div key={i} style={{height:10,background:"rgba(255,255,255,0.06)",borderRadius:6,marginBottom:10,width:i===4?"60%":"100%"}}/>)}
-    </div>
-    <p style={{color:C.dim,fontSize:12,marginTop:24}}>{sr?"Ovo može trajati 5-15 sekundi...":"This may take 5-15 seconds..."}</p>
-  </div>;
-
-  return <div>
-    {/* STEP 3 */}
-    <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:14,padding:"20px"}}>
-      <div style={{color:C.mut,fontSize:11,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",marginBottom:14}}>{t.bm_step3}</div>
-      {!importedData&&!loading&&!fetchingData&&<div style={{textAlign:"center",padding:"24px 0"}}>
-        <div style={{fontSize:36,marginBottom:10}}>📭</div>
-        <div style={{color:C.txt,fontWeight:600,fontSize:14,marginBottom:6}}>{t.bm_noData}</div>
-        <div style={{color:C.mut,fontSize:13}}>{t.bm_noDataSub}</div>
-      </div>}
-      {importedData&&!analysis&&!loading&&<>
-        <div style={{background:"rgba(52,211,153,0.08)",border:"1px solid rgba(52,211,153,0.2)",borderRadius:12,padding:"14px",marginBottom:16}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}><span style={{fontSize:18}}>✅</span><span style={{color:C.grn,fontWeight:700,fontSize:14}}>{t.bm_dataTitle}</span></div>
-          <div style={{display:"flex",flexDirection:"column",gap:6}}>
-            <div style={{color:C.mut,fontSize:12}}>{t.bm_source}: <span style={{color:C.txt,fontWeight:600}}>{importedData.title||importedData.source}</span></div>
-            {importedData.dateRange&&<div style={{color:C.mut,fontSize:12}}>{t.bm_dateRange}: <span style={{color:C.txt,fontWeight:600}}>{importedData.dateRange}</span></div>}
-            <div style={{color:C.mut,fontSize:12}}>{t.bm_date}: <span style={{color:C.txt,fontWeight:600}}>{new Date(importedData.timestamp).toLocaleString(sr?"sr-RS":"en-US")}</span></div>
-            {importedData.screenshot
-              ? <div style={{color:C.mut,fontSize:12}}>Tip: <span style={{color:C.grn,fontWeight:600}}>Screenshot ✓</span></div>
-              : <div style={{color:C.mut,fontSize:12}}>{t.bm_tables}: <span style={{color:C.txt,fontWeight:600}}>{importedData.tables.length} ({importedData.tables.reduce((a,tb)=>a+tb.rows.length,0)} {t.bm_rows})</span></div>
-            }
-          </div>
-        </div>
-        {importedData.screenshot&&<div style={{marginBottom:16}}>
-          <img src={`data:${getImageMediaType(importedData.screenshot)};base64,${importedData.screenshot}`} alt="screenshot" style={{width:"100%",borderRadius:10,border:`1px solid ${C.brd}`}}/>
-        </div>}
-        <div style={{marginBottom:14}}>
-          <Lbl c={sr?"Naziv klijenta (opciono)":"Client name (optional)"}/>
-          {!showNewClientInput&&<select value={clientName} onChange={e=>{
-              if(e.target.value==="__new__"){ setShowNewClientInput(true); setClientName(""); }
-              else setClientName(e.target.value);
-            }} style={{width:"100%",padding:"13px 12px",background:"rgba(255,255,255,0.06)",border:`1px solid ${C.brd}`,borderRadius:10,color:C.txt,fontSize:14,outline:"none",boxSizing:"border-box"}}>
-            <option value="" style={{color:"#111"}}>{sr?"— Bez klijenta —":"— No client —"}</option>
-            {clientsList.map(c=><option key={c.id} value={c.name} style={{color:"#111"}}>{c.name}</option>)}
-            <option value="__new__" style={{color:"#111"}}>+ {sr?"Novi klijent...":"New client..."}</option>
-          </select>}
-          {showNewClientInput&&<div style={{display:"flex",gap:8}}>
-            <div style={{flex:1}}><TIn v={clientName} ch={setClientName} ph={sr?"npr. Sport Reality MNE":"e.g. Sport Reality MNE"}/></div>
-            <button onClick={()=>{setShowNewClientInput(false);setClientName("");}} style={{background:"none",border:`1px solid ${C.brd}`,borderRadius:10,color:C.mut,fontSize:12,padding:"0 14px",cursor:"pointer"}}>{sr?"Odustani":"Cancel"}</button>
-          </div>}
-        </div>
-        <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:14}}>
-          <div><Lbl c={sr?"Period od":"Period from"}/><DIn v={periodFrom} ch={setPeriodFrom}/></div>
-          <div><Lbl c={sr?"Period do":"Period to"}/><DIn v={periodTo} ch={setPeriodTo}/></div>
-        </div>
-        <div style={{display:"flex",gap:10}}>
-          <Btn onClick={analyze}>{t.bm_analyze}</Btn>
-          <button onClick={clear} style={{background:"none",border:`1px solid ${C.brd}`,borderRadius:11,color:C.mut,fontSize:13,fontWeight:600,padding:"13px 16px",cursor:"pointer"}}>{t.bm_clear}</button>
-        </div>
-      </>}
-      {loading&&<div style={{textAlign:"center",padding:"24px 0"}}>
-        <div style={{fontSize:32,marginBottom:12}}>✦</div>
-        <div style={{color:C.acl,fontWeight:700,fontSize:15,marginBottom:16}}>{t.bm_analyzing}</div>
-        {[1,2,3,4].map(i=><div key={i} style={{height:12,background:"rgba(255,255,255,0.06)",borderRadius:6,width:i===4?"50%":"100%",marginBottom:8}}/>)}
-      </div>}
-      {analysis&&!loading&&<>
-        <div style={{background:"rgba(99,102,241,0.06)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:12,padding:"16px",marginBottom:16}}>
-          <div style={{color:C.acl,fontSize:11,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",marginBottom:10}}>Analiza · {importedData?.title||importedData?.source}</div>
-          <MD2 text={analysis}/>
-        </div>
-        <div style={{display:"flex",gap:10}}>
-          <Btn onClick={()=>setAnalysis("")} sec>{sr?"← Nazad na podatke":"← Back to data"}</Btn>
-          <Btn onClick={clear} sec>{t.bm_clear}</Btn>
-        </div>
-      </>}
-    </div>
-  </div>;
 }
 
 // ── MODULE 10: MOJI KLIJENTI ─────────────────────────────────────────────────
@@ -2610,7 +2125,7 @@ function MyClientsMod({t,lang,goMod}){
   };
 
   const toolLabel=(tool)=>{
-    const map={bookmark:sr?"Uvoz":"Import",report_single:"Report Generator",report_compare:"Report Generator (Comparison)"};
+    const map={import:sr?"Uvoz":"Import",bookmark:sr?"Uvoz":"Import",report_single:"Report Generator",report_compare:"Report Generator (Comparison)"};
     return map[tool]||tool;
   };
 
@@ -2819,306 +2334,6 @@ function MyClientsMod({t,lang,goMod}){
         </div>
       </div>)}
     </div>}
-  </div>;
-}
-
-// ── MODULE 11: TIME MACHINE ───────────────────────────────────────────────────
-function TimeMachineMod({t,lang}){
-  const sr=lang==="sr";
-  const [mode,setMode]=useState(null); // null=izbor, "period", "compare"
-  const [clients,setClients]=useState([]);
-  const [clientsLoading,setClientsLoading]=useState(true);
-  const [selectedClient,setSelectedClient]=useState(null);
-  const [period,setPeriod]=useState("7");
-  const [customFrom,setCustomFrom]=useState("");
-  const [customTo,setCustomTo]=useState("");
-  const [periodA,setPeriodA]=useState({from:"",to:""});
-  const [periodB,setPeriodB]=useState({from:"",to:""});
-  const [loading,setLoading]=useState(false);
-  const [report,setReport]=useState(null);
-  const [chartData,setChartData]=useState([]);
-
-  useEffect(()=>{
-    const uid=localStorage.getItem("mat_user_id");
-    if(!uid){ setClientsLoading(false); return; }
-    fetch(`/api/clients?user_id=${uid}`)
-      .then(r=>r.json())
-      .then(data=>setClients(Array.isArray(data)?data:[]))
-      .catch(()=>{}).finally(()=>setClientsLoading(false));
-  },[]);
-
-  const getDateRange=(p)=>{
-    const to=new Date();
-    const from=new Date();
-    from.setDate(from.getDate()-parseInt(p));
-    return{
-      from:from.toISOString().split("T")[0],
-      to:to.toISOString().split("T")[0]
-    };
-  };
-
-  const extractMetrics=(analysisText)=>{
-    const metrics={};
-    const patterns=[
-      {key:"roas",regex:/ROAS[:\s]+([0-9.,]+)/i},
-      {key:"revenue",regex:/revenue[:\s]+[€$]?([0-9.,]+)/i},
-      {key:"spend",regex:/spend[:\s]+[€$]?([0-9.,]+)|potrošnja[:\s]+[€$]?([0-9.,]+)/i},
-      {key:"cpa",regex:/CPA[:\s]+[€$]?([0-9.,]+)/i},
-    ];
-    patterns.forEach(({key,regex})=>{
-      const m=analysisText.match(regex);
-      if(m){
-        const val=parseFloat((m[1]||m[2]||"0").replace(",","."));
-        if(!isNaN(val)) metrics[key]=val;
-      }
-    });
-    return metrics;
-  };
-
-  const generate=async()=>{
-    if(!selectedClient) return;
-    setLoading(true); setReport(null); setChartData([]);
-    try{
-      let from,to,fromB,toB;
-      if(mode==="period"){
-        if(period==="custom"){ from=customFrom; to=customTo; }
-        else{ const r=getDateRange(period); from=r.from; to=r.to; }
-      } else {
-        from=periodA.from; to=periodA.to;
-        fromB=periodB.from; toB=periodB.to;
-      }
-
-      // Fetch analyses
-      const urlA=`/api/analyses?client_id=${selectedClient.id}&from=${from}&to=${to}&limit=50`;
-      const resA=await fetch(urlA);
-      const analysesA=await resA.json();
-
-      let analysesB=[];
-      if(mode==="compare"&&fromB&&toB){
-        const urlB=`/api/analyses?client_id=${selectedClient.id}&from=${fromB}&to=${toB}&limit=50`;
-        const resB=await fetch(urlB);
-        analysesB=await resB.json();
-      }
-
-      // Build chart data
-      const chartPoints=analysesA
-        .filter(a=>a.period_from)
-        .map(a=>{
-          const m=extractMetrics(a.analysis_text);
-          return{date:a.period_from,...m,label:a.period_from};
-        })
-        .sort((a,b)=>new Date(a.date)-new Date(b.date));
-      setChartData(chartPoints);
-
-      // Build prompt
-      const summaryA=analysesA.map((a,i)=>
-        `Analiza ${i+1} (${a.period_from||"?"} → ${a.period_to||"?"}): ${a.analysis_text.substring(0,2000)}`
-      ).join("\n\n---\n\n");
-
-      const summaryB=analysesB.map((a,i)=>
-        `Analiza ${i+1} (${a.period_from||"?"} → ${a.period_to||"?"}): ${a.analysis_text.substring(0,2000)}`
-      ).join("\n\n---\n\n");
-
-      if(analysesA.length===0){
-        setReport({error:true,msg:sr?`Nema analiza za ${selectedClient.name} u ovom periodu. Dodaj analize prvo u Report Generator-u.`:`No analyses for ${selectedClient.name} in this period. Add analyses first in Report Generator.`});
-        setLoading(false); return;
-      }
-
-      const prompt=sr
-        ?`Ti si senior marketing analitičar. Napravi sintetizovani izveštaj za klijenta "${selectedClient.name}".
-
-${mode==="compare"
-  ?`PERIOD A (${from} → ${to}) – ${analysesA.length} analiza:\n${summaryA}\n\nPERIOD B (${fromB} → ${toB}) – ${analysesB.length} analiza:\n${summaryB}`
-  :`PERIOD (${from} → ${to}) – ${analysesA.length} analiza:\n${summaryA}`}
-
-Piši isključivo na srpskom jeziku, ekavski. NE koristi Markdown.
-
-${mode==="compare"?"POREĐENJE PERIODA\n(Šta se promenilo između perioda A i B, koje metrike su porasle/pale)\n\n":""}EXECUTIVE SUMMARY
-(2-3 rečenice – opšta ocena perioda)
-
-KLJUČNI TRENDOVI
-(Šta se dešavalo tokom perioda – da li performanse rastu, padaju ili su stabilne)
-
-PROBLEMI
-(Šta nije radilo dobro)
-
-ŠTA RADI DOBRO
-(Pozitivni trendovi)
-
-PREPORUKE ZA SLEDEĆI PERIOD
-(3-5 konkretnih akcija)
-
-Budi konkretan, koristi brojke iz analiza.`
-        :`You are a senior marketing analyst. Create a synthesized report for client "${selectedClient.name}".
-
-${mode==="compare"
-  ?`PERIOD A (${from} → ${to}) – ${analysesA.length} analyses:\n${summaryA}\n\nPERIOD B (${fromB} → ${toB}) – ${analysesB.length} analyses:\n${summaryB}`
-  :`PERIOD (${from} → ${to}) – ${analysesA.length} analyses:\n${summaryA}`}
-
-Do NOT use Markdown. Plain text only.
-
-${mode==="compare"?"PERIOD COMPARISON\n(What changed between periods A and B)\n\n":""}EXECUTIVE SUMMARY
-KEY TRENDS
-ISSUES
-WHAT'S WORKING
-RECOMMENDATIONS FOR NEXT PERIOD
-
-Be specific, use numbers from the analyses.`;
-
-      const res=await fetch("/api/analyze",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:prompt}]})
-      });
-      const data=await res.json();
-      setReport({text:data.content?.[0]?.text||"",client:selectedClient.name,from,to,fromB,toB,count:analysesA.length,countB:analysesB.length,mode});
-    }catch(e){ setReport({error:true,msg:sr?"Greška pri generisanju.":"Error generating report."}); }
-    setLoading(false);
-  };
-
-  // Simple line chart component
-  const LineChart=({data,metric,color,label})=>{
-    if(!data||data.length<2) return null;
-    const vals=data.map(d=>d[metric]).filter(v=>v!=null&&!isNaN(v));
-    if(vals.length<2) return null;
-    const min=Math.min(...vals);
-    const max=Math.max(...vals);
-    const range=max-min||1;
-    const w=300; const h=80; const pad=10;
-    const pts=vals.map((v,i)=>{
-      const x=pad+(i/(vals.length-1))*(w-pad*2);
-      const y=h-pad-((v-min)/range)*(h-pad*2);
-      return`${x},${y}`;
-    }).join(" ");
-    return <div style={{marginBottom:16}}>
-      <div style={{color:C.mut,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:6}}>{label}</div>
-      <svg viewBox={`0 0 ${w} ${h}`} style={{width:"100%",height:80,display:"block"}}>
-        <polyline points={pts} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"/>
-        {vals.map((v,i)=>{
-          const x=pad+(i/(vals.length-1))*(w-pad*2);
-          const y=h-pad-((v-min)/range)*(h-pad*2);
-          return <g key={i}>
-            <circle cx={x} cy={y} r="4" fill={color}/>
-            <text x={x} y={y-8} textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize="9">{v}</text>
-          </g>;
-        })}
-      </svg>
-      <div style={{display:"flex",justifyContent:"space-between"}}>
-        {data.filter(d=>d[metric]!=null).map((d,i)=><div key={i} style={{color:C.dim,fontSize:10}}>{d.date}</div>)}
-      </div>
-    </div>;
-  };
-
-  const periods=[{v:"7",l:sr?"7 dana":"7 days"},{v:"14",l:sr?"14 dana":"14 days"},{v:"30",l:sr?"30 dana":"30 days"},{v:"custom",l:sr?"Custom":"Custom"}];
-
-  // REPORT
-  if(report) return <div>
-    <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 4px"}}>⏱️ Time Machine</h2>
-    <p style={{color:C.mut,fontSize:13,margin:"0 0 20px"}}>{report.client} · {report.from} → {report.to}</p>
-
-    {report.error&&<div style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:12,padding:"16px",color:C.red,fontSize:13,marginBottom:16}}>{report.msg}</div>}
-
-    {!report.error&&<>
-      {/* Charts */}
-      {chartData.length>=2&&<div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"16px",marginBottom:16}}>
-        <div style={{color:C.acl,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"1px",marginBottom:14}}>{sr?"Grafikon trendova":"Trend Charts"}</div>
-        <LineChart data={chartData} metric="roas" color="#6366F1" label="ROAS"/>
-        <LineChart data={chartData} metric="revenue" color="#34D399" label={sr?"Revenue (€)":"Revenue (€)"}/>
-        <LineChart data={chartData} metric="spend" color="#F97316" label={sr?"Potrošnja (€)":"Spend (€)"}/>
-        <LineChart data={chartData} metric="cpa" color="#F59E0B" label="CPA (€)"/>
-      </div>}
-
-      {chartData.length<2&&chartData.length>0&&<div style={{background:"rgba(251,191,36,0.08)",border:"1px solid rgba(251,191,36,0.2)",borderRadius:12,padding:"14px",marginBottom:16}}>
-        <div style={{color:C.yel,fontSize:12}}>⚠️ {sr?"Samo 1 analiza u periodu – grafikon zahteva 2+ analiza.":"Only 1 analysis in period – chart requires 2+ analyses."}</div>
-      </div>}
-
-      {/* Report text */}
-      <div style={{background:"rgba(99,102,241,0.06)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:12,padding:"16px",marginBottom:16}}>
-        <div style={{color:C.acl,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"1px",marginBottom:12}}>
-          {sr?`Sintetizovani izveštaj · ${report.count} analiza`:`Synthesized report · ${report.count} analyses`}
-        </div>
-        <MD2 text={report.text}/>
-      </div>
-    </>}
-
-    <Btn onClick={()=>{setReport(null);setChartData([]);}} sec>{sr?"← Novi izveštaj":"← New Report"}</Btn>
-  </div>;
-
-  // LOADING
-  if(loading) return <div style={{textAlign:"center",padding:"40px 0"}}>
-    <div style={{fontSize:36,marginBottom:16}}>⏱️</div>
-    <div style={{color:C.acl,fontWeight:700,fontSize:15,marginBottom:8}}>{sr?"Time Machine analizira...":"Time Machine analyzing..."}</div>
-    <div style={{color:C.mut,fontSize:13,marginBottom:20}}>{sr?"Sintetizujem sve analize iz perioda...":"Synthesizing all analyses from the period..."}</div>
-    {[1,2,3,4].map(i=><div key={i} style={{height:12,background:"rgba(255,255,255,0.06)",borderRadius:6,width:i===4?"50%":"100%",marginBottom:8,maxWidth:400,margin:"0 auto 8px"}}/>)}
-  </div>;
-
-  // FORM
-  return <div>
-    <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>⏱️ Time Machine</h2>
-    <p style={{color:C.mut,fontSize:13,margin:"0 0 24px"}}>{t.m11s}</p>
-
-    {/* Izbor klijenta */}
-    <div style={{marginBottom:20}}>
-      <Lbl c={sr?"Izaberi klijenta":"Select client"}/>
-      {clientsLoading
-        ?<div style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:12,padding:"16px",color:C.acl,fontSize:13,textAlign:"center"}}>
-          ✦ {sr?"Učitavam klijente...":"Loading clients..."}
-        </div>
-        :clients.length===0
-        ?<div style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:12,padding:"16px",color:C.mut,fontSize:13,textAlign:"center"}}>
-          {sr?"Nema klijenata. Dodaj klijenta u Clients ili napravi analizu u Report Generator-u.":"No clients. Add a client in Clients or create an analysis in Report Generator."}
-        </div>
-        :<div style={{display:"flex",flexDirection:"column",gap:8}}>
-          {clients.map(c=><button key={c.id} onClick={()=>setSelectedClient(c)} style={{background:selectedClient?.id===c.id?"rgba(99,102,241,0.2)":"rgba(255,255,255,0.03)",border:`1px solid ${selectedClient?.id===c.id?"rgba(99,102,241,0.5)":C.brd}`,borderRadius:10,padding:"12px 16px",textAlign:"left",cursor:"pointer",color:selectedClient?.id===c.id?C.acl:C.txt,fontWeight:600,fontSize:13}}>
-            👤 {c.name}
-          </button>)}
-        </div>
-      }
-    </div>
-
-    {selectedClient&&<>
-      {/* Izbor moda */}
-      <div style={{display:"flex",gap:8,marginBottom:20}}>
-        <button onClick={()=>setMode("period")} style={{flex:1,padding:"10px",borderRadius:10,border:`1px solid ${mode==="period"?"rgba(99,102,241,0.6)":C.brd}`,background:mode==="period"?"rgba(99,102,241,0.15)":"transparent",color:mode==="period"?C.acl:C.mut,fontSize:13,fontWeight:600,cursor:"pointer"}}>
-          📈 {sr?"Period Report":"Period Report"}
-        </button>
-        <button onClick={()=>setMode("compare")} style={{flex:1,padding:"10px",borderRadius:10,border:`1px solid ${mode==="compare"?"rgba(52,211,153,0.6)":C.brd}`,background:mode==="compare"?"rgba(52,211,153,0.15)":"transparent",color:mode==="compare"?C.grn:C.mut,fontSize:13,fontWeight:600,cursor:"pointer"}}>
-          📊 {sr?"Poređenje":"Comparison"}
-        </button>
-      </div>
-
-      {mode==="period"&&<>
-        <Lbl c={sr?"Period":"Period"}/>
-        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}}>
-          {periods.map(p=><button key={p.v} onClick={()=>setPeriod(p.v)} style={{padding:"8px 16px",borderRadius:20,border:`1px solid ${period===p.v?"rgba(99,102,241,0.6)":C.brd}`,background:period===p.v?"rgba(99,102,241,0.2)":"transparent",color:period===p.v?C.acl:C.mut,fontSize:13,fontWeight:600,cursor:"pointer"}}>{p.l}</button>)}
-        </div>
-        {period==="custom"&&<div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
-          <div><Lbl c={sr?"Od":"From"}/><DIn v={customFrom} ch={setCustomFrom}/></div>
-          <div><Lbl c={sr?"Do":"To"}/><DIn v={customTo} ch={setCustomTo}/></div>
-        </div>}
-        <Btn onClick={generate} disabled={period==="custom"&&(!customFrom||!customTo)}>{sr?"⏱️ Generiši izveštaj →":"⏱️ Generate report →"}</Btn>
-      </>}
-
-      {mode==="compare"&&<>
-        <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:16}}>
-          <div style={{background:"rgba(99,102,241,0.06)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:12,padding:"14px"}}>
-            <div style={{color:C.acl,fontWeight:700,fontSize:12,marginBottom:10}}>Period A</div>
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              <div><Lbl c={sr?"Od":"From"}/><DIn v={periodA.from} ch={v=>setPeriodA(p=>({...p,from:v}))}/></div>
-              <div><Lbl c={sr?"Do":"To"}/><DIn v={periodA.to} ch={v=>setPeriodA(p=>({...p,to:v}))}/></div>
-            </div>
-          </div>
-          <div style={{background:"rgba(52,211,153,0.06)",border:"1px solid rgba(52,211,153,0.2)",borderRadius:12,padding:"14px"}}>
-            <div style={{color:C.grn,fontWeight:700,fontSize:12,marginBottom:10}}>Period B</div>
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              <div><Lbl c={sr?"Od":"From"}/><DIn v={periodB.from} ch={v=>setPeriodB(p=>({...p,from:v}))}/></div>
-              <div><Lbl c={sr?"Do":"To"}/><DIn v={periodB.to} ch={v=>setPeriodB(p=>({...p,to:v}))}/></div>
-            </div>
-          </div>
-        </div>
-        <Btn onClick={generate} disabled={!periodA.from||!periodA.to||!periodB.from||!periodB.to}>{sr?"⏱️ Uporedi periode →":"⏱️ Compare periods →"}</Btn>
-      </>}
-    </>}
   </div>;
 }
 
@@ -4198,12 +3413,10 @@ const MODS=[
   {id:13,icon:"💬",col:"#22D3EE",tk:"m13t",sk:"m13s",grp:"an"},
   {id:2,icon:"💰",col:"#10B981",tk:"m2t",sk:"m2s",grp:"dw"},
   {id:15,icon:"📑",col:"#F59E0B",tk:"m15t",sk:"m15s",grp:"dw"},
-  {id:8,icon:"📄",col:"#F97316",tk:"m8t",sk:"m8s",grp:"dw"},
-  {id:11,icon:"⏱️",col:"#EC4899",tk:"m11t",sk:"m11s",grp:"dw"},
   {id:10,icon:"👥",col:"#A855F7",tk:"m10t",sk:"m10s",grp:"dw"},
   {id:1,icon:"📊",col:"#6366F1",tk:"m1t",sk:"m1s",grp:"dw"},
-  // mod=9 ostaje dostupan samo preko adrese (stari bookmarklet/ekstenzija), ne prikazuje se u meniju
-  {id:9,icon:"🔗",col:"#00D4FF",tk:"m9t",sk:"m9s",grp:"dw",hidden:true},
+  // mod=9 (stari bookmarklet/ekstenzija) vodi na uvoz u Report Studio; ne prikazuje se u meniju
+  {id:9,icon:"📑",col:"#F59E0B",tk:"m15t",sk:"m15s",grp:"dw",hidden:true},
 ];
 const VISIBLE_MODS=MODS.filter(m=>!m.hidden);
 const MOD_GROUPS=[{k:"an",tk:"grpAn"},{k:"dw",tk:"grpDw"}];
@@ -4345,7 +3558,7 @@ export default function App(){
   // Save lang preference
   useEffect(()=>{ localStorage.setItem("mat_lang",lang); },[lang]);
 
-  const Comp=mod===1?HealthMod:mod===8?ReportMod:mod===9?BookmarkMod:mod===10?MyClientsMod:mod===11?TimeMachineMod:mod===12?ProductIntelligenceMod:mod===13?AskDataMod:mod===14?CampaignsMod:mod===2?BudgetPacingMod:mod===15?ReportStudioMod:null;
+  const Comp=mod===1?HealthMod:mod===10?MyClientsMod:mod===12?ProductIntelligenceMod:mod===13?AskDataMod:mod===14?CampaignsMod:mod===2?BudgetPacingMod:(mod===15||mod===9)?ReportStudioMod:null;
   // Nepostojeci ili obrisani modul (npr. stari link ?mod=3) vodi na pocetni ekran
   const showHome=!mod||!Comp;
 
@@ -4428,7 +3641,7 @@ export default function App(){
         })}
         <div style={{padding:"24px 16px 0",textAlign:"center"}}><div style={{color:"rgba(255,255,255,0.2)",fontSize:11}}>Meta Ads Toolkit · v1.0 · by aleksandarpopup</div></div>
       </>}
-      {!showHome&&<div style={{padding:"20px 16px"}}><Comp t={t} lang={lang} goMod={goMod}/></div>}
+      {!showHome&&<div style={{padding:"20px 16px"}}><Comp t={t} lang={lang} goMod={goMod} initialTab={mod===9?"import":undefined}/></div>}
     </div>
   </div>;
 
@@ -4528,7 +3741,7 @@ export default function App(){
             </div>;
           })}
         </div>}
-        {!showHome&&<div style={{padding:"40px 48px 60px",maxWidth:860}}><Comp t={t} lang={lang} goMod={goMod}/></div>}
+        {!showHome&&<div style={{padding:"40px 48px 60px",maxWidth:860}}><Comp t={t} lang={lang} goMod={goMod} initialTab={mod===9?"import":undefined}/></div>}
       </div>
     </div>
   </div>;
