@@ -49,9 +49,6 @@ const DIn=({v,ch})=><input type="date" value={v} onChange={e=>ch(e.target.value)
 const Div=({l})=><div style={{display:"flex",alignItems:"center",gap:10,margin:"22px 0 12px"}}><div style={{height:1,flex:1,background:C.brd}}/>{l&&<span style={{color:C.dim,fontSize:10,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",whiteSpace:"nowrap"}}>{l}</span>}<div style={{height:1,flex:1,background:C.brd}}/></div>;
 const ST=({c})=><div style={{color:C.dim,fontSize:10,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"20px 0 10px"}}>{c}</div>;
 const Btn=({onClick,disabled,children,sec})=><button onClick={onClick} disabled={disabled} style={{padding:"15px 20px",borderRadius:11,fontSize:15,fontWeight:700,cursor:disabled?"not-allowed":"pointer",border:sec?`1px solid ${C.brd}`:"none",background:disabled?"rgba(255,255,255,0.06)":sec?"rgba(255,255,255,0.05)":"linear-gradient(135deg,#6366F1,#8B5CF6)",color:disabled?"rgba(255,255,255,0.3)":C.txt,width:"100%"}}>{children}</button>;
-const SBdg=({l,v,s})=>{ const cfg=SC[s]||{}; return <div style={{background:s?`${cfg.b}80`:C.sur,border:`1px solid ${s?cfg.r:C.brd}`,borderLeft:`3px solid ${s?cfg.c:"rgba(255,255,255,0.1)"}`,borderRadius:10,padding:"12px 14px"}}><div style={{color:C.mut,fontSize:11,marginBottom:4}}>{l}</div><div style={{color:s?cfg.c:C.txt,fontWeight:800,fontSize:18}}>{v}</div></div>; };
-const Grid2=({children,mob})=><div style={{display:"grid",gridTemplateColumns:mob?"1fr":"1fr 1fr",gap:12,marginBottom:16}}>{children}</div>;
-const Grid3=({children,mob})=><div style={{display:"grid",gridTemplateColumns:mob?"1fr 1fr":"1fr 1fr 1fr",gap:12,marginBottom:16}}>{children}</div>;
 
 function Pills({opts,val,ch,multi=false}){
   const arr=multi?(Array.isArray(val)?val:[]):null;
@@ -66,14 +63,14 @@ const T={
     m1t:"Health Check", m1s:"Brza dijagnoza kampanje iz screenshota ili CSV-a",
     m8t:"Report Generator", m8s:"Profesionalni izveštaj sa PDF exportom",
     m9t:"Uvoz podataka", m9s:"Analiza uvezenih podataka",
-    m2t:"Budget Pace Kalkulator", m2s:"Prati tempo potrošnje budžeta",
+    m2t:"Budget Pacing", m2s:"Tempo potrošnje po klijentu, underspend i overspend na prvi pogled",
     m10t:"Clients", m10s:"Svi klijenti i povezani GA4 i Google Ads nalozi",
     m11t:"Time Machine", m11s:"Izveštaj i grafikon za period",
     m12t:"Product Intelligence", m12s:"Svaki proizvod, od pregleda do prodaje",
     m13t:"Ask Your Data", m13s:"Pitaj bilo šta o podacima klijenta, odgovor za par sekundi",
     m14t:"Campaign Intelligence", m14s:"Šta svaka kampanja stvarno donosi",
     grpAn:"Analitika", grpDw:"Svakodnevni rad", open:"Otvori",
-    analyze:"Analiziraj →", calc:"Izračunaj →",
+    analyze:"Analiziraj →", 
     newA:"← Nova analiza", poor:"Kritično", ok:"Prosečno", good:"Odlično",
     nxt:"Dalje →", prv:"←", res:"Rezultati", s1:"Osnove", s2:"Metrike", s3:"Targeting & Kreativa",
     bm_step3:"Uvezeni podaci za analizu",
@@ -149,16 +146,7 @@ const T={
     hMAN:"Analiza metrika", hTAN:"Analiza targetiranja", hCAN:"Analiza kreative",
     hPRI:"Prioritetne akcije – uradi odmah", hSTR:"Strateške preporuke",
     hGl:"Cilj", hMsub:"analiziranih metrika",
-    bTitle:"Budget Pace Kalkulator", bSub:"Unesi budžet i tempo potrošnje po fazama",
-    bTot:"Ukupan budžet (€)", bTotPh:"npr. 5000", bSp:"Već potrošeno (€)", bSpPh:"npr. 1200",
-    bSt:"Datum početka", bEn:"Datum kraja", bTd:"Današnji datum",
-    bAdd:"+ Dodaj fazu", bRem:"Ukloni", bPh:"Faza", bFr:"Od dana", bTo:"Do dana", bPct:"% budžeta",
-    bPhT:"Tempo po fazama (opciono)", bPhS:"Podeli kampanju na faze sa različitim tempom potrošnje",
-    bRem2:"Preostalo", bDL:"Dana do kraja", bDE:"Proteklih dana",
-    bIS:"Idealna potrošnja do danas", bDI:"Idealni daily spend",
-    bDN:"Potrebni daily spend", bStat:"Status tempa",
-    bON:"Na pravom putu ✓", bOV:"Prekoračenje – uspori ⚠️", bUN:"Underspend – ubrza ⚠️",
-    bPS:"Status po fazama", bCP:"Trenutna faza", bPB:"Budžet faze", bPD:"Daily spend faze",
+    bIS:"Idealna potrošnja do danas", 
   },
   en:{
     appTitle:"Meta Ads Toolkit", appSub:"Professional tools for performance marketing",
@@ -166,14 +154,14 @@ const T={
     m1t:"Health Check", m1s:"Quick campaign diagnosis from a screenshot or CSV",
     m8t:"Report Generator", m8s:"Professional report with PDF export",
     m9t:"Data import", m9s:"Analysis of imported data",
-    m2t:"Budget Pace Calculator", m2s:"Track your budget spending pace",
+    m2t:"Budget Pacing", m2s:"Spend pace per client, underspend and overspend at a glance",
     m10t:"Clients", m10s:"All clients and connected GA4 and Google Ads accounts",
     m11t:"Time Machine", m11s:"Report and chart for any period",
     m12t:"Product Intelligence", m12s:"Every product, from view to sale",
     m13t:"Ask Your Data", m13s:"Ask anything about your client's data, answers in seconds",
     m14t:"Campaign Intelligence", m14s:"What every campaign really delivers",
     grpAn:"Analytics", grpDw:"Daily work", open:"Open",
-    analyze:"Analyze →", calc:"Calculate →",
+    analyze:"Analyze →", 
     newA:"← New Analysis", poor:"Critical", ok:"Average", good:"Excellent",
     nxt:"Next →", prv:"←", res:"Results", s1:"Basics", s2:"Metrics", s3:"Targeting & Creative",
     bm_step3:"Imported data to analyze",
@@ -215,16 +203,7 @@ const T={
     hMAN:"Metrics Analysis", hTAN:"Targeting Analysis", hCAN:"Creative Analysis",
     hPRI:"Priority Actions – Do Now", hSTR:"Strategic Recommendations",
     hGl:"Goal", hMsub:"metrics analyzed",
-    bTitle:"Budget Pace Calculator", bSub:"Enter budget and spending pace by phases",
-    bTot:"Total Campaign Budget (€)", bTotPh:"e.g. 5000", bSp:"Already Spent (€)", bSpPh:"e.g. 1200",
-    bSt:"Campaign Start Date", bEn:"Campaign End Date", bTd:"Today's Date",
-    bAdd:"+ Add Phase", bRem:"Remove", bPh:"Phase", bFr:"From day", bTo:"To day", bPct:"% of budget",
-    bPhT:"Spending Pace by Phases (optional)", bPhS:"Split campaign into phases with different spending pace",
-    bRem2:"Remaining", bDL:"Days remaining", bDE:"Days elapsed",
-    bIS:"Ideal spend to date", bDI:"Ideal daily spend",
-    bDN:"Required daily spend", bStat:"Pace Status",
-    bON:"On track ✓", bOV:"Overspending – slow down ⚠️", bUN:"Underspending – speed up ⚠️",
-    bPS:"Phase Status", bCP:"Current Phase", bPB:"Phase Budget", bPD:"Phase daily spend",
+    bIS:"Ideal spend to date", 
     rg_title:"AI Report Generator",
     rg_sub:"Professional client report with PDF export",
     rg_single:"Single Period Report",
@@ -833,89 +812,414 @@ Be specific, direct and professional. Use real Meta Ads benchmark values.`;
   </div>;
 }
 
-// ── MODULE 2: BUDGET PACE ────────────────────────────────────────────────────
-function BudgetMod({t,lang}){
-  const td=new Date().toISOString().split("T")[0];
-  const [tot,setTot]=useState(""); const [sp,setSp]=useState("");
-  const [st,setSt]=useState(""); const [en,setEn]=useState(""); const [now,setNow]=useState(td);
-  const [phases,setPh]=useState([{fr:"",to:"",pct:""}]);
-  const [done,setDone]=useState(false);
-  const sr=lang==="sr";
-  const addPh=()=>setPh(p=>[...p,{fr:"",to:"",pct:""}]);
-  const remPh=i=>setPh(p=>p.filter((_,x)=>x!==i));
-  const setPhi=(i,k,v)=>setPh(p=>p.map((ph,x)=>x===i?{...ph,[k]:v}:ph));
-  const calc=()=>{
-    const T=parseFloat(tot)||0; const S=parseFloat(sp)||0;
-    const A=new Date(st); const B=new Date(en); const N=new Date(now);
-    if(!T||!st||!en) return null;
-    const tD=Math.max(1,Math.round((B-A)/(86400000)));
-    const el=Math.max(0,Math.round((N-A)/(86400000)));
-    const dl=Math.max(0,tD-el); const rem=T-S;
-    const ideal=T*(el/tD); const dIdeal=T/tD;
-    const dNeed=dl>0?rem/dl:0;
-    const diff=(S-ideal)/Math.max(ideal,1);
-    const stat=Math.abs(diff)<0.1?"on":diff>0.1?"over":"under";
-    const pRes=phases.filter(p=>p.fr&&p.to&&p.pct).map(p=>{
-      const pA=new Date(st); pA.setDate(pA.getDate()+(parseInt(p.fr)-1));
-      const pB=new Date(st); pB.setDate(pB.getDate()+(parseInt(p.to)-1));
-      const pD=Math.max(1,Math.round((pB-pA)/(86400000)));
-      const pBud=T*(parseFloat(p.pct)/100);
-      return{fr:p.fr,to:p.to,pct:p.pct,bud:pBud,daily:pBud/pD,days:pD,cur:N>=pA&&N<=pB};
-    });
-    return{T,S,rem,tD,el,dl,ideal,dIdeal,dNeed,stat,pRes};
+// ── BUDGET PACING: POMOCNE FUNKCIJE ──────────────────────────────────────────
+// Datumi se cuvaju kao "YYYY-MM-DD" (lokalni dan), racunanje dana ide preko UTC da letnje/zimsko vreme ne pravi gresku.
+const bpISO=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+const bpParse=s=>{const [y,m,d]=String(s).split("-").map(Number);return new Date(y,m-1,d);};
+const bpDays=(a,b)=>{const A=bpParse(a),B=bpParse(b);return Math.round((Date.UTC(B.getFullYear(),B.getMonth(),B.getDate())-Date.UTC(A.getFullYear(),A.getMonth(),A.getDate()))/86400000);};
+const bpAddDays=(s,n)=>{const d=bpParse(s);d.setDate(d.getDate()+n);return bpISO(d);};
+const bpToday=()=>bpISO(new Date());
+const bpMonthRange=(y,m)=>({from:bpISO(new Date(y,m,1)),to:bpISO(new Date(y,m+1,0))});
+const BP_UNDER=-0.20; // vise od 20% ispod ocekivanog = underspend (kao u internom Excelu)
+const BP_PLATFORMS=[{k:"meta",l:"Meta"},{k:"google_ads",l:"Google Ads"},{k:"tiktok",l:"TikTok"},{k:"other",l:"Other"}];
+const BP_CURRENCIES=["EUR","RSD","USD","BAM","MKD","HUF","BGN","RON","CHF","GBP"];
+const BP_ORDER={over:0,under:1,no_spend:2,no_entry:3,ok:4,early:5,not_started:6,finished:7};
+
+// Racuna tempo jednog budzeta na osnovu poslednjeg unosa.
+function bpCalc(b,today){
+  const entries=b.budget_spend_entries||[];
+  const last=entries.length?entries[entries.length-1]:null;
+  const total=Number(b.total_budget)||0;
+  const totalDays=bpDays(b.start_date,b.end_date)+1;
+  const out={last,total,totalDays,spent:last?Number(last.spent)||0:null,expected:null,diff:null,diffPct:null,projPct:null,daily:null,remaining:null,stale:false,finPct:null};
+  if(today<b.start_date) return {...out,status:"not_started"};
+  if(!last) return {...out,status:"no_entry"};
+  // Unos "zakljucno sa juce" pokriva potrosnju do dana pre unosa
+  let ref=last.through_today?last.entry_date:bpAddDays(last.entry_date,-1);
+  if(ref>b.end_date) ref=b.end_date;
+  const elapsed=Math.max(0,Math.min(totalDays,bpDays(b.start_date,ref)+1));
+  const spent=out.spent;
+  const expected=total*elapsed/totalDays;
+  const remaining=total-spent;
+  const remDays=totalDays-elapsed;
+  const res={...out,elapsed,expected,remaining,
+    diff:spent-expected,
+    diffPct:expected>0?(spent-expected)/expected:null,
+    projPct:expected>0?spent/expected:null,
+    daily:remDays>0?Math.max(remaining,0)/remDays:null,
+    stale:last.entry_date<today&&today<=b.end_date};
+  if(today>b.end_date) return {...res,status:"finished",finPct:total>0?spent/total:null};
+  if(spent===0&&elapsed>0) return {...res,status:"no_spend"};
+  if(expected<=0) return {...res,status:"early"};
+  if(res.diffPct>0) return {...res,status:"over"};
+  if(res.diffPct<BP_UNDER) return {...res,status:"under"};
+  return {...res,status:"ok"};
+}
+
+function bpStatusMeta(status,sr,calc){
+  const pct=v=>v==null?"":` ${(v*100).toFixed(0)}%`;
+  const m={
+    over:{c:C.red,l:sr?"Overspend – smanji potrošnju":"Overspend – reduce spend"},
+    under:{c:C.yel,l:sr?"Underspend – povećaj potrošnju":"Underspend – increase spend"},
+    no_spend:{c:C.red,l:sr?"Nema potrošnje – proveri":"No spend – check it"},
+    no_entry:{c:C.mut,l:sr?"Nema unosa":"No entry yet"},
+    ok:{c:C.grn,l:sr?"Na tempu":"On pace"},
+    early:{c:C.acl,l:sr?"Prvi dan":"First day"},
+    not_started:{c:C.dim,l:sr?"Nije počelo":"Not started"},
+    finished:{c:C.acl,l:(sr?"Završeno":"Completed")+pct(calc&&calc.finPct)},
   };
-  const r=done?calc():null;
-  const SI={on:{c:C.grn,l:t.bON,i:"✅"},over:{c:C.red,l:t.bOV,i:"🔴"},under:{c:C.yel,l:t.bUN,i:"⚠️"}};
+  return m[status]||{c:C.mut,l:status};
+}
+
+// Kratak pregled za zivu karticu na pocetnom ekranu
+function bpSummary(budgets,today){
+  const cnt={};
+  budgets.forEach(b=>{const s=bpCalc(b,today).status;cnt[s]=(cnt[s]||0)+1;});
+  return cnt;
+}
+
+const bpPct=v=>v==null?"–":`${(v*100).toFixed(1)}%`;
+const bpInp={padding:"10px 12px",background:"rgba(255,255,255,0.06)",border:`1px solid ${C.brd}`,borderRadius:9,color:C.txt,fontSize:14,outline:"none",boxSizing:"border-box",width:"100%"};
+const bpBtn=(primary)=>({padding:"10px 14px",borderRadius:10,fontSize:13,fontWeight:700,cursor:"pointer",border:primary?"none":`1px solid ${C.brd}`,background:primary?"linear-gradient(135deg,#10B981,#059669)":"rgba(255,255,255,0.05)",color:"#fff",whiteSpace:"nowrap"});
+
+// Grafikon tempa: idealna linija naspram stvarnih unosa
+function BpChart({b,sr}){
+  const calcTotalDays=bpDays(b.start_date,b.end_date)+1;
+  const total=Number(b.total_budget)||0;
+  const entries=b.budget_spend_entries||[];
+  const W=600,H=170,P=28;
+  const maxY=Math.max(total,...entries.map(e=>Number(e.spent)||0))*1.08||1;
+  const x=d=>P+(d/calcTotalDays)*(W-P*2);
+  const y=v=>H-P-(v/maxY)*(H-P*2);
+  const pts=entries.map(e=>{
+    let ref=e.through_today?e.entry_date:bpAddDays(e.entry_date,-1);
+    if(ref>b.end_date) ref=b.end_date;
+    const el=Math.max(0,Math.min(calcTotalDays,bpDays(b.start_date,ref)+1));
+    return [x(el),y(Number(e.spent)||0)];
+  });
+  return <div style={{background:"rgba(255,255,255,0.02)",border:`1px solid ${C.brd}`,borderRadius:10,padding:"10px 8px 6px",marginTop:10}}>
+    <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:"auto",display:"block"}} role="img" aria-label={sr?"Grafikon tempa potrošnje":"Spend pace chart"}>
+      <line x1={P} y1={H-P} x2={W-P} y2={H-P} stroke="rgba(255,255,255,0.15)"/>
+      <line x1={x(0)} y1={y(0)} x2={x(calcTotalDays)} y2={y(total)} stroke="rgba(255,255,255,0.35)" strokeDasharray="5 5"/>
+      {pts.length>1&&<polyline points={pts.map(p=>p.join(",")).join(" ")} fill="none" stroke="#10B981" strokeWidth="2.5"/>}
+      {pts.map((p,i)=><circle key={i} cx={p[0]} cy={p[1]} r="3.5" fill="#10B981"/>)}
+      <text x={P} y={H-8} fill="rgba(255,255,255,0.4)" fontSize="11">{b.start_date.slice(8)}.{b.start_date.slice(5,7)}.</text>
+      <text x={W-P} y={H-8} fill="rgba(255,255,255,0.4)" fontSize="11" textAnchor="end">{b.end_date.slice(8)}.{b.end_date.slice(5,7)}.</text>
+    </svg>
+    <div style={{display:"flex",gap:14,fontSize:11,color:C.mut,padding:"2px 8px 0"}}>
+      <span>- - {sr?"idealan tempo":"ideal pace"}</span>
+      <span style={{color:"#10B981"}}>● {sr?"stvarna potrošnja":"actual spend"}</span>
+    </div>
+  </div>;
+}
+
+// ── MODULE 2: BUDGET PACING ──────────────────────────────────────────────────
+function BudgetPacingMod({t,lang}){
+  const sr=lang==="sr";
+  const mob=useIsMobile();
+  const now=new Date();
+  const [ym,setYm]=useState({y:now.getFullYear(),m:now.getMonth()});
+  const [budgets,setBudgets]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [loadErr,setLoadErr]=useState("");
+  const [clients,setClients]=useState([]);
+  const [clientsLoading,setClientsLoading]=useState(true);
+  const [inputs,setInputs]=useState({});
+  const [throughToday,setThroughToday]=useState(false);
+  const [saving,setSaving]=useState(false);
+  const [msg,setMsg]=useState(null);
+  const [filter,setFilter]=useState("all");
+  const [expanded,setExpanded]=useState(null);
+  const [form,setForm]=useState(null); // null | {mode:"new"} | {mode:"edit",b} | {mode:"period"}
+  const today=bpToday();
+  const range=bpMonthRange(ym.y,ym.m);
+  const monthLabel=new Date(ym.y,ym.m,1).toLocaleDateString(sr?"sr-Latn-RS":"en-GB",{month:"long",year:"numeric"});
+
+  const loadBudgets=async()=>{
+    const uid=localStorage.getItem("mat_user_id");
+    if(!uid){ setBudgets([]); setLoading(false); return; }
+    setLoading(true); setLoadErr("");
+    try{
+      const r=await fetch(`/api/budgets?user_id=${uid}&from=${range.from}&to=${range.to}`);
+      const d=await r.json();
+      if(!r.ok) throw new Error(d.error||"error");
+      setBudgets(Array.isArray(d)?d:[]);
+    }catch(e){
+      setLoadErr(sr?"Budžeti nisu učitani. Osveži stranicu i pokušaj ponovo.":"Budgets could not be loaded. Refresh the page and try again.");
+      setBudgets([]);
+    }
+    setLoading(false);
+  };
+  useEffect(()=>{ loadBudgets(); },[ym.y,ym.m]);
+
+  const loadClients=()=>{
+    const uid=localStorage.getItem("mat_user_id");
+    if(!uid){ setClientsLoading(false); return; }
+    fetch(`/api/clients?user_id=${uid}`).then(r=>r.json()).then(d=>setClients(Array.isArray(d)?d:[])).catch(()=>{}).finally(()=>setClientsLoading(false));
+  };
+  useEffect(()=>{ loadClients(); },[]);
+
+  const shiftMonth=delta=>{ setInputs({}); setExpanded(null); setFilter("all"); setYm(p=>{const d=new Date(p.y,p.m+delta,1);return {y:d.getFullYear(),m:d.getMonth()};}); };
+
+  const rows=budgets.map(b=>({b,calc:bpCalc(b,today)}))
+    .sort((a,z)=>(BP_ORDER[a.calc.status]-BP_ORDER[z.calc.status])||String(a.b.clients?.name||"").localeCompare(String(z.b.clients?.name||"")));
+  const counts={}; rows.forEach(r=>{counts[r.calc.status]=(counts[r.calc.status]||0)+1;});
+  const shown=filter==="all"?rows:rows.filter(r=>r.calc.status===filter);
+  const pending=Object.entries(inputs).filter(([,v])=>String(v).trim()!=="");
+  const canEnter=b=>today>=b.start_date;
+
+  const saveEntries=async()=>{
+    const uid=await getOrCreateUser();
+    const entries=[];
+    for(const [id,v] of pending){
+      const n=Number(String(v).replace(/\s/g,"").replace(",","."));
+      if(!isFinite(n)||n<0){ setMsg({err:true,t:sr?"Proveri unete iznose – dozvoljeni su samo brojevi 0 ili veći.":"Check the amounts – only numbers 0 or higher are allowed."}); return; }
+      entries.push({budget_id:Number(id),spent:n,entry_date:today,through_today:throughToday});
+    }
+    if(!entries.length) return;
+    setSaving(true); setMsg(null);
+    try{
+      const r=await fetch("/api/budgets",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:uid,action:"entries",entries})});
+      const d=await r.json();
+      if(!r.ok) throw new Error(d.error||"error");
+      setInputs({});
+      setMsg({err:false,t:sr?`Sačuvano: ${entries.length}`:`Saved: ${entries.length}`});
+      await loadBudgets();
+    }catch(e){
+      setMsg({err:true,t:sr?"Unosi nisu sačuvani. Pokušaj ponovo.":"Entries were not saved. Please try again."});
+    }
+    setSaving(false);
+  };
+
+  const deleteBudget=async b=>{
+    if(!window.confirm(sr?`Obrisati budžet za ${b.clients?.name||""}? Brišu se i svi unosi potrošnje.`:`Delete the budget for ${b.clients?.name||""}? All spend entries will be deleted too.`)) return;
+    const uid=localStorage.getItem("mat_user_id");
+    try{
+      const r=await fetch(`/api/budgets?id=${b.id}&user_id=${uid}`,{method:"DELETE"});
+      if(!r.ok) throw new Error();
+      setForm(null); await loadBudgets();
+    }catch(e){ alert(sr?"Budžet nije obrisan. Pokušaj ponovo.":"Budget was not deleted. Please try again."); }
+  };
+
+  const filters=[["all",sr?"Svi":"All",rows.length],["over","Overspend",counts.over||0],["under","Underspend",counts.under||0],["no_spend",sr?"Bez potrošnje":"No spend",counts.no_spend||0],["no_entry",sr?"Bez unosa":"No entry",counts.no_entry||0],["ok",sr?"Na tempu":"On pace",counts.ok||0],["finished",sr?"Završeni":"Completed",counts.finished||0]].filter(f=>f[0]==="all"||f[2]>0);
+
   return <div>
-    <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>{t.bTitle}</h2>
-    <p style={{color:C.mut,fontSize:13,margin:"0 0 22px"}}>{t.bSub}</p>
-    {!done&&<>
-      <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:16}}>
-        <div><Lbl c={t.bTot}/><NIn v={tot} ch={setTot} ph={t.bTotPh} sx="€"/></div>
-        <div><Lbl c={t.bSp}/><NIn v={sp} ch={setSp} ph={t.bSpPh} sx="€"/></div>
+    <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>💰 Budget Pacing</h2>
+    <p style={{color:C.mut,fontSize:13,margin:"0 0 18px"}}>{t.m2s}</p>
+
+    {/* Mesec i akcije */}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:14}}>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <button onClick={()=>shiftMonth(-1)} style={bpBtn(false)} aria-label={sr?"Prethodni mesec":"Previous month"}>←</button>
+        <div style={{fontWeight:800,fontSize:15,minWidth:mob?120:150,textAlign:"center",textTransform:"capitalize"}}>{monthLabel}</div>
+        <button onClick={()=>shiftMonth(1)} style={bpBtn(false)} aria-label={sr?"Sledeći mesec":"Next month"}>→</button>
       </div>
-      <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:16}}>
-        <div><Lbl c={t.bSt}/><DIn v={st} ch={setSt}/></div>
-        <div><Lbl c={t.bEn}/><DIn v={en} ch={setEn}/></div>
-        <div><Lbl c={t.bTd}/><DIn v={now} ch={setNow}/></div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <button onClick={()=>setForm({mode:"period"})} style={bpBtn(false)}>{sr?"Novi period":"New period"}</button>
+        <button onClick={()=>setForm({mode:"new"})} style={bpBtn(true)}>+ {sr?"Novi budžet":"New budget"}</button>
       </div>
-      <Div l={t.bPhT}/>
-      <p style={{color:C.mut,fontSize:12,margin:"0 0 14px"}}>{t.bPhS}</p>
-      {phases.map((ph,i)=><div key={i} style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:11,padding:"13px 15px",marginBottom:10}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}><span style={{color:C.txt,fontWeight:700,fontSize:13}}>{t.bPh} {i+1}</span>{phases.length>1&&<button onClick={()=>remPh(i)} style={{background:"none",border:"none",color:C.red,fontSize:12,cursor:"pointer",fontWeight:600}}>{t.bRem}</button>}</div>
-        <div style={{display:"flex",flexDirection:"column",gap:10}}>
-          <div><Lbl c={t.bFr}/><NIn v={ph.fr} ch={v=>setPhi(i,"fr",v)} ph="1"/></div>
-          <div><Lbl c={t.bTo}/><NIn v={ph.to} ch={v=>setPhi(i,"to",v)} ph="15"/></div>
-          <div><Lbl c={t.bPct}/><NIn v={ph.pct} ch={v=>setPhi(i,"pct",v)} ph="40" sx="%"/></div>
+    </div>
+
+    {form&&<BpForm form={form} sr={sr} mob={mob} clients={clients} setClients={setClients} clientsLoading={clientsLoading} range={range} ym={ym}
+      onClose={()=>setForm(null)} onSaved={async()=>{setForm(null);await loadBudgets();}} onDelete={deleteBudget}/>}
+
+    {/* Filteri po statusu */}
+    {!loading&&rows.length>0&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}}>
+      {filters.map(([k,l,n])=><button key={k} onClick={()=>setFilter(k)} style={{padding:"6px 12px",borderRadius:20,fontSize:12,fontWeight:600,cursor:"pointer",border:filter===k?`1px solid #10B981`:`1px solid ${C.brd}`,background:filter===k?"rgba(16,185,129,0.15)":"transparent",color:filter===k?"#fff":C.mut}}>{l} · {n}</button>)}
+    </div>}
+
+    {/* Unos potrosnje */}
+    {!loading&&rows.some(r=>canEnter(r.b))&&<div style={{background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:12,padding:"12px 14px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        <span style={{color:C.mut,fontSize:12}}>{sr?"Potrošnja zaključno sa:":"Spend up to and including:"}</span>
+        {[[false,sr?"Juče":"Yesterday"],[true,sr?"Danas":"Today"]].map(([v,l])=><button key={l} onClick={()=>setThroughToday(v)} style={{padding:"5px 12px",borderRadius:20,fontSize:12,fontWeight:700,cursor:"pointer",border:"none",background:throughToday===v?"rgba(16,185,129,0.35)":"rgba(255,255,255,0.07)",color:throughToday===v?"#fff":C.mut}}>{l}</button>)}
+      </div>
+      <button onClick={saveEntries} disabled={saving||!pending.length} style={{...bpBtn(true),opacity:saving||!pending.length?0.45:1,cursor:saving||!pending.length?"not-allowed":"pointer"}}>
+        {saving?(sr?"Čuvam...":"Saving..."):(sr?`Sačuvaj unose${pending.length?` (${pending.length})`:""}`:`Save entries${pending.length?` (${pending.length})`:""}`)}
+      </button>
+    </div>}
+    {msg&&<div style={{color:msg.err?C.red:C.grn,fontSize:13,margin:"-6px 0 12px"}}>{msg.t}</div>}
+
+    {loading&&<div style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:12,padding:"16px",color:C.acl,fontSize:13,textAlign:"center"}}>✦ {sr?"Učitavam budžete...":"Loading budgets..."}</div>}
+    {!loading&&loadErr&&<div style={{color:C.red,fontSize:13,marginBottom:12}}>{loadErr}</div>}
+    {!loading&&!loadErr&&rows.length===0&&<div style={{textAlign:"center",padding:"32px 12px",background:"rgba(255,255,255,0.02)",border:`1px solid ${C.brd}`,borderRadius:12}}>
+      <div style={{fontSize:34,marginBottom:10}}>💰</div>
+      <div style={{fontWeight:700,fontSize:15,marginBottom:6}}>{sr?"Nema budžeta za ovaj mesec":"No budgets for this month"}</div>
+      <div style={{color:C.mut,fontSize:13}}>{sr?"Klikni \"+ Novi budžet\" ili \"Novi period\" da dodaš budžete klijenata.":"Click \"+ New budget\" or \"New period\" to add client budgets."}</div>
+    </div>}
+
+    {!loading&&shown.map(({b,calc})=>{
+      const sm=bpStatusMeta(calc.status,sr,calc);
+      const cur=b.currency||"EUR";
+      const plat=BP_PLATFORMS.find(p=>p.k===b.platform);
+      const open=expanded===b.id;
+      return <div key={b.id} style={{background:C.sur,border:`1px solid ${C.brd}`,borderLeft:`3px solid ${sm.c}`,borderRadius:12,padding:"12px 14px",marginBottom:10}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
+          <div style={{minWidth:0}}>
+            <div style={{fontWeight:700,fontSize:14}}>{b.clients?.name||"—"} <span style={{color:C.mut,fontWeight:500,fontSize:12}}>· {plat?(plat.k==="other"?(sr?"Ostalo":"Other"):plat.l):b.platform}</span></div>
+            <div style={{color:C.mut,fontSize:12,marginTop:2}}>{bpParse(b.start_date).toLocaleDateString(sr?"sr-RS":"en-GB")} – {bpParse(b.end_date).toLocaleDateString(sr?"sr-RS":"en-GB")} · {sr?"budžet":"budget"} {fmtMoney(b.total_budget,cur)}{b.note?` · ${b.note}`:""}</div>
+          </div>
+          <div style={{color:sm.c,fontSize:12,fontWeight:700,whiteSpace:"nowrap"}}>{sm.l}</div>
         </div>
-      </div>)}
-      <button onClick={addPh} style={{background:"none",border:`1px dashed ${C.brd}`,borderRadius:10,color:C.acl,fontSize:13,fontWeight:600,cursor:"pointer",width:"100%",padding:"11px",marginBottom:20}}>{t.bAdd}</button>
-      <Btn onClick={()=>setDone(true)} disabled={!tot||!st||!en}>{t.calc}</Btn>
-    </>}
-    {done&&r&&<>
-      <div className="g2" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
-        <SBdg l={t.bDE} v={`${r.el} ${sr?"dana":"days"}`}/>
-        <SBdg l={t.bDL} v={`${r.dl} ${sr?"dana":"days"}`}/>
-        <SBdg l={t.bRem2} v={`€${Math.round(r.rem).toLocaleString()}`}/>
-        <SBdg l={t.bDI} v={`€${Math.round(r.dIdeal)}/${sr?"dan":"day"}`}/>
-      </div>
-      <div style={{background:`${SI[r.stat].c}15`,border:`1px solid ${SI[r.stat].c}40`,borderRadius:14,padding:"18px",marginBottom:16,textAlign:"center"}}>
-        <div style={{fontSize:28,marginBottom:6}}>{SI[r.stat].i}</div>
-        <div style={{color:SI[r.stat].c,fontWeight:800,fontSize:16,marginBottom:4}}>{t.bStat}: {SI[r.stat].l}</div>
-        <div style={{color:C.mut,fontSize:13}}>
-          {r.stat==="on"&&(sr?`Idealno do danas: €${Math.round(r.ideal).toLocaleString()} · Stvarno: €${Math.round(r.S).toLocaleString()}`:`Ideal to date: €${Math.round(r.ideal).toLocaleString()} · Actual: €${Math.round(r.S).toLocaleString()}`)}
-          {r.stat==="over"&&(sr?`Potrošeno €${Math.round(r.S-r.ideal).toLocaleString()} više od plana. Uspori potrošnju.`:`Spent €${Math.round(r.S-r.ideal).toLocaleString()} over plan. Slow down spending.`)}
-          {r.stat==="under"&&(sr?`Potrošeno €${Math.round(r.ideal-r.S).toLocaleString()} manje od plana. Ubrzi potrošnju.`:`Spent €${Math.round(r.ideal-r.S).toLocaleString()} under plan. Speed up spending.`)}
+        <div style={{display:"grid",gridTemplateColumns:mob?"1fr 1fr":"repeat(5,1fr)",gap:8,marginTop:10}}>
+          {[
+            [sr?"Potrošeno":"Spent",calc.spent==null?"–":fmtMoney(calc.spent,cur)],
+            [sr?"Očekivano":"Expected",calc.expected==null?"–":fmtMoney(calc.expected,cur)],
+            [sr?"Razlika":"Difference",calc.diffPct==null?"–":`${calc.diff>=0?"+":""}${fmtMoney(calc.diff,cur)} (${calc.diffPct>=0?"+":""}${(calc.diffPct*100).toFixed(1)}%)`],
+            [sr?"Tempo":"Pace",bpPct(calc.projPct)],
+            [sr?"Dnevno potrebno":"Daily needed",calc.daily==null?"–":fmtMoney(calc.daily,cur)],
+          ].map(([l,v])=><div key={l}><div style={{color:C.dim,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.6px"}}>{l}</div><div style={{fontSize:13,fontWeight:600,marginTop:2}}>{v}</div></div>)}
         </div>
+        {calc.stale&&calc.last&&<div style={{color:C.yel,fontSize:11,marginTop:8}}>{sr?`Poslednji unos: ${bpParse(calc.last.entry_date).toLocaleDateString("sr-RS")} – unesi današnje stanje.`:`Last entry: ${bpParse(calc.last.entry_date).toLocaleDateString("en-GB")} – enter today's figure.`}</div>}
+        <div style={{display:"flex",gap:8,marginTop:10,alignItems:"center",flexWrap:"wrap"}}>
+          {canEnter(b)&&<input type="text" inputMode="decimal" value={inputs[b.id]||""} onChange={e=>setInputs(p=>({...p,[b.id]:e.target.value}))}
+            placeholder={(sr?"Potrošeno do sada":"Spent so far")+(calc.spent!=null?` (${sr?"poslednje":"last"}: ${fmtMoney(calc.spent,cur)})`:"")}
+            aria-label={sr?"Potrošeno do sada":"Spent so far"}
+            style={{...bpInp,flex:"1 1 200px",width:"auto"}}/>}
+          <button onClick={()=>setExpanded(open?null:b.id)} style={bpBtn(false)}>{open?(sr?"Sakrij grafikon":"Hide chart"):(sr?"Grafikon":"Chart")}</button>
+          <button onClick={()=>setForm({mode:"edit",b})} style={bpBtn(false)}>{sr?"Izmeni":"Edit"}</button>
+        </div>
+        {open&&<BpChart b={b} sr={sr}/>}
+      </div>;
+    })}
+  </div>;
+}
+
+// Forma: novi budzet, izmena budzeta ili "Novi period" (lista klijenata iz prethodnog meseca, bez iznosa)
+function BpForm({form,sr,mob,clients,setClients,clientsLoading,range,ym,onClose,onSaved,onDelete}){
+  const edit=form.mode==="edit"?form.b:null;
+  const [clientId,setClientId]=useState(edit?String(edit.client_id):"");
+  const [platform,setPlatform]=useState(edit?edit.platform:"meta");
+  const [start,setStart]=useState(edit?edit.start_date:range.from);
+  const [end,setEnd]=useState(edit?edit.end_date:range.to);
+  const [amount,setAmount]=useState(edit?String(edit.total_budget):"");
+  const [currency,setCurrency]=useState(edit?edit.currency:"EUR");
+  const [note,setNote]=useState(edit?(edit.note||""):"");
+  const [newName,setNewName]=useState("");
+  const [creatingClient,setCreatingClient]=useState(false);
+  const [saving,setSaving]=useState(false);
+  const [err,setErr]=useState("");
+  // Novi period
+  const [prevRows,setPrevRows]=useState(null);
+  const [prevAmounts,setPrevAmounts]=useState({});
+
+  useEffect(()=>{
+    if(form.mode!=="period") return;
+    const uid=localStorage.getItem("mat_user_id");
+    if(!uid){ setPrevRows([]); return; }
+    const pr=bpMonthRange(ym.m===0?ym.y-1:ym.y,ym.m===0?11:ym.m-1);
+    fetch(`/api/budgets?user_id=${uid}&from=${pr.from}&to=${pr.to}`).then(r=>r.json()).then(d=>{
+      const seen=new Set(); const list=[];
+      (Array.isArray(d)?d:[]).forEach(b=>{const k=`${b.client_id}|${b.platform}`; if(!seen.has(k)){seen.add(k);list.push({key:k,client_id:b.client_id,name:b.clients?.name||"—",platform:b.platform,currency:b.currency||"EUR"});}});
+      list.sort((a,z)=>a.name.localeCompare(z.name));
+      setPrevRows(list);
+    }).catch(()=>setPrevRows([]));
+  },[form.mode]);
+
+  const addClient=async()=>{
+    if(!newName.trim()) return;
+    setCreatingClient(true);
+    try{
+      const uid=await getOrCreateUser();
+      const r=await fetch("/api/clients",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:uid,name:newName.trim()})});
+      const c=await r.json();
+      if(r.ok&&c.id){
+        setClients(p=>p.some(x=>String(x.id)===String(c.id))?p:[c,...p]);
+        setClientId(String(c.id)); setNewName("");
+      } else alert(sr?"Klijent nije sačuvan. Pokušaj ponovo.":"Client was not saved. Please try again.");
+    }catch(e){ alert(sr?"Klijent nije sačuvan. Proveri internet vezu i pokušaj ponovo.":"Client was not saved. Check your connection and try again."); }
+    setCreatingClient(false);
+  };
+
+  const num=v=>Number(String(v).replace(/\s/g,"").replace(",","."));
+
+  const save=async()=>{
+    setErr("");
+    if(!start||!end||end<start){ setErr(sr?"Proveri datume – kraj ne može biti pre početka.":"Check the dates – the end can't be before the start."); return; }
+    const uid=await getOrCreateUser();
+    setSaving(true);
+    try{
+      if(form.mode==="period"){
+        const list=(prevRows||[]).filter(r=>String(prevAmounts[r.key]||"").trim()!=="").map(r=>({client_id:r.client_id,platform:r.platform,start_date:start,end_date:end,total_budget:num(prevAmounts[r.key]),currency:r.currency}));
+        if(!list.length){ setErr(sr?"Unesi iznos bar za jednog klijenta.":"Enter an amount for at least one client."); setSaving(false); return; }
+        if(list.some(b=>!isFinite(b.total_budget)||b.total_budget<0)){ setErr(sr?"Iznosi moraju biti brojevi 0 ili veći.":"Amounts must be numbers 0 or higher."); setSaving(false); return; }
+        const r=await fetch("/api/budgets",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:uid,action:"create",budgets:list})});
+        if(!r.ok) throw new Error();
+      } else {
+        const tb=num(amount);
+        if(!clientId){ setErr(sr?"Izaberi klijenta.":"Choose a client."); setSaving(false); return; }
+        if(!isFinite(tb)||tb<0||String(amount).trim()===""){ setErr(sr?"Unesi ispravan iznos budžeta.":"Enter a valid budget amount."); setSaving(false); return; }
+        const body={client_id:Number(clientId),platform,start_date:start,end_date:end,total_budget:tb,currency,note};
+        const r=edit
+          ?await fetch(`/api/budgets?id=${edit.id}&user_id=${uid}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})
+          :await fetch("/api/budgets",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:uid,action:"create",budgets:[body]})});
+        if(!r.ok) throw new Error();
+      }
+      await onSaved();
+    }catch(e){
+      setErr(sr?"Nije sačuvano. Pokušaj ponovo.":"Not saved. Please try again.");
+    }
+    setSaving(false);
+  };
+
+  const title=form.mode==="edit"?(sr?"Izmeni budžet":"Edit budget"):form.mode==="period"?(sr?"Novi period":"New period"):(sr?"Novi budžet":"New budget");
+  const L=({c})=><div style={{color:C.mut,fontSize:11,fontWeight:700,letterSpacing:"0.6px",textTransform:"uppercase",margin:"0 0 6px"}}>{c}</div>;
+  const dates=<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+    <div><L c={sr?"Početak":"Start"}/><input type="date" value={start} onChange={e=>setStart(e.target.value)} style={bpInp}/></div>
+    <div><L c={sr?"Kraj":"End"}/><input type="date" value={end} onChange={e=>setEnd(e.target.value)} style={bpInp}/></div>
+  </div>;
+
+  return <div style={{background:"rgba(16,185,129,0.05)",border:"1px solid rgba(16,185,129,0.25)",borderRadius:14,padding:"16px",marginBottom:16}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+      <div style={{fontWeight:800,fontSize:15}}>{title}</div>
+      <button onClick={onClose} style={{...bpBtn(false),padding:"6px 10px"}} aria-label={sr?"Zatvori":"Close"}>✕</button>
+    </div>
+
+    {form.mode==="period"?<>
+      <div style={{color:C.mut,fontSize:13,marginBottom:12}}>{sr?"Klijenti iz prethodnog meseca, bez iznosa. Upiši budžet za one koji nastavljaju – prazni se preskaču.":"Clients from the previous month, without amounts. Enter a budget for those who continue – empty ones are skipped."}</div>
+      {dates}
+      {prevRows===null&&<div style={{color:C.acl,fontSize:13}}>✦ {sr?"Učitavam...":"Loading..."}</div>}
+      {prevRows&&prevRows.length===0&&<div style={{color:C.mut,fontSize:13,marginBottom:10}}>{sr?"U prethodnom mesecu nema budžeta. Koristi \"+ Novi budžet\".":"There are no budgets in the previous month. Use \"+ New budget\"."}</div>}
+      {prevRows&&prevRows.map(r=>{const plat=BP_PLATFORMS.find(p=>p.k===r.platform);return <div key={r.key} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+        <div style={{flex:1,minWidth:0,fontSize:13}}>{r.name} <span style={{color:C.mut}}>· {plat?(plat.k==="other"?(sr?"Ostalo":"Other"):plat.l):r.platform}</span></div>
+        <input type="text" inputMode="decimal" value={prevAmounts[r.key]||""} onChange={e=>setPrevAmounts(p=>({...p,[r.key]:e.target.value}))} placeholder={`${sr?"Budžet":"Budget"} (${r.currency})`} aria-label={`${r.name} ${sr?"budžet":"budget"}`} style={{...bpInp,width:mob?120:170}}/>
+      </div>;})}
+    </>:<>
+      <L c={sr?"Klijent":"Client"}/>
+      {clientsLoading?<div style={{color:C.acl,fontSize:13,marginBottom:12}}>✦ {sr?"Učitavam klijente...":"Loading clients..."}</div>:
+        <select value={clientId} onChange={e=>setClientId(e.target.value)} disabled={!!edit} style={{...bpInp,marginBottom:8}}>
+          <option value="" style={{color:"#111"}}>{sr?"— izaberi klijenta —":"— choose a client —"}</option>
+          {clients.map(c=><option key={c.id} value={String(c.id)} style={{color:"#111"}}>{c.name}</option>)}
+        </select>}
+      {!edit&&<div style={{display:"flex",gap:8,marginBottom:12}}>
+        <input value={newName} onChange={e=>setNewName(e.target.value)} placeholder={sr?"ili upiši ime novog klijenta":"or type a new client name"} style={{...bpInp,flex:1,width:"auto"}}/>
+        <button onClick={addClient} disabled={creatingClient||!newName.trim()} style={{...bpBtn(false),opacity:creatingClient||!newName.trim()?0.5:1}}>{creatingClient?"...":(sr?"+ Novi klijent":"+ New client")}</button>
+      </div>}
+      <div style={{display:"grid",gridTemplateColumns:mob?"1fr":"1fr 1fr",gap:10,marginBottom:12}}>
+        <div><L c={sr?"Platforma":"Platform"}/>
+          <select value={platform} onChange={e=>setPlatform(e.target.value)} style={bpInp}>
+            {BP_PLATFORMS.map(p=><option key={p.k} value={p.k} style={{color:"#111"}}>{p.k==="other"?(sr?"Ostalo":"Other"):p.l}</option>)}
+          </select></div>
+        <div><L c={sr?"Valuta":"Currency"}/>
+          <select value={currency} onChange={e=>setCurrency(e.target.value)} style={bpInp}>
+            {(BP_CURRENCIES.includes(currency)?BP_CURRENCIES:[currency,...BP_CURRENCIES]).map(c=><option key={c} value={c} style={{color:"#111"}}>{c}</option>)}
+          </select></div>
       </div>
-      <div style={{background:"rgba(99,102,241,0.1)",border:"1px solid rgba(99,102,241,0.25)",borderRadius:12,padding:"16px",marginBottom:16,textAlign:"center"}}>
-        <div style={{color:C.mut,fontSize:11,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:6}}>{t.bDN}</div>
-        <div style={{color:C.acl,fontWeight:900,fontSize:32}}>€{Math.round(r.dNeed)}<span style={{fontSize:16,fontWeight:500}}>/{sr?"dan":"day"}</span></div>
-        <div style={{color:C.mut,fontSize:12,marginTop:4}}>{sr?`da se iskoristi €${Math.round(r.rem).toLocaleString()} u ${r.dl} dana`:`to spend €${Math.round(r.rem).toLocaleString()} in ${r.dl} days`}</div>
+      {dates}
+      <div style={{display:"grid",gridTemplateColumns:mob?"1fr":"1fr 1fr",gap:10,marginBottom:12}}>
+        <div><L c={sr?"Ukupan budžet":"Total budget"}/><input type="text" inputMode="decimal" value={amount} onChange={e=>setAmount(e.target.value)} placeholder={sr?"npr. 5000":"e.g. 5000"} style={bpInp}/></div>
+        <div><L c={sr?"Napomena (opciono)":"Note (optional)"}/><input value={note} onChange={e=>setNote(e.target.value)} placeholder="Always On" maxLength={200} style={bpInp}/></div>
       </div>
-      {r.pRes.length>0&&<><ST c={t.bPS}/>{r.pRes.map((ph,i)=><div key={i} style={{background:ph.cur?"rgba(99,102,241,0.1)":C.sur,border:`1px solid ${ph.cur?"rgba(99,102,241,0.3)":C.brd}`,borderRadius:11,padding:"13px 15px",marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}><span style={{color:C.txt,fontWeight:700,fontSize:13}}>{t.bPh} {i+1} – {sr?`Dan ${ph.fr}–${ph.to}`:`Day ${ph.fr}–${ph.to}`} ({ph.pct}%)</span>{ph.cur&&<span style={{background:"rgba(99,102,241,0.2)",color:C.acl,fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:20}}>{t.bCP}</span>}</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}><div style={{color:C.mut,fontSize:12}}>{t.bPB}: <span style={{color:C.txt,fontWeight:700}}>€{Math.round(ph.bud).toLocaleString()}</span></div><div style={{color:C.mut,fontSize:12}}>{t.bPD}: <span style={{color:C.acl,fontWeight:700}}>€{Math.round(ph.daily)}/{sr?"dan":"day"}</span></div></div></div>)}</>}
-      <Btn onClick={()=>setDone(false)} sec>{t.newA}</Btn>
     </>}
+
+    {err&&<div style={{color:C.red,fontSize:13,marginBottom:10}}>{err}</div>}
+    <div style={{display:"flex",gap:8,justifyContent:"space-between",flexWrap:"wrap"}}>
+      <div>{edit&&<button onClick={()=>onDelete(edit)} style={{...bpBtn(false),color:C.red,borderColor:"rgba(248,113,113,0.3)"}}>{sr?"Obriši budžet":"Delete budget"}</button>}</div>
+      <div style={{display:"flex",gap:8}}>
+        <button onClick={onClose} style={bpBtn(false)}>{sr?"Otkaži":"Cancel"}</button>
+        <button onClick={save} disabled={saving} style={{...bpBtn(true),opacity:saving?0.5:1}}>{saving?(sr?"Čuvam...":"Saving..."):(sr?"Sačuvaj":"Save")}</button>
+      </div>
+    </div>
   </div>;
 }
 
@@ -3499,7 +3803,10 @@ const CARD_CSS=`.mc{transition:transform .18s ease,border-color .18s ease}
 .mc .mc-op{opacity:0;transform:translateX(-8px);transition:opacity .2s ease,transform .2s ease}
 .mc:hover .mc-op,.mc:focus-visible .mc-op{opacity:1;transform:none}
 @media (hover:none){.mc:hover{transform:none}.mc .mc-op{opacity:1;transform:none}}
-@media (prefers-reduced-motion:reduce){.mc,.mc .mc-op{transition:none}.mc:hover{transform:none}}`;
+@media (prefers-reduced-motion:reduce){.mc,.mc .mc-op{transition:none}.mc:hover{transform:none}}
+.mc .mc-live{display:none}
+@media (hover:hover){.mc:hover .mc-desc.has-live{display:none}.mc:hover .mc-live{display:block}}
+@media (hover:none){.mc .mc-live{display:block}}`;
 
 // ── RESPONSIVE HOOK ──────────────────────────────────────────────────────────
 function useWindowSize(){
@@ -3622,9 +3929,32 @@ export default function App(){
   // Save lang preference
   useEffect(()=>{ localStorage.setItem("mat_lang",lang); },[lang]);
 
-  const Comp=mod===1?HealthMod:mod===8?ReportMod:mod===9?BookmarkMod:mod===10?MyClientsMod:mod===11?TimeMachineMod:mod===12?ProductIntelligenceMod:mod===13?AskDataMod:mod===14?CampaignsMod:mod===2?BudgetMod:null;
+  const Comp=mod===1?HealthMod:mod===8?ReportMod:mod===9?BookmarkMod:mod===10?MyClientsMod:mod===11?TimeMachineMod:mod===12?ProductIntelligenceMod:mod===13?AskDataMod:mod===14?CampaignsMod:mod===2?BudgetPacingMod:null;
   // Nepostojeci ili obrisani modul (npr. stari link ?mod=3) vodi na pocetni ekran
   const showHome=!mod||!Comp;
+
+  // Ziva kartica Budget Pacing: stanje budzeta za tekuci mesec
+  const [bpLive,setBpLive]=useState(null);
+  useEffect(()=>{
+    if(!showHome) return;
+    const uid=localStorage.getItem("mat_user_id");
+    if(!uid) return;
+    const d=new Date(); const r=bpMonthRange(d.getFullYear(),d.getMonth());
+    let cancelled=false;
+    fetch(`/api/budgets?user_id=${uid}&from=${r.from}&to=${r.to}`).then(x=>x.ok?x.json():[]).then(list=>{
+      if(cancelled||!Array.isArray(list)||!list.length){ if(!cancelled) setBpLive(null); return; }
+      const c=bpSummary(list,bpToday());
+      const problems=(c.under||0)+(c.over||0)+(c.no_spend||0);
+      const parts=[];
+      if(c.under) parts.push(`${c.under} underspend`);
+      if(c.over) parts.push(`${c.over} overspend`);
+      if(c.no_spend) parts.push(`${c.no_spend} ${lang==="sr"?"bez potrošnje":"no spend"}`);
+      if(c.ok) parts.push(`${c.ok} ${lang==="sr"?"na tempu":"on pace"}`);
+      if(!parts.length) parts.push(`${list.length} ${lang==="sr"?"budžeta":"budgets"}`);
+      setBpLive({text:parts.join(" · "),bad:problems>0});
+    }).catch(()=>{ if(!cancelled) setBpLive(null); });
+    return()=>{cancelled=true;};
+  },[showHome,lang]);
 
   const ModCard=({m,i,large})=>(
     <button className="mc" onClick={()=>goMod(m.id)} style={{
@@ -3638,7 +3968,10 @@ export default function App(){
     }}>
       <div style={{width:large?48:40,height:large?48:40,borderRadius:12,background:`linear-gradient(135deg,${m.col}40,${m.col}20)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:large?24:20,marginBottom:large?14:12}}>{m.icon}</div>
       <div style={{color:"#fff",fontWeight:700,fontSize:large?15:13,marginBottom:4,lineHeight:1.3}}>{t[m.tk]}</div>
-      <div style={{color:"rgba(255,255,255,0.45)",fontSize:large?12:11,lineHeight:1.5,marginBottom:large?14:12}}>{t[m.sk]}</div>
+      {(()=>{const live=m.id===2&&bpLive?bpLive:null;return <div style={{marginBottom:large?14:12}}>
+        <div className={live?"mc-desc has-live":"mc-desc"} style={{color:"rgba(255,255,255,0.45)",fontSize:large?12:11,lineHeight:1.5}}>{t[m.sk]}</div>
+        {live&&<div className="mc-live" style={{color:live.bad?C.red:C.grn,fontSize:large?12:11,lineHeight:1.5,fontWeight:700}}>{live.text}</div>}
+      </div>;})()}
       <div className="mc-op" style={{color:m.col,fontSize:12,fontWeight:700}}>{t.open} →</div>
     </button>
   );
