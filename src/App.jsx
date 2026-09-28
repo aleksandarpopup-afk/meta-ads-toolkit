@@ -70,6 +70,7 @@ const T={
     m13t:"Ask Your Data", m13s:"Pitaj bilo šta o podacima klijenta, odgovor za par sekundi",
     m14t:"Campaign Intelligence", m14s:"Šta svaka kampanja stvarno donosi",
     grpAn:"Analitika", grpDw:"Svakodnevni rad", open:"Otvori",
+    m15t:"Report Studio", m15s:"Izveštaj za klijenta u par klikova, sa PDF-om",
     analyze:"Analiziraj →", 
     newA:"← Nova analiza", poor:"Kritično", ok:"Prosečno", good:"Odlično",
     nxt:"Dalje →", prv:"←", res:"Rezultati", s1:"Osnove", s2:"Metrike", s3:"Targeting & Kreativa",
@@ -161,6 +162,7 @@ const T={
     m13t:"Ask Your Data", m13s:"Ask anything about your client's data, answers in seconds",
     m14t:"Campaign Intelligence", m14s:"What every campaign really delivers",
     grpAn:"Analytics", grpDw:"Daily work", open:"Open",
+    m15t:"Report Studio", m15s:"Client reports in a few clicks, with PDF",
     analyze:"Analyze →", 
     newA:"← New Analysis", poor:"Critical", ok:"Average", good:"Excellent",
     nxt:"Next →", prv:"←", res:"Results", s1:"Basics", s2:"Metrics", s3:"Targeting & Creative",
@@ -1266,6 +1268,248 @@ function BpForm({form,sr,mob,clients,setClients,clientsLoading,range,ym,onClose,
         <button onClick={save} disabled={saving} style={{...bpBtn(true),opacity:saving?0.5:1}}>{saving?(sr?"Čuvam...":"Saving..."):(sr?"Sačuvaj":"Save")}</button>
       </div>
     </div>
+  </div>;
+}
+
+// ── REPORT STUDIO: POMOCNE FUNKCIJE ──────────────────────────────────────────
+const rsEsc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const rsNum=(v,d=0)=>v==null||!isFinite(v)?"–":new Intl.NumberFormat("sr-RS",{minimumFractionDigits:d,maximumFractionDigits:d}).format(v);
+const rsDate=(s,sr)=>bpParse(s).toLocaleDateString(sr?"sr-RS":"en-GB");
+const rsDelta=(cur,prev)=>(prev==null||!isFinite(prev)||prev===0||cur==null||!isFinite(cur))?null:(cur-prev)/prev;
+const rsSum=(arr,k)=>(arr||[]).reduce((s,x)=>s+(Number(x[k])||0),0);
+
+// Glavni brojevi iz odgovora /api/campaigns (isti izvor kao Campaign Intelligence)
+function rsTotals(d){
+  if(!d) return null;
+  const c=d.campaigns||[];
+  const spend=Number(d.totalSpendEUR)||0, revenue=Number(d.totalRevenueEUR)||0;
+  const purchases=rsSum(c,"conversions"), clicks=rsSum(c,"clicks"), impressions=rsSum(c,"impressions");
+  return {spend,revenue,roas:spend>0?revenue/spend:null,purchases,clicks,impressions,
+    cpc:clicks>0?spend/clicks:null,cpa:purchases>0?spend/purchases:null,ctr:impressions>0?clicks/impressions:null};
+}
+
+function rsPeriodRange(key,custom){
+  const t=new Date(); const y=new Date(t); y.setDate(y.getDate()-1);
+  const back=n=>{const s=new Date(y); s.setDate(s.getDate()-(n-1)); return {from:bpISO(s),to:bpISO(y)};};
+  if(key==="7") return back(7);
+  if(key==="30") return back(30);
+  if(key==="90") return back(90);
+  if(key==="month"){ const from=bpISO(new Date(t.getFullYear(),t.getMonth(),1)); return {from:from>bpISO(y)?bpISO(y):from,to:bpISO(y)}; }
+  if(key==="lastmonth") return bpMonthRange(t.getMonth()===0?t.getFullYear()-1:t.getFullYear(),t.getMonth()===0?11:t.getMonth()-1);
+  return {from:custom.from,to:custom.to};
+}
+
+// Grafikon: potrosnja po danu (stubici) i prihod po danu (linija)
+function RsChart({daily,sr,forPrint}){
+  if(!daily||!daily.length) return null;
+  const W=640,H=200,P=34;
+  const max=Math.max(1,...daily.map(d=>Math.max(d.spendEUR||0,d.revenueEUR||0)))*1.1;
+  const n=daily.length, bw=Math.max(2,(W-P*2)/n*0.6);
+  const x=i=>P+(i+0.5)*((W-P*2)/n);
+  const y=v=>H-P-((v||0)/max)*(H-P*2);
+  const axis=forPrint?"#d1d5db":"rgba(255,255,255,0.15)", lbl=forPrint?"#6b7280":"rgba(255,255,255,0.4)";
+  const pts=daily.map((d,i)=>`${x(i)},${y(d.revenueEUR)}`).join(" ");
+  const tick=[0,Math.floor((n-1)/2),n-1].filter((v,i,a)=>a.indexOf(v)===i);
+  return <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:"auto",display:"block"}} role="img" aria-label={sr?"Potrošnja i prihod po danima":"Spend and revenue by day"}>
+    <line x1={P} y1={H-P} x2={W-P} y2={H-P} stroke={axis}/>
+    {daily.map((d,i)=><rect key={d.date} x={x(i)-bw/2} y={y(d.spendEUR)} width={bw} height={Math.max(0,H-P-y(d.spendEUR))} fill="#F59E0B" opacity="0.75"/>)}
+    <polyline points={pts} fill="none" stroke="#10B981" strokeWidth="2.5"/>
+    {tick.map(i=><text key={i} x={x(i)} y={H-12} fill={lbl} fontSize="11" textAnchor="middle">{daily[i].date.slice(8)}.{daily[i].date.slice(5,7)}.</text>)}
+    <text x={P} y={16} fill={lbl} fontSize="11">{rsNum(max/1.1)} €</text>
+  </svg>;
+}
+
+// ── MODULE 15: REPORT STUDIO ─────────────────────────────────────────────────
+function ReportStudioMod({t,lang}){
+  const sr=lang==="sr";
+  const mob=useIsMobile();
+  const [clients,setClients]=useState([]);
+  const [clientsLoading,setClientsLoading]=useState(true);
+  const [clientId,setClientId]=useState("");
+  const [periodKey,setPeriodKey]=useState("30");
+  const [custom,setCustom]=useState(()=>rsPeriodRange("30",{}));
+  const [compare,setCompare]=useState(true);
+  const [loading,setLoading]=useState(false);
+  const [err,setErr]=useState("");
+  const [rep,setRep]=useState(null);
+  const [ai,setAi]=useState("");
+  const [aiLoading,setAiLoading]=useState(false);
+  const [showAll,setShowAll]=useState(false);
+
+  useEffect(()=>{
+    const uid=localStorage.getItem("mat_user_id");
+    if(!uid){ setClientsLoading(false); return; }
+    fetch(`/api/clients?user_id=${uid}`).then(r=>r.json()).then(d=>setClients(Array.isArray(d)?d:[])).catch(()=>{}).finally(()=>setClientsLoading(false));
+  },[]);
+
+  const periods=[["7",sr?"7 dana":"7 days"],["30",sr?"30 dana":"30 days"],["90",sr?"90 dana":"90 days"],["month",sr?"Ovaj mesec":"This month"],["lastmonth",sr?"Prošli mesec":"Last month"],["custom",sr?"Proizvoljno":"Custom"]];
+
+  const generate=async()=>{
+    setErr(""); setRep(null); setAi(""); setShowAll(false);
+    if(!clientId){ setErr(sr?"Izaberi klijenta.":"Choose a client."); return; }
+    const r=rsPeriodRange(periodKey,custom);
+    if(!r.from||!r.to||r.to<r.from){ setErr(sr?"Proveri period – kraj ne može biti pre početka.":"Check the period – the end can't be before the start."); return; }
+    const uid=await getOrCreateUser();
+    setLoading(true);
+    try{
+      const res=await fetch(`/api/report-google-ads?client_id=${clientId}&user_id=${uid}&from=${r.from}&to=${r.to}&compare=${compare?1:0}`);
+      const d=await res.json();
+      if(!res.ok){
+        const e=String(d.error||"");
+        if(e==="no_gads") setErr(sr?"Google Ads nije povezan za ovog klijenta. Poveži ga u Clients.":"Google Ads is not connected for this client. Connect it in Clients.");
+        else if(e==="no_ga4") setErr(sr?"GA4 nije povezan za ovog klijenta. Poveži ga u Clients – potreban je za prihod i ROAS.":"GA4 is not connected for this client. Connect it in Clients – it's needed for revenue and ROAS.");
+        else if(e.includes("invalid_grant")) setErr(sr?"Veza sa Google nalogom je istekla. U Clients otkači i ponovo poveži GA4 i Google Ads za ovog klijenta.":"The Google connection has expired. In Clients, disconnect and reconnect GA4 and Google Ads for this client.");
+        else setErr(sr?"Izveštaj nije napravljen. Pokušaj ponovo.":"The report could not be created. Please try again.");
+      } else setRep(d);
+    }catch(e){ setErr(sr?"Izveštaj nije napravljen. Proveri internet vezu i pokušaj ponovo.":"The report could not be created. Check your connection and try again."); }
+    setLoading(false);
+  };
+
+  const cur=rep?rsTotals(rep.current):null;
+  const prev=rep&&rep.previous?rsTotals(rep.previous):null;
+  const camps=rep?[...(rep.current.campaigns||[])].sort((a,b)=>(b.spendEUR||0)-(a.spendEUR||0)):[];
+  const unattr=rep?rep.current.unattributed:null;
+
+  const kpis=cur?[
+    {k:"spend",l:sr?"Potrošnja":"Spend",v:`${rsNum(cur.spend)} €`,d:rsDelta(cur.spend,prev&&prev.spend),good:null},
+    {k:"revenue",l:sr?"Prihod":"Revenue",v:`${rsNum(cur.revenue)} €`,d:rsDelta(cur.revenue,prev&&prev.revenue),good:1},
+    {k:"roas",l:"ROAS",v:cur.roas==null?"–":`${rsNum(cur.roas,2)}x`,d:rsDelta(cur.roas,prev&&prev.roas),good:1},
+    {k:"purchases",l:sr?"Kupovine":"Purchases",v:rsNum(cur.purchases),d:rsDelta(cur.purchases,prev&&prev.purchases),good:1},
+    {k:"cpa",l:sr?"Cena po kupovini":"Cost per purchase",v:cur.cpa==null?"–":`${rsNum(cur.cpa,2)} €`,d:rsDelta(cur.cpa,prev&&prev.cpa),good:-1},
+    {k:"clicks",l:sr?"Klikovi":"Clicks",v:rsNum(cur.clicks),d:rsDelta(cur.clicks,prev&&prev.clicks),good:1},
+    {k:"cpc",l:"CPC",v:cur.cpc==null?"–":`${rsNum(cur.cpc,2)} €`,d:rsDelta(cur.cpc,prev&&prev.cpc),good:-1},
+    {k:"ctr",l:"CTR",v:cur.ctr==null?"–":`${rsNum(cur.ctr*100,2)}%`,d:rsDelta(cur.ctr,prev&&prev.ctr),good:1},
+  ]:[];
+  const dColor=(d,good)=>d==null||good==null||Math.abs(d)<0.005?C.mut:((d>0)===(good>0)?C.grn:C.red);
+  const dText=d=>d==null?"":`${d>0?"+":""}${(d*100).toFixed(1)}%`;
+
+  const writeAi=async()=>{
+    if(!rep||!cur) return;
+    setAiLoading(true); setAi("");
+    const top=camps.slice(0,15).map(c=>`- ${c.campaign_name}: ${sr?"potrošnja":"spend"} ${rsNum(c.spendEUR)} €, ${sr?"prihod":"revenue"} ${rsNum(c.revenueEUR)} €, ROAS ${rsNum(c.roas,2)}, ${sr?"kupovine":"purchases"} ${rsNum(c.conversions)}`).join("\n");
+    const line=(t,p)=>`${t}${p?` (${sr?"prethodni period":"previous period"}: ${p})`:""}`;
+    const prompt=sr
+      ?`Ti si iskusan Google Ads konsultant. Napiši kratak, jasan zaključak izveštaja za klijenta "${rep.client.name}" za period ${rsDate(rep.period.from,true)} – ${rsDate(rep.period.to,true)}. Iznosi su u EUR. Prihod i kupovine su iz GA4 (Google Ads kanali).\n\nUkupno:\n${line(`Potrošnja ${rsNum(cur.spend)} €`,prev&&`${rsNum(prev.spend)} €`)}\n${line(`Prihod ${rsNum(cur.revenue)} €`,prev&&`${rsNum(prev.revenue)} €`)}\n${line(`ROAS ${rsNum(cur.roas,2)}`,prev&&rsNum(prev.roas,2))}\n${line(`Kupovine ${rsNum(cur.purchases)}`,prev&&rsNum(prev.purchases))}\n${line(`CPC ${rsNum(cur.cpc,2)} €`,prev&&`${rsNum(prev.cpc,2)} €`)}\n\nKampanje (najveća potrošnja prvo):\n${top}\n\nNapiši na srpskom (latinica), u Markdown formatu, sa tri kratka dela: "## Rezime" (2–3 rečenice), "## Šta ide dobro" i "## Preporuke" (3–5 konkretnih koraka). Koristi samo date brojeve, ništa ne izmišljaj. Ne pominji da si AI.`
+      :`You are an experienced Google Ads consultant. Write a short, clear report conclusion for client "${rep.client.name}" for ${rsDate(rep.period.from,false)} – ${rsDate(rep.period.to,false)}. Amounts are in EUR. Revenue and purchases come from GA4 (Google Ads channels).\n\nTotals:\n${line(`Spend ${rsNum(cur.spend)} €`,prev&&`${rsNum(prev.spend)} €`)}\n${line(`Revenue ${rsNum(cur.revenue)} €`,prev&&`${rsNum(prev.revenue)} €`)}\n${line(`ROAS ${rsNum(cur.roas,2)}`,prev&&rsNum(prev.roas,2))}\n${line(`Purchases ${rsNum(cur.purchases)}`,prev&&rsNum(prev.purchases))}\n${line(`CPC ${rsNum(cur.cpc,2)} €`,prev&&`${rsNum(prev.cpc,2)} €`)}\n\nCampaigns (highest spend first):\n${top}\n\nWrite in English, in Markdown, with three short parts: "## Summary" (2–3 sentences), "## What's working" and "## Recommendations" (3–5 concrete steps). Use only the given numbers, don't invent anything. Don't mention that you are an AI.`;
+    try{
+      const txt=await callClaude(prompt,lang);
+      setAi(txt||(sr?"Zaključak nije napisan. Pokušaj ponovo.":"The conclusion could not be written. Please try again."));
+    }catch(e){ setAi(sr?"Zaključak nije napisan. Pokušaj ponovo.":"The conclusion could not be written. Please try again."); }
+    setAiLoading(false);
+  };
+
+  // PDF: izvestaj se otvara kao cista, svetla stranica u novom prozoru i odmah nudi stampu / cuvanje kao PDF
+  const exportPdf=()=>{
+    if(!rep||!cur) return;
+    const w=window.open("","_blank");
+    if(!w){ alert(sr?"Browser je blokirao novi prozor. Dozvoli iskačuće prozore za ovaj sajt i pokušaj ponovo.":"The browser blocked the new window. Allow pop-ups for this site and try again."); return; }
+    const chartEl=document.getElementById("rs-chart-print");
+    const chart=chartEl?chartEl.innerHTML:"";
+    const mdToHtml=txt=>rsEsc(txt).split("\n").map(l=>l.startsWith("## ")?`<h3>${l.slice(3)}</h3>`:l.startsWith("# ")?`<h3>${l.slice(2)}</h3>`:/^[-*] /.test(l)?`<li>${l.slice(2)}</li>`:/^\d+\. /.test(l)?`<li>${l.replace(/^\d+\. /,"")}</li>`:l.trim()?`<p>${l}</p>`:"").join("").replace(/\*\*(.+?)\*\*/g,"<b>$1</b>");
+    const rows=camps.map(c=>`<tr><td>${rsEsc(c.campaign_name)}</td><td>${rsNum(c.spendEUR)} €</td><td>${rsNum(c.revenueEUR)} €</td><td>${rsNum(c.roas,2)}</td><td>${rsNum(c.conversions)}</td></tr>`).join("");
+    const k=kpis.map(x=>`<div class="k"><div class="l">${rsEsc(x.l)}</div><div class="v">${rsEsc(x.v)}</div>${x.d!=null?`<div class="d">${dText(x.d)} ${sr?"vs prethodni":"vs previous"}</div>`:""}</div>`).join("");
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${rsEsc(rep.client.name)} – Google Ads</title><style>
+      body{font-family:Arial,sans-serif;color:#1a1a2e;margin:32px;}h1{font-size:22px;margin:0 0 4px}h2{font-size:15px;margin:22px 0 10px;color:#4338ca}h3{font-size:14px;margin:14px 0 6px}
+      .sub{color:#6b7280;font-size:13px}.g{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.k{border:1px solid #e5e7eb;border-radius:8px;padding:10px}
+      .l{font-size:11px;color:#6b7280;text-transform:uppercase}.v{font-size:18px;font-weight:700;margin-top:4px}.d{font-size:11px;color:#6b7280;margin-top:2px}
+      table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #e5e7eb}th{color:#6b7280;font-weight:600}
+      p,li{font-size:13px;line-height:1.5}.chart{border:1px solid #e5e7eb;border-radius:8px;padding:10px}.foot{margin-top:28px;color:#9ca3af;font-size:11px}
+      @media print{body{margin:14mm}.k,.chart,tr{page-break-inside:avoid}}</style></head><body>
+      <h1>${rsEsc(rep.client.name)} – Google Ads ${sr?"izveštaj":"report"}</h1>
+      <div class="sub">${rsDate(rep.period.from,sr)} – ${rsDate(rep.period.to,sr)}${rep.prevPeriod?` · ${sr?"poređenje sa":"compared to"} ${rsDate(rep.prevPeriod.from,sr)} – ${rsDate(rep.prevPeriod.to,sr)}`:""} · ${sr?"iznosi u EUR":"amounts in EUR"}</div>
+      <h2>${sr?"Glavni pokazatelji":"Key metrics"}</h2><div class="g">${k}</div>
+      ${chart?`<h2>${sr?"Potrošnja i prihod po danima":"Spend and revenue by day"}</h2><div class="chart">${chart}</div>`:""}
+      ${ai?`<h2>${sr?"Zaključak i preporuke":"Conclusion and recommendations"}</h2>${mdToHtml(ai)}`:""}
+      <h2>${sr?"Kampanje":"Campaigns"}</h2><table><tr><th>${sr?"Kampanja":"Campaign"}</th><th>${sr?"Potrošnja":"Spend"}</th><th>${sr?"Prihod":"Revenue"}</th><th>ROAS</th><th>${sr?"Kupovine":"Purchases"}</th></tr>${rows}</table>
+      ${unattr&&unattr.revenueEUR>0?`<p class="sub">${sr?"Prihod iz Google Ads kanala bez prepoznate kampanje":"Revenue from Google Ads channels without a recognized campaign"}: ${rsNum(unattr.revenueEUR)} €</p>`:""}
+      <div class="foot">${sr?"Izvor: Google Ads (potrošnja) i GA4 (prihod i kupovine)":"Source: Google Ads (spend) and GA4 (revenue and purchases)"}</div>
+      <script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>`);
+    w.document.close();
+  };
+
+  const clientName=clients.find(c=>String(c.id)===String(clientId))?.name;
+
+  return <div>
+    <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>📑 Report Studio</h2>
+    <p style={{color:C.mut,fontSize:13,margin:"0 0 18px"}}>{t.m15s}</p>
+
+    <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:14,padding:"16px",marginBottom:16}}>
+      <div style={{color:C.mut,fontSize:11,fontWeight:700,letterSpacing:"0.6px",textTransform:"uppercase",margin:"0 0 6px"}}>{sr?"Klijent":"Client"}</div>
+      {clientsLoading?<div style={{color:C.acl,fontSize:13,marginBottom:12}}>✦ {sr?"Učitavam klijente...":"Loading clients..."}</div>:
+        clients.length===0?<div style={{color:C.mut,fontSize:13,marginBottom:12}}>{sr?"Nema klijenata još. Dodaj klijenta u Clients.":"No clients yet. Add a client in Clients."}</div>:
+        <select value={clientId} onChange={e=>setClientId(e.target.value)} style={{...bpInp,marginBottom:14}}>
+          <option value="" style={{color:"#111"}}>{sr?"— izaberi klijenta —":"— choose a client —"}</option>
+          {clients.map(c=><option key={c.id} value={String(c.id)} style={{color:"#111"}}>{c.name}</option>)}
+        </select>}
+      <div style={{color:C.mut,fontSize:11,fontWeight:700,letterSpacing:"0.6px",textTransform:"uppercase",margin:"0 0 6px"}}>{sr?"Period":"Period"}</div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:periodKey==="custom"?10:14}}>
+        {periods.map(([k,l])=><button key={k} onClick={()=>setPeriodKey(k)} style={{padding:"7px 13px",borderRadius:20,fontSize:12,fontWeight:600,cursor:"pointer",border:periodKey===k?"1px solid #F59E0B":`1px solid ${C.brd}`,background:periodKey===k?"rgba(245,158,11,0.15)":"transparent",color:periodKey===k?"#fff":C.mut}}>{l}</button>)}
+      </div>
+      {periodKey==="custom"&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+        <input type="date" value={custom.from||""} onChange={e=>setCustom(p=>({...p,from:e.target.value}))} style={bpInp} aria-label={sr?"Od":"From"}/>
+        <input type="date" value={custom.to||""} onChange={e=>setCustom(p=>({...p,to:e.target.value}))} style={bpInp} aria-label={sr?"Do":"To"}/>
+      </div>}
+      <label style={{display:"flex",alignItems:"center",gap:8,fontSize:13,color:C.txt,cursor:"pointer",marginBottom:14}}>
+        <input type="checkbox" checked={compare} onChange={e=>setCompare(e.target.checked)}/> {sr?"Uporedi sa prethodnim periodom iste dužine":"Compare with the previous period of the same length"}
+      </label>
+      <button onClick={generate} disabled={loading} style={{padding:"12px 18px",borderRadius:11,fontSize:14,fontWeight:700,cursor:loading?"not-allowed":"pointer",border:"none",background:"linear-gradient(135deg,#F59E0B,#D97706)",color:"#fff",opacity:loading?0.6:1}}>
+        {loading?(sr?"Pravim izveštaj...":"Creating report..."):(sr?"Napravi Google Ads izveštaj":"Create Google Ads report")}
+      </button>
+      {err&&<div style={{color:C.red,fontSize:13,marginTop:10}}>{err}</div>}
+    </div>
+
+    {rep&&cur&&<div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap",marginBottom:12}}>
+        <div>
+          <div style={{fontWeight:800,fontSize:17}}>{rep.client.name||clientName} – Google Ads</div>
+          <div style={{color:C.mut,fontSize:12,marginTop:2}}>{rsDate(rep.period.from,sr)} – {rsDate(rep.period.to,sr)}{rep.prevPeriod?` · ${sr?"poređenje sa":"compared to"} ${rsDate(rep.prevPeriod.from,sr)} – ${rsDate(rep.prevPeriod.to,sr)}`:""} · {sr?"iznosi u EUR":"amounts in EUR"}</div>
+        </div>
+        <button onClick={exportPdf} style={bpBtn(false)}>📄 {sr?"Preuzmi PDF":"Download PDF"}</button>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:mob?"1fr 1fr":"repeat(4,1fr)",gap:10,marginBottom:14}}>
+        {kpis.map(x=><div key={x.k} style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"12px"}}>
+          <div style={{color:C.dim,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.6px"}}>{x.l}</div>
+          <div style={{fontSize:18,fontWeight:800,marginTop:4}}>{x.v}</div>
+          {x.d!=null&&<div style={{fontSize:11,fontWeight:700,color:dColor(x.d,x.good),marginTop:2}}>{dText(x.d)}</div>}
+        </div>)}
+      </div>
+      {rep.previous===null&&rep.prevPeriod&&<div style={{color:C.mut,fontSize:12,margin:"-4px 0 12px"}}>{sr?"Podaci za prethodni period nisu dostupni, pa poređenje nije prikazano.":"Data for the previous period isn't available, so the comparison isn't shown."}</div>}
+
+      <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"12px",marginBottom:14}}>
+        <div style={{fontWeight:700,fontSize:13,marginBottom:8}}>{sr?"Potrošnja i prihod po danima":"Spend and revenue by day"}</div>
+        {rep.daily?<><RsChart daily={rep.daily} sr={sr} forPrint={false}/><div id="rs-chart-print" style={{display:"none"}} aria-hidden="true"><RsChart daily={rep.daily} sr={sr} forPrint={true}/></div></>
+          :<div style={{color:C.mut,fontSize:12}}>{sr?"Grafikon trenutno nije dostupan.":"The chart is currently unavailable."}</div>}
+        {rep.daily&&<div style={{display:"flex",gap:14,fontSize:11,color:C.mut,marginTop:6}}>
+          <span style={{color:"#F59E0B"}}>■ {sr?"potrošnja":"spend"}</span><span style={{color:"#10B981"}}>● {sr?"prihod":"revenue"}</span>
+        </div>}
+      </div>
+
+      <div style={{background:"rgba(245,158,11,0.06)",border:"1px solid rgba(245,158,11,0.25)",borderRadius:12,padding:"12px",marginBottom:14}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+          <div style={{fontWeight:700,fontSize:13}}>{sr?"Zaključak i preporuke":"Conclusion and recommendations"}</div>
+          <button onClick={writeAi} disabled={aiLoading} style={{...bpBtn(false),opacity:aiLoading?0.6:1}}>{aiLoading?(sr?"Pišem...":"Writing..."):ai?(sr?"Napiši ponovo":"Rewrite"):(sr?"Napiši zaključak":"Write conclusion")}</button>
+        </div>
+        {!ai&&!aiLoading&&<div style={{color:C.mut,fontSize:12,marginTop:6}}>{sr?"Opciono: kratak rezime, šta ide dobro i konkretne preporuke. Ulazi i u PDF.":"Optional: a short summary, what's working and concrete recommendations. Included in the PDF."}</div>}
+        {ai&&<div style={{marginTop:10}}><MD2 text={ai}/></div>}
+      </div>
+
+      <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"12px",overflowX:"auto"}}>
+        <div style={{fontWeight:700,fontSize:13,marginBottom:8}}>{sr?"Kampanje":"Campaigns"} · {camps.length}</div>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:520}}>
+          <thead><tr>{[sr?"Kampanja":"Campaign",sr?"Potrošnja":"Spend",sr?"Prihod":"Revenue","ROAS",sr?"Kupovine":"Purchases"].map(h=><th key={h} style={{textAlign:"left",color:C.mut,fontWeight:600,padding:"6px 8px",borderBottom:`1px solid ${C.brd}`}}>{h}</th>)}</tr></thead>
+          <tbody>{(showAll?camps:camps.slice(0,15)).map(c=><tr key={c.campaign_id}>
+            <td style={{padding:"6px 8px",borderBottom:`1px solid ${C.brd}`}}>{c.campaign_name}</td>
+            <td style={{padding:"6px 8px",borderBottom:`1px solid ${C.brd}`}}>{rsNum(c.spendEUR)} €</td>
+            <td style={{padding:"6px 8px",borderBottom:`1px solid ${C.brd}`}}>{rsNum(c.revenueEUR)} €</td>
+            <td style={{padding:"6px 8px",borderBottom:`1px solid ${C.brd}`,color:c.roas>=1?C.grn:c.spendEUR>0?C.red:C.txt,fontWeight:700}}>{rsNum(c.roas,2)}</td>
+            <td style={{padding:"6px 8px",borderBottom:`1px solid ${C.brd}`}}>{rsNum(c.conversions)}</td>
+          </tr>)}</tbody>
+        </table>
+        {camps.length>15&&<button onClick={()=>setShowAll(v=>!v)} style={{...bpBtn(false),marginTop:10}}>{showAll?(sr?"Prikaži manje":"Show less"):(sr?`Prikaži sve (${camps.length})`:`Show all (${camps.length})`)}</button>}
+        {unattr&&unattr.revenueEUR>0&&<div style={{color:C.mut,fontSize:12,marginTop:10}}>{sr?"Prihod iz Google Ads kanala bez prepoznate kampanje":"Revenue from Google Ads channels without a recognized campaign"}: {rsNum(unattr.revenueEUR)} €</div>}
+      </div>
+    </div>}
   </div>;
 }
 
@@ -3834,6 +4078,7 @@ const MODS=[
   {id:12,icon:"🛍️",col:"#F43F5E",tk:"m12t",sk:"m12s",grp:"an"},
   {id:13,icon:"💬",col:"#22D3EE",tk:"m13t",sk:"m13s",grp:"an"},
   {id:2,icon:"💰",col:"#10B981",tk:"m2t",sk:"m2s",grp:"dw"},
+  {id:15,icon:"📑",col:"#F59E0B",tk:"m15t",sk:"m15s",grp:"dw"},
   {id:8,icon:"📄",col:"#F97316",tk:"m8t",sk:"m8s",grp:"dw"},
   {id:11,icon:"⏱️",col:"#EC4899",tk:"m11t",sk:"m11s",grp:"dw"},
   {id:10,icon:"👥",col:"#A855F7",tk:"m10t",sk:"m10s",grp:"dw"},
@@ -3981,7 +4226,7 @@ export default function App(){
   // Save lang preference
   useEffect(()=>{ localStorage.setItem("mat_lang",lang); },[lang]);
 
-  const Comp=mod===1?HealthMod:mod===8?ReportMod:mod===9?BookmarkMod:mod===10?MyClientsMod:mod===11?TimeMachineMod:mod===12?ProductIntelligenceMod:mod===13?AskDataMod:mod===14?CampaignsMod:mod===2?BudgetPacingMod:null;
+  const Comp=mod===1?HealthMod:mod===8?ReportMod:mod===9?BookmarkMod:mod===10?MyClientsMod:mod===11?TimeMachineMod:mod===12?ProductIntelligenceMod:mod===13?AskDataMod:mod===14?CampaignsMod:mod===2?BudgetPacingMod:mod===15?ReportStudioMod:null;
   // Nepostojeci ili obrisani modul (npr. stari link ?mod=3) vodi na pocetni ekran
   const showHome=!mod||!Comp;
 
