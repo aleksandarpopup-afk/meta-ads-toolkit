@@ -2114,6 +2114,7 @@ function TimeMachineMod({t,lang}){
   const sr=lang==="sr";
   const [mode,setMode]=useState(null); // null=izbor, "period", "compare"
   const [clients,setClients]=useState([]);
+  const [clientsLoading,setClientsLoading]=useState(true);
   const [selectedClient,setSelectedClient]=useState(null);
   const [period,setPeriod]=useState("7");
   const [customFrom,setCustomFrom]=useState("");
@@ -2126,11 +2127,11 @@ function TimeMachineMod({t,lang}){
 
   useEffect(()=>{
     const uid=localStorage.getItem("mat_user_id");
-    if(!uid) return;
+    if(!uid){ setClientsLoading(false); return; }
     fetch(`/api/clients?user_id=${uid}`)
       .then(r=>r.json())
       .then(data=>setClients(Array.isArray(data)?data:[]))
-      .catch(()=>{});
+      .catch(()=>{}).finally(()=>setClientsLoading(false));
   },[]);
 
   const getDateRange=(p)=>{
@@ -2346,7 +2347,11 @@ Be specific, use numbers from the analyses.`;
     {/* Izbor klijenta */}
     <div style={{marginBottom:20}}>
       <Lbl c={sr?"Izaberi klijenta":"Select client"}/>
-      {clients.length===0
+      {clientsLoading
+        ?<div style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:12,padding:"16px",color:C.acl,fontSize:13,textAlign:"center"}}>
+          ✦ {sr?"Učitavam klijente...":"Loading clients..."}
+        </div>
+        :clients.length===0
         ?<div style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:12,padding:"16px",color:C.mut,fontSize:13,textAlign:"center"}}>
           {sr?"Nema klijenata. Dodaj klijenta u Clients ili napravi analizu u Report Generator-u.":"No clients. Add a client in Clients or create an analysis in Report Generator."}
         </div>
@@ -2407,6 +2412,7 @@ Be specific, use numbers from the analyses.`;
 function ProductIntelligenceMod({t,lang}){
   const sr=lang==="sr";
   const [clients,setClients]=useState([]);
+  const [clientsLoading,setClientsLoading]=useState(true);
   const [selectedClient,setSelectedClient]=useState(null);
   const [period,setPeriod]=useState("30");
   const [customFrom,setCustomFrom]=useState("");
@@ -2432,8 +2438,8 @@ function ProductIntelligenceMod({t,lang}){
 
   useEffect(()=>{
     const uid=localStorage.getItem("mat_user_id");
-    if(!uid) return;
-    fetch(`/api/clients?user_id=${uid}`).then(r=>r.json()).then(d=>setClients(Array.isArray(d)?d:[])).catch(()=>{});
+    if(!uid){ setClientsLoading(false); return; }
+    fetch(`/api/clients?user_id=${uid}`).then(r=>r.json()).then(d=>setClients(Array.isArray(d)?d:[])).catch(()=>{}).finally(()=>setClientsLoading(false));
   },[]);
 
   const addClient=async()=>{
@@ -2615,7 +2621,11 @@ ${summary}`;
       <button onClick={()=>{setNewClientOpen(false);setNewClientName("");}} style={{background:"none",border:"none",color:C.mut,cursor:"pointer",fontSize:12}}>{sr?"Otkaži":"Cancel"}</button>
     </div>}
 
-    {clients.length===0
+    {clientsLoading
+      ?<div style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:12,padding:"16px",color:C.acl,fontSize:13,textAlign:"center"}}>
+        ✦ {sr?"Učitavam klijente...":"Loading clients..."}
+      </div>
+      :clients.length===0
       ?<div style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:12,padding:"16px",color:C.mut,fontSize:13,textAlign:"center"}}>
         {sr?"Nema klijenata još. Dodaj jednog iznad.":"No clients yet. Add one above."}
       </div>
@@ -2763,6 +2773,7 @@ ${summary}`;
 function AskDataMod({t,lang}){
   const sr=lang==="sr";
   const [clients,setClients]=useState([]);
+  const [clientsLoading,setClientsLoading]=useState(true);
   const [selectedClient,setSelectedClient]=useState(null);
   const [messages,setMessages]=useState([]);
   const [input,setInput]=useState("");
@@ -2774,8 +2785,8 @@ function AskDataMod({t,lang}){
 
   useEffect(()=>{
     const uid=localStorage.getItem("mat_user_id");
-    if(!uid) return;
-    fetch(`/api/clients?user_id=${uid}`).then(r=>r.json()).then(d=>setClients(Array.isArray(d)?d:[])).catch(()=>{});
+    if(!uid){ setClientsLoading(false); return; }
+    fetch(`/api/clients?user_id=${uid}`).then(r=>r.json()).then(d=>setClients(Array.isArray(d)?d:[])).catch(()=>{}).finally(()=>setClientsLoading(false));
   },[]);
 
   useEffect(()=>{
@@ -2847,7 +2858,11 @@ function AskDataMod({t,lang}){
       <button onClick={()=>{setNewClientOpen(false);setNewClientName("");}} style={{background:"none",border:"none",color:C.mut,cursor:"pointer",fontSize:12}}>{sr?"Otkaži":"Cancel"}</button>
     </div>}
 
-    {clients.length===0
+    {clientsLoading
+      ?<div style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:12,padding:"16px",color:C.acl,fontSize:13,textAlign:"center"}}>
+        ✦ {sr?"Učitavam klijente...":"Loading clients..."}
+      </div>
+      :clients.length===0
       ?<div style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:12,padding:"16px",color:C.mut,fontSize:13,textAlign:"center"}}>
         {sr?"Nema klijenata još. Dodaj jednog iznad.":"No clients yet. Add one above."}
       </div>
@@ -2887,6 +2902,7 @@ function AskDataMod({t,lang}){
 function CampaignsMod({t,lang}){
   const sr=lang==="sr";
   const [clients,setClients]=useState([]);
+  const [clientsLoading,setClientsLoading]=useState(true);
   const [selectedClient,setSelectedClient]=useState(null);
   const [period,setPeriod]=useState("30");
   const [customFrom,setCustomFrom]=useState("");
@@ -2928,8 +2944,8 @@ function CampaignsMod({t,lang}){
 
   useEffect(()=>{
     const uid=localStorage.getItem("mat_user_id");
-    if(!uid) return;
-    fetch(`/api/clients?user_id=${uid}`).then(r=>r.json()).then(d=>setClients(Array.isArray(d)?d:[])).catch(()=>{});
+    if(!uid){ setClientsLoading(false); return; }
+    fetch(`/api/clients?user_id=${uid}`).then(r=>r.json()).then(d=>setClients(Array.isArray(d)?d:[])).catch(()=>{}).finally(()=>setClientsLoading(false));
   },[]);
 
   const addClient=async()=>{
@@ -3132,7 +3148,11 @@ function CampaignsMod({t,lang}){
       <button onClick={()=>{setNewClientOpen(false);setNewClientName("");}} style={{background:"none",border:"none",color:C.mut,cursor:"pointer",fontSize:12}}>{sr?"Otkaži":"Cancel"}</button>
     </div>}
 
-    {clients.length===0
+    {clientsLoading
+      ?<div style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:12,padding:"16px",color:C.acl,fontSize:13,textAlign:"center"}}>
+        ✦ {sr?"Učitavam klijente...":"Loading clients..."}
+      </div>
+      :clients.length===0
       ?<div style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:12,padding:"16px",color:C.mut,fontSize:13,textAlign:"center"}}>
         {sr?"Nema klijenata još. Dodaj jednog iznad.":"No clients yet. Add one above."}
       </div>
