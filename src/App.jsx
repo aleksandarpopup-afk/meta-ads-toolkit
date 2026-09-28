@@ -929,6 +929,7 @@ function BudgetPacingMod({t,lang}){
   const [saving,setSaving]=useState(false);
   const [msg,setMsg]=useState(null);
   const [filter,setFilter]=useState("all");
+  const [platTab,setPlatTab]=useState(()=>{ try{ return localStorage.getItem("mat_bp_platform")||"all"; }catch(e){ return "all"; } });
   const [expanded,setExpanded]=useState(null);
   const [form,setForm]=useState(null); // null | {mode:"new"} | {mode:"edit",b} | {mode:"period"}
   const today=bpToday();
@@ -963,8 +964,19 @@ function BudgetPacingMod({t,lang}){
 
   const rows=budgets.map(b=>({b,calc:bpCalc(b,today)}))
     .sort((a,z)=>(BP_ORDER[a.calc.status]-BP_ORDER[z.calc.status])||String(a.b.clients?.name||"").localeCompare(String(z.b.clients?.name||"")));
-  const counts={}; rows.forEach(r=>{counts[r.calc.status]=(counts[r.calc.status]||0)+1;});
-  const shown=filter==="all"?rows:rows.filter(r=>r.calc.status===filter);
+  // Platforme koje postoje u ovom mesecu; izabrana kartica se pamti na ovom racunaru
+  const platCounts={}; rows.forEach(r=>{platCounts[r.b.platform]=(platCounts[r.b.platform]||0)+1;});
+  const platList=BP_PLATFORMS.filter(p=>platCounts[p.k]);
+  const tab=platTab!=="all"&&platCounts[platTab]?platTab:"all";
+  const chooseTab=k=>{ setPlatTab(k); setFilter("all"); try{ localStorage.setItem("mat_bp_platform",k); }catch(e){} };
+  const platName=k=>{const p=BP_PLATFORMS.find(x=>x.k===k);return p?(p.k==="other"?(sr?"Ostalo":"Other"):p.l):k;};
+  const rowsP=tab==="all"?rows:rows.filter(r=>r.b.platform===tab);
+  const counts={}; rowsP.forEach(r=>{counts[r.calc.status]=(counts[r.calc.status]||0)+1;});
+  const shown=filter==="all"?rowsP:rowsP.filter(r=>r.calc.status===filter);
+  // U prikazu "Sve" lista se deli naslovima po platformi (samo ako ima vise platformi)
+  const groups=tab==="all"&&platList.length>1
+    ?platList.map(p=>({k:p.k,title:platName(p.k),items:shown.filter(r=>r.b.platform===p.k)})).filter(g=>g.items.length)
+    :[{k:"one",title:null,items:shown}];
   const pending=Object.entries(inputs).filter(([,v])=>String(v).trim()!=="");
   const canEnter=b=>today>=b.start_date;
 
@@ -1001,7 +1013,7 @@ function BudgetPacingMod({t,lang}){
     }catch(e){ alert(sr?"Budžet nije obrisan. Pokušaj ponovo.":"Budget was not deleted. Please try again."); }
   };
 
-  const filters=[["all",sr?"Svi":"All",rows.length],["over","Overspend",counts.over||0],["under","Underspend",counts.under||0],["no_spend",sr?"Bez potrošnje":"No spend",counts.no_spend||0],["no_entry",sr?"Bez unosa":"No entry",counts.no_entry||0],["ok",sr?"Na tempu":"On pace",counts.ok||0],["finished",sr?"Završeni":"Completed",counts.finished||0]].filter(f=>f[0]==="all"||f[2]>0);
+  const filters=[["all",sr?"Svi":"All",rowsP.length],["over","Overspend",counts.over||0],["under","Underspend",counts.under||0],["no_spend",sr?"Bez potrošnje":"No spend",counts.no_spend||0],["no_entry",sr?"Bez unosa":"No entry",counts.no_entry||0],["ok",sr?"Na tempu":"On pace",counts.ok||0],["finished",sr?"Završeni":"Completed",counts.finished||0]].filter(f=>f[0]==="all"||f[2]>0);
 
   return <div>
     <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>💰 Budget Pacing</h2>
@@ -1022,6 +1034,11 @@ function BudgetPacingMod({t,lang}){
 
     {form&&<BpForm form={form} sr={sr} mob={mob} clients={clients} setClients={setClients} clientsLoading={clientsLoading} range={range} ym={ym}
       onClose={()=>setForm(null)} onSaved={async()=>{setForm(null);await loadBudgets();}} onDelete={deleteBudget}/>}
+
+    {/* Kartice po platformi */}
+    {!loading&&platList.length>1&&<div role="tablist" style={{display:"flex",gap:4,flexWrap:"wrap",borderBottom:`1px solid ${C.brd}`,marginBottom:12}}>
+      {[{k:"all",l:sr?"Sve":"All",n:rows.length},...platList.map(p=>({k:p.k,l:platName(p.k),n:platCounts[p.k]}))].map(x=><button key={x.k} role="tab" aria-selected={tab===x.k} onClick={()=>chooseTab(x.k)} style={{padding:"9px 14px",fontSize:13,fontWeight:700,cursor:"pointer",background:"transparent",border:"none",borderBottom:tab===x.k?"2px solid #10B981":"2px solid transparent",color:tab===x.k?"#fff":C.mut,marginBottom:-1}}>{x.l} <span style={{color:C.dim,fontWeight:600}}>{x.n}</span></button>)}
+    </div>}
 
     {/* Filteri po statusu */}
     {!loading&&rows.length>0&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}}>
@@ -1048,7 +1065,10 @@ function BudgetPacingMod({t,lang}){
       <div style={{color:C.mut,fontSize:13}}>{sr?"Klikni \"+ Novi budžet\" ili \"Novi period\" da dodaš budžete klijenata.":"Click \"+ New budget\" or \"New period\" to add client budgets."}</div>
     </div>}
 
-    {!loading&&shown.map(({b,calc})=>{
+    {!loading&&rows.length>0&&shown.length===0&&<div style={{color:C.mut,fontSize:13,padding:"12px 0"}}>{sr?"Nema budžeta za ovaj filter.":"No budgets for this filter."}</div>}
+    {!loading&&groups.map(g=><div key={g.k}>
+      {g.title&&<div style={{fontSize:11,fontWeight:700,letterSpacing:"1.2px",textTransform:"uppercase",color:C.mut,margin:"16px 0 8px"}}>{g.title} · {g.items.length}</div>}
+      {g.items.map(({b,calc})=>{
       const sm=bpStatusMeta(calc.status,sr,calc);
       const cur=b.currency||"EUR";
       const plat=BP_PLATFORMS.find(p=>p.k===b.platform);
@@ -1056,7 +1076,7 @@ function BudgetPacingMod({t,lang}){
       return <div key={b.id} style={{background:C.sur,border:`1px solid ${C.brd}`,borderLeft:`3px solid ${sm.c}`,borderRadius:12,padding:"12px 14px",marginBottom:10}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
           <div style={{minWidth:0}}>
-            <div style={{fontWeight:700,fontSize:14}}>{b.clients?.name||"—"} <span style={{color:C.mut,fontWeight:500,fontSize:12}}>· {plat?(plat.k==="other"?(sr?"Ostalo":"Other"):plat.l):b.platform}</span></div>
+            <div style={{fontWeight:700,fontSize:14}}>{b.clients?.name||"—"}{tab==="all"&&platList.length<=1&&<span style={{color:C.mut,fontWeight:500,fontSize:12}}> · {plat?(plat.k==="other"?(sr?"Ostalo":"Other"):plat.l):b.platform}</span>}</div>
             <div style={{color:C.mut,fontSize:12,marginTop:2}}>{bpParse(b.start_date).toLocaleDateString(sr?"sr-RS":"en-GB")} – {bpParse(b.end_date).toLocaleDateString(sr?"sr-RS":"en-GB")} · {sr?"budžet":"budget"} {fmtMoney(b.total_budget,cur)}{b.note?` · ${b.note}`:""}</div>
           </div>
           <div style={{color:sm.c,fontSize:12,fontWeight:700,whiteSpace:"nowrap"}}>{sm.l}</div>
@@ -1082,6 +1102,7 @@ function BudgetPacingMod({t,lang}){
         {open&&<BpChart b={b} sr={sr}/>}
       </div>;
     })}
+    </div>)}
   </div>;
 }
 
@@ -1690,16 +1711,16 @@ For "better": true means Period B is better, false means worse. Return ONLY JSON
 // ── USER UUID ────────────────────────────────────────────────────────────────
 async function getOrCreateUser(){
   let uid=localStorage.getItem("mat_user_id");
-  if(uid) return uid;
+  if(uid&&!uid.startsWith("local-")) return uid;
+  // Stari privremeni "local-" ID baza ne prihvata – brise se i pravi se pravi nalog
+  if(uid) localStorage.removeItem("mat_user_id");
   try{
     const r=await fetch("/api/user",{method:"POST",headers:{"Content-Type":"application/json"}});
     const data=await r.json();
     if(data.id){ localStorage.setItem("mat_user_id",data.id); return data.id; }
   }catch(e){}
-  // Fallback – generate local UUID
-  const local="local-"+Math.random().toString(36).substr(2,9);
-  localStorage.setItem("mat_user_id",local);
-  return local;
+  // Server nije odgovorio: nista se ne pamti, sledeci put se pokusava ponovo
+  return null;
 }
 
 async function saveAnalysis({clientName,tool,periodFrom,periodTo,analysisText,metrics}){
