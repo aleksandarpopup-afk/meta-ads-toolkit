@@ -960,7 +960,10 @@ function BudgetPacingMod({t,lang}){
   };
   useEffect(()=>{ loadClients(); },[]);
 
-  const shiftMonth=delta=>{ setInputs({}); setExpanded(null); setFilter("all"); setYm(p=>{const d=new Date(p.y,p.m+delta,1);return {y:d.getFullYear(),m:d.getMonth()};}); };
+  const shiftMonth=delta=>{
+    const hasPending=Object.values(inputs).some(v=>String(v).trim()!=="");
+    if(hasPending&&!window.confirm(sr?"Imaš nesačuvane unose potrošnje. Preći na drugi mesec bez čuvanja?":"You have unsaved spend entries. Switch month without saving?")) return;
+    setInputs({}); setExpanded(null); setFilter("all"); setYm(p=>{const d=new Date(p.y,p.m+delta,1);return {y:d.getFullYear(),m:d.getMonth()};}); };
 
   const rows=budgets.map(b=>({b,calc:bpCalc(b,today)}))
     .sort((a,z)=>(BP_ORDER[a.calc.status]-BP_ORDER[z.calc.status])||String(a.b.clients?.name||"").localeCompare(String(z.b.clients?.name||"")));
@@ -1103,6 +1106,17 @@ function BudgetPacingMod({t,lang}){
       </div>;
     })}
     </div>)}
+
+    {/* Traka za cuvanje uvek vidljiva na dnu dok ima nesacuvanih unosa */}
+    {!loading&&pending.length>0&&<div style={{position:"sticky",bottom:0,zIndex:50,marginTop:12,paddingBottom:"env(safe-area-inset-bottom, 0px)"}}>
+      <div style={{background:"#0d1f18",border:"1px solid rgba(16,185,129,0.45)",borderRadius:12,padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",boxShadow:"0 -6px 24px rgba(0,0,0,0.45)"}}>
+        <div style={{fontSize:13,color:"#fff",fontWeight:600}}>
+          {sr?`Nesačuvano: ${pending.length}`:`Unsaved: ${pending.length}`}
+          <span style={{color:C.mut,fontWeight:500}}> · {sr?"zaključno sa":"up to"} {throughToday?(sr?"danas":"today"):(sr?"juče":"yesterday")}</span>
+        </div>
+        <button onClick={saveEntries} disabled={saving} style={{...bpBtn(true),opacity:saving?0.5:1}}>{saving?(sr?"Čuvam...":"Saving..."):(sr?"Sačuvaj unose":"Save entries")}</button>
+      </div>
+    </div>}
   </div>;
 }
 
