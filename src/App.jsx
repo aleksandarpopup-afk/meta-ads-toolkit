@@ -59,7 +59,7 @@ function Pills({opts,val,ch,multi=false}){
 const T={
   sr:{
     appTitle:"Meta Ads Toolkit", appSub:"Profesionalni alati za performance marketing",
-    sel:"Odaberi alat", selSub:"Svaki alat možeš koristiti nezavisno", back:"← Nazad",
+    back:"← Nazad",
     m1t:"Health Check", m1s:"Brza dijagnoza kampanje iz screenshota ili CSV-a",
     m2t:"Budget Pacing", m2s:"Tempo potrošnje po klijentu, underspend i overspend na prvi pogled",
     m10t:"Clients", m10s:"Svi klijenti i povezani GA4 i Google Ads nalozi",
@@ -101,7 +101,7 @@ const T={
   },
   en:{
     appTitle:"Meta Ads Toolkit", appSub:"Professional tools for performance marketing",
-    sel:"Select a tool", selSub:"Each tool can be used independently", back:"← Back",
+    back:"← Back",
     m1t:"Health Check", m1s:"Quick campaign diagnosis from a screenshot or CSV",
     m2t:"Budget Pacing", m2s:"Spend pace per client, underspend and overspend at a glance",
     m10t:"Clients", m10s:"All clients and connected GA4 and Google Ads accounts",
@@ -3419,23 +3419,28 @@ const MODS=[
   {id:9,icon:"📑",col:"#F59E0B",tk:"m15t",sk:"m15s",grp:"dw",hidden:true},
 ];
 const VISIBLE_MODS=MODS.filter(m=>!m.hidden);
+// Male oznake na karticama pocetne strane (sta alat koristi / primer)
+const MOD_TAGS={
+  14:{sr:["Google Ads","GA4","ROAS"],en:["Google Ads","GA4","ROAS"]},
+  12:{sr:["Proizvodi","Korpe","Trendovi"],en:["Products","Carts","Trends"]},
+  13:{sr:["„Koji proizvod raste?“"],en:["“Which product is growing?”"]},
+  2:{sr:["Meta","Google Ads"],en:["Meta","Google Ads"]},
+  15:{sr:["Google Ads","Screenshot","PDF"],en:["Google Ads","Screenshot","PDF"]},
+  10:{sr:["GA4","Google Ads"],en:["GA4","Google Ads"]},
+  1:{sr:["Screenshot","CSV"],en:["Screenshot","CSV"]},
+};
 const MOD_GROUPS=[{k:"an",tk:"grpAn"},{k:"dw",tk:"grpDw"}];
 const gridCols=n=>n<=4?n:3;
 const CARD_CSS=`.mc{transition:transform .18s ease,border-color .18s ease}
 .mc:hover{transform:translateY(-4px);border-color:var(--c)!important}
-.mc .mc-op{opacity:0;transform:translateX(-8px);transition:opacity .2s ease,transform .2s ease}
-.mc:hover .mc-op,.mc:focus-visible .mc-op{opacity:1;transform:none}
-@media (hover:none){.mc:hover{transform:none}.mc .mc-op{opacity:1;transform:none}}
-@media (prefers-reduced-motion:reduce){.mc,.mc .mc-op{transition:none}.mc:hover{transform:none}}
+.mc .mc-arr{display:inline-block;transition:transform .2s ease}
+.mc:hover .mc-arr{transform:translateX(4px)}
 .mc .mc-ic{transition:transform .2s ease}
 .mc:hover .mc-ic{transform:scale(1.12) rotate(-6deg)}
-.mc .mc-txt{display:grid}
-.mc .mc-txt>*{grid-area:1/1}
-.mc .mc-desc,.mc .mc-live{transition:opacity .18s ease}
-.mc .mc-live{opacity:0;visibility:hidden}
-@media (hover:hover){.mc:hover .mc-desc.has-live{opacity:0;visibility:hidden}.mc:hover .mc-live{opacity:1;visibility:visible}}
-@media (hover:none){.mc .mc-txt{display:block}.mc .mc-live{opacity:1;visibility:visible}.mc:hover .mc-ic{transform:none}}
-@media (prefers-reduced-motion:reduce){.mc .mc-ic,.mc .mc-desc,.mc .mc-live{transition:none}.mc:hover .mc-ic{transform:none}}`;
+.st{transition:border-color .18s ease,transform .18s ease}
+button.st:hover{transform:translateY(-2px);border-color:rgba(248,113,113,0.6)!important}
+@media (hover:none){.mc:hover{transform:none}.mc:hover .mc-ic{transform:none}.mc:hover .mc-arr{transform:none}}
+@media (prefers-reduced-motion:reduce){.mc,.mc .mc-ic,.mc .mc-arr,.st{transition:none}.mc:hover,.mc:hover .mc-ic,.mc:hover .mc-arr,button.st:hover{transform:none}}`;
 
 // ── RESPONSIVE HOOK ──────────────────────────────────────────────────────────
 function useWindowSize(){
@@ -3562,48 +3567,81 @@ export default function App(){
   // Nepostojeci ili obrisani modul (npr. stari link ?mod=3) vodi na pocetni ekran
   const showHome=!mod||!Comp;
 
-  // Ziva kartica Budget Pacing: stanje budzeta za tekuci mesec
-  const [bpLive,setBpLive]=useState(null);
+  // Pocetna strana: pravi podaci (budzeti tekuceg meseca i broj klijenata)
+  const [home,setHome]=useState(null);
   useEffect(()=>{
     if(!showHome) return;
     const uid=localStorage.getItem("mat_user_id");
-    if(!uid) return;
+    if(!uid){ setHome({clients:0,budgets:0,attention:0,ok:0,bp:null}); return; }
     const d=new Date(); const r=bpMonthRange(d.getFullYear(),d.getMonth());
     let cancelled=false;
-    fetch(`/api/budgets?user_id=${uid}&from=${r.from}&to=${r.to}`).then(x=>x.ok?x.json():[]).then(list=>{
-      if(cancelled||!Array.isArray(list)||!list.length){ if(!cancelled) setBpLive(null); return; }
-      const c=bpSummary(list,bpToday());
-      const problems=(c.under||0)+(c.over||0)+(c.no_spend||0);
+    Promise.all([
+      fetch(`/api/budgets?user_id=${uid}&from=${r.from}&to=${r.to}`).then(x=>x.ok?x.json():[]).catch(()=>null),
+      fetch(`/api/clients?user_id=${uid}`).then(x=>x.ok?x.json():[]).catch(()=>null),
+    ]).then(([list,cl])=>{
+      if(cancelled) return;
+      const budgets=Array.isArray(list)?list:[];
+      const c=bpSummary(budgets,bpToday());
+      const attention=(c.under||0)+(c.over||0)+(c.no_spend||0);
       const parts=[];
       if(c.under) parts.push(`${c.under} underspend`);
       if(c.over) parts.push(`${c.over} overspend`);
       if(c.no_spend) parts.push(`${c.no_spend} ${lang==="sr"?"bez potrošnje":"no spend"}`);
       if(c.ok) parts.push(`${c.ok} ${lang==="sr"?"na tempu":"on pace"}`);
-      if(!parts.length) parts.push(`${list.length} ${lang==="sr"?"budžeta":"budgets"}`);
-      setBpLive({text:parts.join(" · "),bad:problems>0});
-    }).catch(()=>{ if(!cancelled) setBpLive(null); });
+      setHome({
+        clients:Array.isArray(cl)?cl.length:null,
+        budgets:Array.isArray(list)?budgets.length:null,
+        attention:Array.isArray(list)?attention:null,
+        ok:Array.isArray(list)?(c.ok||0):null,
+        bp:budgets.length?{text:parts.join(" · ")||`${budgets.length} ${lang==="sr"?"budžeta":"budgets"}`,bad:attention>0}:null,
+      });
+    });
     return()=>{cancelled=true;};
   },[showHome,lang]);
 
-  const ModCard=({m,i,large})=>(
-    <button className="mc" onClick={()=>goMod(m.id)} style={{
+  const now=new Date();
+  const hr=now.getHours();
+  const greeting=lang==="sr"?(hr<12?"Dobro jutro":hr<18?"Dobar dan":"Dobro veče"):(hr<12?"Good morning":hr<18?"Good afternoon":"Good evening");
+  const dateStr=(s=>s.charAt(0).toUpperCase()+s.slice(1))(now.toLocaleDateString(lang==="sr"?"sr-Latn-RS":"en-GB",{weekday:"long",day:"numeric",month:"long"}));
+  const stats=[
+    {k:"clients",l:lang==="sr"?"Klijenti":"Clients",v:home?.clients,go:10},
+    {k:"budgets",l:lang==="sr"?"Budžeti ovog meseca":"Budgets this month",v:home?.budgets,go:2},
+    {k:"attention",l:lang==="sr"?"Traže pažnju":"Need attention",v:home?.attention,go:2,bad:true},
+    {k:"ok",l:lang==="sr"?"Na tempu":"On pace",v:home?.ok,go:2,good:true},
+  ];
+  const StatStrip=({cols})=><div style={{display:"grid",gridTemplateColumns:`repeat(${cols},minmax(0,1fr))`,gap:12}}>
+    {stats.map(x=><button key={x.k} className="st" onClick={()=>goMod(x.go)} style={{textAlign:"left",cursor:"pointer",background:"rgba(255,255,255,0.03)",border:`1px solid ${x.bad&&x.v>0?"rgba(248,113,113,0.35)":C.brd}`,borderRadius:14,padding:"14px 16px",color:C.txt}}>
+      <div style={{color:"rgba(255,255,255,0.45)",fontSize:12,fontWeight:600}}>{x.l}</div>
+      <div style={{fontSize:26,fontWeight:800,marginTop:4,letterSpacing:"-0.5px",color:x.v==null?C.dim:x.bad&&x.v>0?C.red:x.good&&x.v>0?C.grn:"#fff"}}>{home==null?"…":x.v==null?"–":x.v}</div>
+    </button>)}
+  </div>;
+
+  const ModCard=({m,i,large})=>{
+    const tags=(MOD_TAGS[m.id]||{})[lang]||[];
+    const live=m.id===2&&home?.bp?home.bp:null;
+    const extra=m.id===10&&home?.clients!=null?`${home.clients} ${lang==="sr"?(home.clients===1?"klijent":"klijenata"):(home.clients===1?"client":"clients")}`:null;
+    return <button className="mc" onClick={()=>goMod(m.id)} style={{
       "--c":m.col,
-      background:`linear-gradient(145deg,${m.col}22,${m.col}08 60%,#0d0d1a)`,
+      background:`linear-gradient(145deg,${m.col}24,${m.col}0a 55%,#0d0d1a)`,
       border:`1px solid ${m.col}45`,borderTop:`1px solid ${m.col}70`,
-      borderRadius:16,padding:large?"22px 18px":"18px 15px",textAlign:"left",
-      cursor:"pointer",display:"block",width:"100%",
+      borderRadius:16,padding:large?"20px 20px 18px":"18px 16px 16px",textAlign:"left",
+      cursor:"pointer",display:"flex",flexDirection:"column",width:"100%",height:"100%",boxSizing:"border-box",
       WebkitTapHighlightColor:"transparent",
-      boxShadow:`0 4px 24px ${m.col}20`,
+      boxShadow:`0 4px 24px ${m.col}18`,
     }}>
-      <div className="mc-ic" style={{width:large?48:40,height:large?48:40,borderRadius:12,background:`linear-gradient(135deg,${m.col}40,${m.col}20)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:large?24:20,marginBottom:large?14:12}}>{m.icon}</div>
-      <div style={{color:"#fff",fontWeight:700,fontSize:large?15:13,marginBottom:4,lineHeight:1.3}}>{t[m.tk]}</div>
-      {(()=>{const live=m.id===2&&bpLive?bpLive:null;return <div className="mc-txt" style={{marginBottom:large?14:12}}>
-        <div className={live?"mc-desc has-live":"mc-desc"} style={{color:"rgba(255,255,255,0.45)",fontSize:large?12:11,lineHeight:1.5}}>{t[m.sk]}</div>
-        {live&&<div className="mc-live" style={{color:live.bad?C.red:C.grn,fontSize:large?12:11,lineHeight:1.5,fontWeight:700}}>{live.text}</div>}
-      </div>;})()}
-      <div className="mc-op" style={{color:m.col,fontSize:12,fontWeight:700}}>{t.open} →</div>
-    </button>
-  );
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+        <div className="mc-ic" style={{width:large?46:40,height:large?46:40,borderRadius:12,background:`linear-gradient(135deg,${m.col}45,${m.col}20)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:large?23:20,flexShrink:0}}>{m.icon}</div>
+        <div style={{color:"#fff",fontWeight:800,fontSize:large?17:15,lineHeight:1.25}}>{t[m.tk]}</div>
+      </div>
+      <div style={{color:"rgba(255,255,255,0.55)",fontSize:large?13:12,lineHeight:1.5}}>{t[m.sk]}</div>
+      {live&&<div style={{color:live.bad?C.red:C.grn,fontSize:12.5,fontWeight:700,lineHeight:1.5,marginTop:8}}>{live.text}</div>}
+      {extra&&<div style={{color:"rgba(255,255,255,0.8)",fontSize:12.5,fontWeight:700,marginTop:8}}>{extra}</div>}
+      {tags.length>0&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:12}}>
+        {tags.map(tg=><span key={tg} style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.6)",background:"rgba(255,255,255,0.05)",border:`1px solid ${m.col}35`,borderRadius:20,padding:"3px 9px"}}>{tg}</span>)}
+      </div>}
+      <div style={{marginTop:"auto",paddingTop:14,color:m.col,fontSize:13,fontWeight:700}}>{t.open} <span className="mc-arr">→</span></div>
+    </button>;
+  };
 
   const GroupLabel=({g,mb})=><div style={{fontSize:11,fontWeight:700,letterSpacing:"1.5px",textTransform:"uppercase",color:"rgba(255,255,255,0.35)",marginBottom:mb}}>{t[g.tk]}</div>;
 
@@ -3626,9 +3664,9 @@ export default function App(){
     <div style={{maxWidth:580,margin:"0 auto",padding:"0 0 40px"}}>
       {showHome&&<>
         <div style={{padding:"28px 16px 20px",background:"linear-gradient(180deg,rgba(99,102,241,0.08) 0%,transparent 100%)"}}>
-          <div style={{fontSize:11,fontWeight:700,letterSpacing:"2px",textTransform:"uppercase",color:"#A5B4FC",marginBottom:8}}>META ADS TOOLKIT</div>
-          <h1 style={{fontSize:26,fontWeight:900,margin:"0 0 6px",letterSpacing:"-0.5px",lineHeight:1.2}}>{t.sel}</h1>
-          <p style={{color:"rgba(255,255,255,0.4)",fontSize:13,margin:0}}>{t.selSub}</p>
+          <div style={{color:"rgba(255,255,255,0.45)",fontSize:13,fontWeight:600}}>{dateStr}</div>
+          <h1 style={{fontSize:26,fontWeight:900,margin:"4px 0 16px",letterSpacing:"-0.5px",lineHeight:1.2}}>{greeting} 👋</h1>
+          <StatStrip cols={2}/>
         </div>
         {MOD_GROUPS.map(g=>{
           const list=VISIBLE_MODS.filter(m=>m.grp===g.k);
@@ -3663,7 +3701,7 @@ export default function App(){
         {!showHome&&<div style={{display:"flex",alignItems:"center",gap:12}}>
           <button onClick={()=>goMod(null)} style={{background:"rgba(255,255,255,0.08)",border:`1px solid ${C.brd}`,borderRadius:10,color:"rgba(255,255,255,0.7)",fontSize:13,fontWeight:600,padding:"7px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>← {t.back}</button>
           <div style={{color:"rgba(255,255,255,0.4)",fontSize:13}}>
-            <span style={{cursor:"pointer",color:"#A5B4FC"}} onClick={()=>goMod(null)}>{t.sel}</span>
+            <span style={{cursor:"pointer",color:"#A5B4FC"}} onClick={()=>goMod(null)}>{lang==="sr"?"Početna":"Home"}</span>
             <span style={{margin:"0 8px",color:"rgba(255,255,255,0.2)"}}>›</span>
             <span style={{color:"#fff",fontWeight:600}}>{t[MODS.find(m=>m.id===mod)?.tk]}</span>
           </div>
@@ -3725,17 +3763,17 @@ export default function App(){
 
       {/* MAIN */}
       <div style={{flex:1,overflowY:"auto",minWidth:0}}>
-        {showHome&&<div style={{padding:"40px 48px 60px",maxWidth:1100}}>
-          <div style={{marginBottom:40}}>
-            <div style={{fontSize:11,fontWeight:700,letterSpacing:"2px",textTransform:"uppercase",color:"#A5B4FC",marginBottom:12}}>META ADS TOOLKIT</div>
-            <h1 style={{fontSize:42,fontWeight:900,margin:"0 0 10px",letterSpacing:"-1.5px",lineHeight:1.05}}>{t.sel}</h1>
-            <p style={{color:"rgba(255,255,255,0.4)",fontSize:16,margin:0}}>{t.selSub}</p>
+        {showHome&&<div style={{padding:"36px 48px 60px",maxWidth:1320}}>
+          <div style={{marginBottom:32}}>
+            <div style={{color:"rgba(255,255,255,0.45)",fontSize:14,fontWeight:600}}>{dateStr}</div>
+            <h1 style={{fontSize:38,fontWeight:900,margin:"4px 0 20px",letterSpacing:"-1px",lineHeight:1.1}}>{greeting} 👋</h1>
+            <StatStrip cols={4}/>
           </div>
           {MOD_GROUPS.map(g=>{
             const list=VISIBLE_MODS.filter(m=>m.grp===g.k);
             return <div key={g.k} style={{marginBottom:34}}>
               <GroupLabel g={g} mb={14}/>
-              <div style={{display:"grid",gridTemplateColumns:`repeat(${gridCols(list.length)},1fr)`,gap:18}}>
+              <div style={{display:"grid",gridTemplateColumns:`repeat(${gridCols(list.length)},minmax(0,1fr))`,gap:18,alignItems:"stretch"}}>
                 {list.map((m,i)=><ModCard key={m.id} m={m} i={i} large={g.k==="an"}/>)}
               </div>
             </div>;
