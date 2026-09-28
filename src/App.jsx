@@ -847,7 +847,7 @@ function bpCalc(b,today){
     diffPct:expected>0?(spent-expected)/expected:null,
     projPct:expected>0?spent/expected:null,
     daily:remDays>0?Math.max(remaining,0)/remDays:null,
-    stale:last.entry_date<today&&today<=b.end_date};
+    stale:b.auto?!!b.auto.stale:(last.entry_date<today&&today<=b.end_date)};
   if(today>b.end_date) return {...res,status:"finished",finPct:total>0?spent/total:null};
   if(spent===0&&elapsed>0) return {...res,status:"no_spend"};
   if(expected<=0) return {...res,status:"early"};
@@ -981,7 +981,7 @@ function BudgetPacingMod({t,lang}){
     ?platList.map(p=>({k:p.k,title:platName(p.k),items:shown.filter(r=>r.b.platform===p.k)})).filter(g=>g.items.length)
     :[{k:"one",title:null,items:shown}];
   const pending=Object.entries(inputs).filter(([,v])=>String(v).trim()!=="");
-  const canEnter=b=>today>=b.start_date;
+  const canEnter=b=>today>=b.start_date&&!b.auto;
 
   const saveEntries=async()=>{
     const uid=await getOrCreateUser();
@@ -1093,7 +1093,12 @@ function BudgetPacingMod({t,lang}){
             [sr?"Dnevno potrebno":"Daily needed",calc.daily==null?"–":fmtMoney(calc.daily,cur)],
           ].map(([l,v])=><div key={l}><div style={{color:C.dim,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.6px"}}>{l}</div><div style={{fontSize:13,fontWeight:600,marginTop:2}}>{v}</div></div>)}
         </div>
-        {calc.stale&&calc.last&&<div style={{color:C.yel,fontSize:11,marginTop:8}}>{sr?`Poslednji unos: ${bpParse(calc.last.entry_date).toLocaleDateString("sr-RS")} – unesi današnje stanje.`:`Last entry: ${bpParse(calc.last.entry_date).toLocaleDateString("en-GB")} – enter today's figure.`}</div>}
+        {b.auto&&<div style={{color:"#10B981",fontSize:11,marginTop:8,fontWeight:600}}>⚡ {sr?"Automatski iz Google Ads":"Automatic from Google Ads"} · {sr?"podaci zaključno sa":"data up to"} {bpParse(b.auto.data_through).toLocaleDateString(sr?"sr-RS":"en-GB")}{b.campaign_filter?` · ${sr?"kampanje koje sadrže":"campaigns containing"} "${b.campaign_filter}"`:""}</div>}
+        {b.auto&&b.auto.stale&&<div style={{color:C.yel,fontSize:11,marginTop:4}}>{sr?"Google Ads podaci nisu osveženi od tada. Veza je verovatno istekla – u Clients otkači i ponovo poveži Google Ads.":"Google Ads data hasn't refreshed since then. The connection has probably expired – in Clients, disconnect and reconnect Google Ads."}</div>}
+        {b.auto&&!b.auto.fx_ok&&<div style={{color:C.yel,fontSize:11,marginTop:4}}>{sr?"Kurs za konverziju valute trenutno nije dostupan – iznosi su prikazani bez konverzije.":"The exchange rate is currently unavailable – amounts are shown without conversion."}</div>}
+        {b.auto&&b.auto.overlap&&<div style={{color:C.yel,fontSize:11,marginTop:4}}>{sr?"Ovaj budžet se preklapa sa drugim Google Ads budžetom istog klijenta – ista potrošnja se možda broji dvaput. Proveri filtere kampanja.":"This budget overlaps another Google Ads budget of the same client – the same spend may be counted twice. Check the campaign filters."}</div>}
+        {b.auto_error&&<div style={{color:C.yel,fontSize:11,marginTop:8}}>{sr?"Automatski Google Ads podaci trenutno nisu dostupni. Pokušaj ponovo kasnije.":"Automatic Google Ads data is currently unavailable. Try again later."}</div>}
+        {!b.auto&&calc.stale&&calc.last&&<div style={{color:C.yel,fontSize:11,marginTop:8}}>{sr?`Poslednji unos: ${bpParse(calc.last.entry_date).toLocaleDateString("sr-RS")} – unesi današnje stanje.`:`Last entry: ${bpParse(calc.last.entry_date).toLocaleDateString("en-GB")} – enter today's figure.`}</div>}
         <div style={{display:"flex",gap:8,marginTop:10,alignItems:"center",flexWrap:"wrap"}}>
           {canEnter(b)&&<input type="text" inputMode="decimal" value={inputs[b.id]||""} onChange={e=>setInputs(p=>({...p,[b.id]:e.target.value}))}
             placeholder={(sr?"Potrošeno do sada":"Spent so far")+(calc.spent!=null?` (${sr?"poslednje":"last"}: ${fmtMoney(calc.spent,cur)})`:"")}
@@ -1130,6 +1135,7 @@ function BpForm({form,sr,mob,clients,setClients,clientsLoading,range,ym,onClose,
   const [amount,setAmount]=useState(edit?String(edit.total_budget):"");
   const [currency,setCurrency]=useState(edit?edit.currency:"EUR");
   const [note,setNote]=useState(edit?(edit.note||""):"");
+  const [campFilter,setCampFilter]=useState(edit?(edit.campaign_filter||""):"");
   const [newName,setNewName]=useState("");
   const [creatingClient,setCreatingClient]=useState(false);
   const [saving,setSaving]=useState(false);
@@ -1145,7 +1151,7 @@ function BpForm({form,sr,mob,clients,setClients,clientsLoading,range,ym,onClose,
     const pr=bpMonthRange(ym.m===0?ym.y-1:ym.y,ym.m===0?11:ym.m-1);
     fetch(`/api/budgets?user_id=${uid}&from=${pr.from}&to=${pr.to}`).then(r=>r.json()).then(d=>{
       const seen=new Set(); const list=[];
-      (Array.isArray(d)?d:[]).forEach(b=>{const k=`${b.client_id}|${b.platform}`; if(!seen.has(k)){seen.add(k);list.push({key:k,client_id:b.client_id,name:b.clients?.name||"—",platform:b.platform,currency:b.currency||"EUR"});}});
+      (Array.isArray(d)?d:[]).forEach(b=>{const k=`${b.client_id}|${b.platform}|${b.campaign_filter||""}`; if(!seen.has(k)){seen.add(k);list.push({key:k,client_id:b.client_id,name:b.clients?.name||"—",platform:b.platform,currency:b.currency||"EUR",campaign_filter:b.campaign_filter||""});}});
       list.sort((a,z)=>a.name.localeCompare(z.name));
       setPrevRows(list);
     }).catch(()=>setPrevRows([]));
@@ -1175,7 +1181,7 @@ function BpForm({form,sr,mob,clients,setClients,clientsLoading,range,ym,onClose,
     setSaving(true);
     try{
       if(form.mode==="period"){
-        const list=(prevRows||[]).filter(r=>String(prevAmounts[r.key]||"").trim()!=="").map(r=>({client_id:r.client_id,platform:r.platform,start_date:start,end_date:end,total_budget:num(prevAmounts[r.key]),currency:r.currency}));
+        const list=(prevRows||[]).filter(r=>String(prevAmounts[r.key]||"").trim()!=="").map(r=>({client_id:r.client_id,platform:r.platform,start_date:start,end_date:end,total_budget:num(prevAmounts[r.key]),currency:r.currency,campaign_filter:r.campaign_filter}));
         if(!list.length){ setErr(sr?"Unesi iznos bar za jednog klijenta.":"Enter an amount for at least one client."); setSaving(false); return; }
         if(list.some(b=>!isFinite(b.total_budget)||b.total_budget<0)){ setErr(sr?"Iznosi moraju biti brojevi 0 ili veći.":"Amounts must be numbers 0 or higher."); setSaving(false); return; }
         const r=await fetch("/api/budgets",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:uid,action:"create",budgets:list})});
@@ -1184,7 +1190,7 @@ function BpForm({form,sr,mob,clients,setClients,clientsLoading,range,ym,onClose,
         const tb=num(amount);
         if(!clientId){ setErr(sr?"Izaberi klijenta.":"Choose a client."); setSaving(false); return; }
         if(!isFinite(tb)||tb<0||String(amount).trim()===""){ setErr(sr?"Unesi ispravan iznos budžeta.":"Enter a valid budget amount."); setSaving(false); return; }
-        const body={client_id:Number(clientId),platform,start_date:start,end_date:end,total_budget:tb,currency,note};
+        const body={client_id:Number(clientId),platform,start_date:start,end_date:end,total_budget:tb,currency,note,campaign_filter:platform==="google_ads"?campFilter:""};
         const r=edit
           ?await fetch(`/api/budgets?id=${edit.id}&user_id=${uid}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})
           :await fetch("/api/budgets",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:uid,action:"create",budgets:[body]})});
@@ -1216,7 +1222,7 @@ function BpForm({form,sr,mob,clients,setClients,clientsLoading,range,ym,onClose,
       {prevRows===null&&<div style={{color:C.acl,fontSize:13}}>✦ {sr?"Učitavam...":"Loading..."}</div>}
       {prevRows&&prevRows.length===0&&<div style={{color:C.mut,fontSize:13,marginBottom:10}}>{sr?"U prethodnom mesecu nema budžeta. Koristi \"+ Novi budžet\".":"There are no budgets in the previous month. Use \"+ New budget\"."}</div>}
       {prevRows&&prevRows.map(r=>{const plat=BP_PLATFORMS.find(p=>p.k===r.platform);return <div key={r.key} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
-        <div style={{flex:1,minWidth:0,fontSize:13}}>{r.name} <span style={{color:C.mut}}>· {plat?(plat.k==="other"?(sr?"Ostalo":"Other"):plat.l):r.platform}</span></div>
+        <div style={{flex:1,minWidth:0,fontSize:13}}>{r.name} <span style={{color:C.mut}}>· {plat?(plat.k==="other"?(sr?"Ostalo":"Other"):plat.l):r.platform}{r.campaign_filter?` · "${r.campaign_filter}"`:""}</span></div>
         <input type="text" inputMode="decimal" value={prevAmounts[r.key]||""} onChange={e=>setPrevAmounts(p=>({...p,[r.key]:e.target.value}))} placeholder={`${sr?"Budžet":"Budget"} (${r.currency})`} aria-label={`${r.name} ${sr?"budžet":"budget"}`} style={{...bpInp,width:mob?120:170}}/>
       </div>;})}
     </>:<>
@@ -1245,6 +1251,11 @@ function BpForm({form,sr,mob,clients,setClients,clientsLoading,range,ym,onClose,
         <div><L c={sr?"Ukupan budžet":"Total budget"}/><input type="text" inputMode="decimal" value={amount} onChange={e=>setAmount(e.target.value)} placeholder={sr?"npr. 5000":"e.g. 5000"} style={bpInp}/></div>
         <div><L c={sr?"Napomena (opciono)":"Note (optional)"}/><input value={note} onChange={e=>setNote(e.target.value)} placeholder="Always On" maxLength={200} style={bpInp}/></div>
       </div>
+      {platform==="google_ads"&&<div style={{marginBottom:12}}>
+        <L c={sr?"Samo kampanje čiji naziv sadrži (opciono)":"Only campaigns whose name contains (optional)"}/>
+        <input value={campFilter} onChange={e=>setCampFilter(e.target.value)} placeholder={sr?"prazno = ceo nalog, npr. Search ili RS":"empty = whole account, e.g. Search or RS"} maxLength={100} style={bpInp}/>
+        <div style={{color:C.mut,fontSize:11,marginTop:6,lineHeight:1.5}}>{sr?"Ako je klijent povezan sa Google Ads (u Clients), potrošnja se popunjava automatski svako jutro. Ako nije, unosi se ručno.":"If the client is connected to Google Ads (in Clients), spend is filled in automatically every morning. If not, it is entered manually."}</div>
+      </div>}
     </>}
 
     {err&&<div style={{color:C.red,fontSize:13,marginBottom:10}}>{err}</div>}
