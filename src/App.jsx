@@ -1311,7 +1311,7 @@ function rsPdfDoc({rep,kpis,camps,unattr,ai,sr,chartImg}){
     {text:String(c.campaign_name||"")},
     {text:`${rsNum(c.spendEUR)} €`,alignment:"right"},
     {text:`${rsNum(c.revenueEUR)} €`,alignment:"right"},
-    {text:rsNum(c.roas,2),alignment:"right",bold:true,color:c.spendEUR>0?(c.roas>=1?"#059669":"#dc2626"):"#1f2937"},
+    {text:c.spendEUR>0?rsNum(c.roas,2):"–",alignment:"right",bold:true,color:c.spendEUR>0?(c.roas>=1?"#059669":"#dc2626"):"#6b7280"},
     {text:rsNum(c.conversions),alignment:"right"},
   ])];
 
@@ -1816,6 +1816,7 @@ function ReportStudioMod({t,lang,initialTab}){
           {x.d!=null&&<div style={{fontSize:11,fontWeight:700,color:dColor(x.d,x.good),marginTop:2}}>{dText(x.d)}</div>}
         </div>)}
       </div>
+      {rep.current.fxMissing&&<div style={{color:C.red,fontSize:12,margin:"-4px 0 12px"}}>⚠️ {sr?"Kurs za konverziju u EUR trenutno nije dostupan – deo iznosa je u originalnoj valuti naloga, pa zbirovi mogu biti netačni.":"The EUR exchange rate is currently unavailable – some amounts are in the account's original currency, so totals may be inaccurate."}</div>}
       {rep.previous===null&&rep.prevPeriod&&<div style={{color:C.mut,fontSize:12,margin:"-4px 0 12px"}}>{sr?"Podaci za prethodni period nisu dostupni, pa poređenje nije prikazano.":"Data for the previous period isn't available, so the comparison isn't shown."}</div>}
 
       <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"12px",marginBottom:14}}>
@@ -1844,7 +1845,7 @@ function ReportStudioMod({t,lang,initialTab}){
             <td style={{padding:"6px 8px",borderBottom:`1px solid ${C.brd}`}}>{c.campaign_name}</td>
             <td style={{padding:"6px 8px",borderBottom:`1px solid ${C.brd}`}}>{rsNum(c.spendEUR)} €</td>
             <td style={{padding:"6px 8px",borderBottom:`1px solid ${C.brd}`}}>{rsNum(c.revenueEUR)} €</td>
-            <td style={{padding:"6px 8px",borderBottom:`1px solid ${C.brd}`,color:c.roas>=1?C.grn:c.spendEUR>0?C.red:C.txt,fontWeight:700}}>{rsNum(c.roas,2)}</td>
+            <td style={{padding:"6px 8px",borderBottom:`1px solid ${C.brd}`,color:c.spendEUR>0?(c.roas>=1?C.grn:C.red):C.mut,fontWeight:700}}>{c.spendEUR>0?rsNum(c.roas,2):"–"}</td>
             <td style={{padding:"6px 8px",borderBottom:`1px solid ${C.brd}`}}>{rsNum(c.conversions)}</td>
           </tr>)}</tbody>
         </table>
@@ -3140,6 +3141,9 @@ function CampaignsMod({t,lang}){
       {err&&err!=="no_gads"&&err!=="no_ga4"&&err!=="timeout"&&!loading&&<div style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:12,padding:"16px",color:C.red,fontSize:13,marginBottom:16}}>⚠️ {err}</div>}
 
       {data&&!loading&&!drillCampaign&&<>
+        {data.fxMissing&&<div style={{background:"rgba(248,113,113,0.08)",border:"1px solid rgba(248,113,113,0.3)",borderRadius:12,padding:"12px 16px",color:C.red,fontSize:12,marginBottom:12}}>
+          ⚠️ {sr?"Kurs za konverziju u EUR trenutno nije dostupan. Deo iznosa je prikazan u originalnoj valuti naloga, pa zbirovi i ROAS mogu biti netačni. Pokušaj ponovo kasnije.":"The EUR exchange rate is currently unavailable. Some amounts are shown in the account's original currency, so totals and ROAS may be inaccurate. Try again later."}
+        </div>}
         {(data.showSpendNative||data.showRevenueNative)&&<div style={{background:"rgba(245,158,11,0.08)",border:"1px solid rgba(245,158,11,0.25)",borderRadius:12,padding:"12px 16px",color:C.yel,fontSize:12,marginBottom:16}}>
           ℹ️ {sr?`Prikazano u EUR kao glavnoj valuti (originalna valuta ispod, malim slovima), konvertovano po kursu iz ${data.rateDate?new Date(data.rateDate).toLocaleDateString("sr-RS"):"?"}.`:`Shown in EUR as the primary currency (original currency below, in small text), converted using the exchange rate from ${data.rateDate?new Date(data.rateDate).toLocaleDateString():"?"}.`}
         </div>}
@@ -3181,7 +3185,7 @@ function CampaignsMod({t,lang}){
             </thead>
             <tbody>
               {filteredCampaigns().map((c,i)=><tr key={i} onClick={()=>openCampaign(c)} style={{borderTop:`1px solid ${C.brd}`,cursor:"pointer"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.02)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                <td style={{padding:"8px 4px",color:C.acl,textDecoration:"underline"}}>{c.campaign_name} <span style={{color:C.mut}}>({c.campaign_id})</span></td>
+                <td style={{padding:"8px 4px",color:C.acl,textDecoration:"underline"}}>{c.campaign_name} <span style={{color:C.mut}}>({c.campaign_id})</span>{c.no_spend_in_period&&<span style={{display:"inline-block",marginLeft:6,color:C.yel,fontSize:10,textDecoration:"none"}}>{sr?"bez potrošnje u periodu":"no spend in period"}</span>}</td>
                 <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{c.clicks.toLocaleString()}</td>
                 <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{c.impressions.toLocaleString()}</td>
                 <td style={{padding:"8px 4px",textAlign:"right",color:C.txt}}>
@@ -3194,7 +3198,7 @@ function CampaignsMod({t,lang}){
                 </td>
                 <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{c.conversions.toFixed(1)}</td>
                 <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{c.itemsPurchased.toLocaleString()}</td>
-                <td style={{padding:"8px 4px",textAlign:"right",fontWeight:700,color:c.roas>=1?C.grn:C.red}}>{c.roas.toFixed(2)}x</td>
+                <td style={{padding:"8px 4px",textAlign:"right",fontWeight:700,color:c.spendEUR>0?(c.roas>=1?C.grn:C.red):C.mut}}>{c.spendEUR>0?`${c.roas.toFixed(2)}x`:"–"}</td>
               </tr>)}
             </tbody>
           </table>
