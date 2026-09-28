@@ -90,8 +90,9 @@ async function dailySeries(clientId, from, to, gadsCurrency, ga4Currency) {
     const rv = revBy[d] || { revenue: 0, purchases: 0 };
     out.push({
       date: d,
-      spendEUR: gadsCurrency === "EUR" ? s : convert(s, gadsCurrency, "EUR", rates),
-      revenueEUR: ga4Currency === "EUR" ? rv.revenue : convert(rv.revenue, ga4Currency, "EUR", rates),
+      // ako kurs fali, iznos ostaje u originalnoj valuti (isto kao u campaigns.js), umesto da nestane
+      spendEUR: gadsCurrency === "EUR" ? s : (convert(s, gadsCurrency, "EUR", rates) ?? s),
+      revenueEUR: ga4Currency === "EUR" ? rv.revenue : (convert(rv.revenue, ga4Currency, "EUR", rates) ?? rv.revenue),
       purchases: rv.purchases,
     });
   }
