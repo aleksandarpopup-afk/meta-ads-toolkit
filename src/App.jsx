@@ -3825,9 +3825,15 @@ const CARD_CSS=`.mc{transition:transform .18s ease,border-color .18s ease}
 .mc:hover .mc-op,.mc:focus-visible .mc-op{opacity:1;transform:none}
 @media (hover:none){.mc:hover{transform:none}.mc .mc-op{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.mc,.mc .mc-op{transition:none}.mc:hover{transform:none}}
-.mc .mc-live{display:none}
-@media (hover:hover){.mc:hover .mc-desc.has-live{display:none}.mc:hover .mc-live{display:block}}
-@media (hover:none){.mc .mc-live{display:block}}`;
+.mc .mc-ic{transition:transform .2s ease}
+.mc:hover .mc-ic{transform:scale(1.12) rotate(-6deg)}
+.mc .mc-txt{display:grid}
+.mc .mc-txt>*{grid-area:1/1}
+.mc .mc-desc,.mc .mc-live{transition:opacity .18s ease}
+.mc .mc-live{opacity:0;visibility:hidden}
+@media (hover:hover){.mc:hover .mc-desc.has-live{opacity:0;visibility:hidden}.mc:hover .mc-live{opacity:1;visibility:visible}}
+@media (hover:none){.mc .mc-txt{display:block}.mc .mc-live{opacity:1;visibility:visible}.mc:hover .mc-ic{transform:none}}
+@media (prefers-reduced-motion:reduce){.mc .mc-ic,.mc .mc-desc,.mc .mc-live{transition:none}.mc:hover .mc-ic{transform:none}}`;
 
 // ── RESPONSIVE HOOK ──────────────────────────────────────────────────────────
 function useWindowSize(){
@@ -3987,9 +3993,9 @@ export default function App(){
       WebkitTapHighlightColor:"transparent",
       boxShadow:`0 4px 24px ${m.col}20`,
     }}>
-      <div style={{width:large?48:40,height:large?48:40,borderRadius:12,background:`linear-gradient(135deg,${m.col}40,${m.col}20)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:large?24:20,marginBottom:large?14:12}}>{m.icon}</div>
+      <div className="mc-ic" style={{width:large?48:40,height:large?48:40,borderRadius:12,background:`linear-gradient(135deg,${m.col}40,${m.col}20)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:large?24:20,marginBottom:large?14:12}}>{m.icon}</div>
       <div style={{color:"#fff",fontWeight:700,fontSize:large?15:13,marginBottom:4,lineHeight:1.3}}>{t[m.tk]}</div>
-      {(()=>{const live=m.id===2&&bpLive?bpLive:null;return <div style={{marginBottom:large?14:12}}>
+      {(()=>{const live=m.id===2&&bpLive?bpLive:null;return <div className="mc-txt" style={{marginBottom:large?14:12}}>
         <div className={live?"mc-desc has-live":"mc-desc"} style={{color:"rgba(255,255,255,0.45)",fontSize:large?12:11,lineHeight:1.5}}>{t[m.sk]}</div>
         {live&&<div className="mc-live" style={{color:live.bad?C.red:C.grn,fontSize:large?12:11,lineHeight:1.5,fontWeight:700}}>{live.text}</div>}
       </div>;})()}
