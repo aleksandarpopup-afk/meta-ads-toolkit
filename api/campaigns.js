@@ -123,7 +123,7 @@ export default async function handler(req, res) {
     const accessToken = await refreshAccessToken(refresh_token);
     const ga4Report = await ga4Fetch(property_id, accessToken, {
       dateRanges: [{ startDate: startStr, endDate: endStr }],
-      dimensions: [{ name: "sessionGoogleAdsCampaignId" }],
+      dimensions: [{ name: "sessionGoogleAdsCampaignId" }, { name: "sessionGoogleAdsCampaignName" }],
       metrics: [{ name: "totalRevenue" }, { name: "transactions" }, { name: "itemsPurchased" }],
       dimensionFilter: {
         filter: { fieldName: "sessionDefaultChannelGroup", inListFilter: { values: ["Paid Search", "Cross-network", "Paid Shopping", "Paid Video"] } }
@@ -131,14 +131,18 @@ export default async function handler(req, res) {
       limit: 500
     });
 
+    // Sabiranje po ID-u kampanje (ista kampanja moze doci u vise redova zbog naziva)
     const revenueByCampaignId = {};
+    const ga4NameById = {};
     for (const row of ga4Report.rows || []) {
       const id = row.dimensionValues[0].value;
-      revenueByCampaignId[id] = {
-        revenue: parseFloat(row.metricValues[0].value) || 0,
-        conversions: parseFloat(row.metricValues[1].value) || 0,
-        itemsPurchased: parseInt(row.metricValues[2].value) || 0
-      };
+      const name = row.dimensionValues[1]?.value;
+      const cur = revenueByCampaignId[id] || { revenue: 0, conversions: 0, itemsPurchased: 0 };
+      cur.revenue += parseFloat(row.metricValues[0].value) || 0;
+      cur.conversions += parseFloat(row.metricValues[1].value) || 0;
+      cur.itemsPurchased += parseInt(row.metricValues[2].value) || 0;
+      revenueByCampaignId[id] = cur;
+      if (name && name !== "(not set)" && !ga4NameById[id]) ga4NameById[id] = name;
     }
 
     // 4.5 Kursevi valuta (potrebni ako Spend ili Revenue nije već u EUR - EUR je naša "glavna" prikazna valuta)
@@ -154,12 +158,28 @@ export default async function handler(req, res) {
       }
     }
 
+    let fxMissing = false;
+    const toEUR = (amount, cur) => {
+      if (cur === "EUR") return amount;
+      const v = rates ? convert(amount, cur, "EUR", rates) : null;
+      if (v == null) { fxMissing = true; return amount; }
+      return v;
+    };
+
+    // 4.6 Kampanje koje imaju GA4 prihod u periodu, a nemaju potrosnju (npr. pauzirane, kupovine od ranijih klikova).
+    // Ranije se taj prihod gubio iz ukupnog zbira; sada se prikazuju sa potrosnjom 0.
+    const isUnattributedKey = (k) => k === "(not set)" || k === "" || !k;
+    for (const id of Object.keys(revenueByCampaignId)) {
+      if (isUnattributedKey(id) || byCampaign[id]) continue;
+      byCampaign[id] = { campaign_id: id, campaign_name: ga4NameById[id] || id, spend: 0, clicks: 0, impressions: 0, no_spend_in_period: true };
+    }
+
     // 5. Spajanje - svaka kampanja sa spend-om dobija svoj GA4 revenue (0 ako nema)
     // Spend i Revenue se uvek prikazuju u EUR (glavno), original valuta ostaje kao referenca
     const campaigns = Object.values(byCampaign).map((c) => {
       const ga4Data = revenueByCampaignId[c.campaign_id] || { revenue: 0, conversions: 0, itemsPurchased: 0 };
-      const spendEUR = rates ? convert(c.spend, gadsCurrency, "EUR", rates) : c.spend;
-      const revenueEUR = rates ? convert(ga4Data.revenue, ga4Currency, "EUR", rates) : ga4Data.revenue;
+      const spendEUR = toEUR(c.spend, gadsCurrency);
+      const revenueEUR = toEUR(ga4Data.revenue, ga4Currency);
       return {
         ...c,
         itemsPurchased: ga4Data.itemsPurchased,
@@ -172,9 +192,7 @@ export default async function handler(req, res) {
     }).sort((a, b) => b.spend - a.spend);
 
     // 6. Neraspoređeno - GA4 revenue bez prepoznatog campaign ID-a ("(not set)" ili prazno)
-    const unattributedKeys = Object.keys(revenueByCampaignId).filter(
-      (k) => k === "(not set)" || k === "" || !k
-    );
+    const unattributedKeys = Object.keys(revenueByCampaignId).filter(isUnattributedKey);
     const unattributed = unattributedKeys.reduce(
       (acc, k) => ({
         revenue: acc.revenue + revenueByCampaignId[k].revenue,
@@ -182,7 +200,7 @@ export default async function handler(req, res) {
       }),
       { revenue: 0, conversions: 0 }
     );
-    unattributed.revenueEUR = rates ? convert(unattributed.revenue, ga4Currency, "EUR", rates) : unattributed.revenue;
+    unattributed.revenueEUR = toEUR(unattributed.revenue, ga4Currency);
 
     const totalSpend = campaigns.reduce((s, c) => s + c.spend, 0);
     const totalSpendEUR = campaigns.reduce((s, c) => s + c.spendEUR, 0);
@@ -202,7 +220,8 @@ export default async function handler(req, res) {
       totalSpendEUR,
       totalRevenue,
       totalRevenueEUR,
-      totalRoas: totalSpendEUR > 0 ? totalRevenueEUR / totalSpendEUR : 0
+      totalRoas: totalSpendEUR > 0 ? totalRevenueEUR / totalSpendEUR : 0,
+      fxMissing
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });
