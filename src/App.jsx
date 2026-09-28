@@ -1398,23 +1398,37 @@ function ReportStudioMod({t,lang}){
     setAiLoading(false);
   };
 
-  // PDF: izvestaj se otvara kao cista, svetla stranica u novom prozoru i odmah nudi stampu / cuvanje kao PDF
-  const exportPdf=()=>{
-    if(!rep||!cur) return;
-    const w=window.open("","_blank");
-    if(!w){ alert(sr?"Browser je blokirao novi prozor. Dozvoli iskačuće prozore za ovaj sajt i pokušaj ponovo.":"The browser blocked the new window. Allow pop-ups for this site and try again."); return; }
+  // PDF: pravo preuzimanje jednim klikom. Izvestaj se slaze kao svetla stranica (van ekrana)
+  // i pretvara u PDF fajl pomocu biblioteke html2pdf (ucitava se tek kad zatreba).
+  const [pdfBusy,setPdfBusy]=useState(false);
+  const loadHtml2Pdf=()=>new Promise((resolve,reject)=>{
+    if(window.html2pdf) return resolve(window.html2pdf);
+    const ex=document.getElementById("html2pdf-lib");
+    if(ex){ ex.addEventListener("load",()=>resolve(window.html2pdf)); ex.addEventListener("error",reject); return; }
+    const sc=document.createElement("script");
+    sc.id="html2pdf-lib";
+    sc.src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+    sc.onload=()=>window.html2pdf?resolve(window.html2pdf):reject(new Error("html2pdf missing"));
+    sc.onerror=reject;
+    document.head.appendChild(sc);
+  });
+  const exportPdf=async()=>{
+    if(!rep||!cur||pdfBusy) return;
+    setPdfBusy(true);
     const chartEl=document.getElementById("rs-chart-print");
     const chart=chartEl?chartEl.innerHTML:"";
     const mdToHtml=txt=>rsEsc(txt).split("\n").map(l=>l.startsWith("## ")?`<h3>${l.slice(3)}</h3>`:l.startsWith("# ")?`<h3>${l.slice(2)}</h3>`:/^[-*] /.test(l)?`<li>${l.slice(2)}</li>`:/^\d+\. /.test(l)?`<li>${l.replace(/^\d+\. /,"")}</li>`:l.trim()?`<p>${l}</p>`:"").join("").replace(/\*\*(.+?)\*\*/g,"<b>$1</b>");
     const rows=camps.map(c=>`<tr><td>${rsEsc(c.campaign_name)}</td><td>${rsNum(c.spendEUR)} €</td><td>${rsNum(c.revenueEUR)} €</td><td>${rsNum(c.roas,2)}</td><td>${rsNum(c.conversions)}</td></tr>`).join("");
     const k=kpis.map(x=>`<div class="k"><div class="l">${rsEsc(x.l)}</div><div class="v">${rsEsc(x.v)}</div>${x.d!=null?`<div class="d">${dText(x.d)} ${sr?"vs prethodni":"vs previous"}</div>`:""}</div>`).join("");
-    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${rsEsc(rep.client.name)} – Google Ads</title><style>
-      body{font-family:Arial,sans-serif;color:#1a1a2e;margin:32px;}h1{font-size:22px;margin:0 0 4px}h2{font-size:15px;margin:22px 0 10px;color:#4338ca}h3{font-size:14px;margin:14px 0 6px}
-      .sub{color:#6b7280;font-size:13px}.g{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.k{border:1px solid #e5e7eb;border-radius:8px;padding:10px}
-      .l{font-size:11px;color:#6b7280;text-transform:uppercase}.v{font-size:18px;font-weight:700;margin-top:4px}.d{font-size:11px;color:#6b7280;margin-top:2px}
-      table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #e5e7eb}th{color:#6b7280;font-weight:600}
-      p,li{font-size:13px;line-height:1.5}.chart{border:1px solid #e5e7eb;border-radius:8px;padding:10px}.foot{margin-top:28px;color:#9ca3af;font-size:11px}
-      @media print{body{margin:14mm}.k,.chart,tr{page-break-inside:avoid}}</style></head><body>
+    const css=`.rs-pdf{font-family:Arial,sans-serif;color:#1a1a2e;background:#fff;padding:8px 4px;width:720px}
+      .rs-pdf h1{font-size:22px;margin:0 0 4px;color:#1a1a2e}.rs-pdf h2{font-size:15px;margin:20px 0 10px;color:#4338ca}.rs-pdf h3{font-size:14px;margin:12px 0 6px;color:#1a1a2e}
+      .rs-pdf .sub{color:#6b7280;font-size:12px}.rs-pdf .g{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+      .rs-pdf .k{border:1px solid #e5e7eb;border-radius:8px;padding:9px}.rs-pdf .l{font-size:10px;color:#6b7280;text-transform:uppercase}
+      .rs-pdf .v{font-size:16px;font-weight:700;margin-top:4px;color:#1a1a2e}.rs-pdf .d{font-size:10px;color:#6b7280;margin-top:2px}
+      .rs-pdf table{width:100%;border-collapse:collapse;font-size:11px}.rs-pdf th,.rs-pdf td{text-align:left;padding:5px 7px;border-bottom:1px solid #e5e7eb;color:#1a1a2e}
+      .rs-pdf th{color:#6b7280;font-weight:600}.rs-pdf p,.rs-pdf li{font-size:12px;line-height:1.5;color:#1a1a2e}
+      .rs-pdf .chart{border:1px solid #e5e7eb;border-radius:8px;padding:8px}.rs-pdf .foot{margin-top:24px;color:#9ca3af;font-size:10px}`;
+    const html=`<style>${css}</style><div class="rs-pdf">
       <h1>${rsEsc(rep.client.name)} – Google Ads ${sr?"izveštaj":"report"}</h1>
       <div class="sub">${rsDate(rep.period.from,sr)} – ${rsDate(rep.period.to,sr)}${rep.prevPeriod?` · ${sr?"poređenje sa":"compared to"} ${rsDate(rep.prevPeriod.from,sr)} – ${rsDate(rep.prevPeriod.to,sr)}`:""} · ${sr?"iznosi u EUR":"amounts in EUR"}</div>
       <h2>${sr?"Glavni pokazatelji":"Key metrics"}</h2><div class="g">${k}</div>
@@ -1422,9 +1436,28 @@ function ReportStudioMod({t,lang}){
       ${ai?`<h2>${sr?"Zaključak i preporuke":"Conclusion and recommendations"}</h2>${mdToHtml(ai)}`:""}
       <h2>${sr?"Kampanje":"Campaigns"}</h2><table><tr><th>${sr?"Kampanja":"Campaign"}</th><th>${sr?"Potrošnja":"Spend"}</th><th>${sr?"Prihod":"Revenue"}</th><th>ROAS</th><th>${sr?"Kupovine":"Purchases"}</th></tr>${rows}</table>
       ${unattr&&unattr.revenueEUR>0?`<p class="sub">${sr?"Prihod iz Google Ads kanala bez prepoznate kampanje":"Revenue from Google Ads channels without a recognized campaign"}: ${rsNum(unattr.revenueEUR)} €</p>`:""}
-      <div class="foot">${sr?"Izvor: Google Ads (potrošnja) i GA4 (prihod i kupovine)":"Source: Google Ads (spend) and GA4 (revenue and purchases)"}</div>
-      <script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>`);
-    w.document.close();
+      <div class="foot">${sr?"Izvor: Google Ads (potrošnja) i GA4 (prihod i kupovine)":"Source: Google Ads (spend) and GA4 (revenue and purchases)"}</div></div>`;
+    const holder=document.createElement("div");
+    holder.style.cssText="position:fixed;left:-10000px;top:0;width:740px;background:#fff;";
+    holder.innerHTML=html;
+    document.body.appendChild(holder);
+    const safe=s=>String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/đ/g,"dj").replace(/Đ/g,"Dj").replace(/[^A-Za-z0-9_-]+/g,"_").replace(/^_+|_+$/g,"");
+    const filename=`${safe(rep.client.name)||"klijent"}_Google-Ads_${rep.period.from}_${rep.period.to}.pdf`;
+    try{
+      const h2p=await loadHtml2Pdf();
+      await h2p().set({
+        margin:[10,10,12,10],
+        filename,
+        image:{type:"jpeg",quality:0.95},
+        html2canvas:{scale:2,backgroundColor:"#ffffff",useCORS:true},
+        jsPDF:{unit:"mm",format:"a4",orientation:"portrait"},
+        pagebreak:{mode:["css","legacy"],avoid:[".k","tr",".chart","h2","h3","li","p"]},
+      }).from(holder.querySelector(".rs-pdf")).save();
+    }catch(e){
+      alert(sr?"PDF nije napravljen. Proveri internet vezu i pokušaj ponovo.":"The PDF could not be created. Check your connection and try again.");
+    }
+    document.body.removeChild(holder);
+    setPdfBusy(false);
   };
 
   const clientName=clients.find(c=>String(c.id)===String(clientId))?.name;
@@ -1464,7 +1497,7 @@ function ReportStudioMod({t,lang}){
           <div style={{fontWeight:800,fontSize:17}}>{rep.client.name||clientName} – Google Ads</div>
           <div style={{color:C.mut,fontSize:12,marginTop:2}}>{rsDate(rep.period.from,sr)} – {rsDate(rep.period.to,sr)}{rep.prevPeriod?` · ${sr?"poređenje sa":"compared to"} ${rsDate(rep.prevPeriod.from,sr)} – ${rsDate(rep.prevPeriod.to,sr)}`:""} · {sr?"iznosi u EUR":"amounts in EUR"}</div>
         </div>
-        <button onClick={exportPdf} style={bpBtn(false)}>📄 {sr?"Preuzmi PDF":"Download PDF"}</button>
+        <button onClick={exportPdf} disabled={pdfBusy} style={{...bpBtn(false),opacity:pdfBusy?0.6:1}}>📄 {pdfBusy?(sr?"Pravim PDF...":"Creating PDF..."):(sr?"Preuzmi PDF":"Download PDF")}</button>
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:mob?"1fr 1fr":"repeat(4,1fr)",gap:10,marginBottom:14}}>
