@@ -1382,7 +1382,7 @@ function rsMdToPdf(md){
       while(i<lines.length&&lines[i].trim().startsWith("|")){ if(!isSep(lines[i])) rows.push(cells(lines[i])); i++; }
       if(rows.length){
         const n=Math.max(...rows.map(r=>r.length));
-        const body=rows.map((r,ri)=>{const rr=[...r]; while(rr.length<n) rr.push(""); return rr.map((c,ci)=>({text:rsRich(c),bold:ri===0,color:ri===0?"#374151":"#1f2937",fillColor:ri===0?"#f3f4f6":(ri%2===0?"#fafafa":null),alignment:ci>0&&/^[\d\s.,%€$+\-−x]+$/.test(c.replace(/\*\*/g,""))?"right":"left"}));});
+        const body=rows.map((r,ri)=>{const rr=[...r]; while(rr.length<n) rr.push(""); return rr.map((c,ci)=>({text:rsRich(c),bold:ri===0,color:ri===0?"#374151":"#1f2937",fillColor:ri===0?"#f3f4f6":(ri%2===0?"#fafafa":null),alignment:ci>0&&/^[\d\s.,%€$+\-−x]+( ?(din|RSD|EUR|USD|kom|pcs))?$/.test(c.replace(/\*\*/g,""))?"right":"left"}));});
         out.push({table:{headerRows:1,dontBreakRows:true,widths:Array(n).fill("*"),body},fontSize:8.5,
           layout:{hLineWidth:(k,node)=>k===0||k===node.table.body.length?0:0.5,vLineWidth:()=>0,hLineColor:()=>"#e5e7eb",paddingTop:()=>4,paddingBottom:()=>4},margin:[0,2,0,8]});
       }
@@ -1660,6 +1660,205 @@ function RsImports({sr,lang,mob,clientId,clientName}){
   </div>;
 }
 
+// ── REPORT STUDIO: PRODAJA PO KAMPANJAMA ─────────────────────────────────────
+const RS_TYPES=[
+  {k:"meta",sr:"Meta",en:"Meta",c:"#60A5FA"},
+  {k:"google",sr:"Google",en:"Google",c:"#FBBF24"},
+  {k:"paid_other",sr:"Ostali plaćeni",en:"Other paid",c:"#C084FC"},
+  {k:"organic",sr:"Organski",en:"Organic",c:"#34D399"},
+  {k:"direct",sr:"Direktno",en:"Direct",c:"#94A3B8"},
+  {k:"referral",sr:"Preporuke",en:"Referral",c:"#F472B6"},
+  {k:"other",sr:"Ostalo",en:"Other",c:"#9CA3AF"},
+];
+const rsType=(k,sr)=>{const x=RS_TYPES.find(t=>t.k===k)||RS_TYPES[RS_TYPES.length-1];return {l:sr?x.sr:x.en,c:x.c};};
+
+function RsProductSales({sr,lang,mob,clientId,clientName}){
+  const [periodKey,setPeriodKey]=useState("7");
+  const [custom,setCustom]=useState(()=>rsPeriodRange("7",{}));
+  const [data,setData]=useState(null);
+  const [loading,setLoading]=useState(false);
+  const [err,setErr]=useState("");
+  const [view,setView]=useState("campaign");
+  const [cat,setCat]=useState("");
+  const [types,setTypes]=useState({});
+  const [q,setQ]=useState("");
+  const [inEur,setInEur]=useState(false);
+  const [open,setOpen]=useState(null);
+  const [limit,setLimit]=useState(100);
+  const [pdfBusy,setPdfBusy]=useState(false);
+
+  useEffect(()=>{ setData(null); setErr(""); },[clientId]);
+
+  const load=async()=>{
+    setErr(""); setData(null); setOpen(null); setLimit(100);
+    if(!clientId){ setErr(sr?"Izaberi klijenta.":"Choose a client."); return; }
+    const r=rsPeriodRange(periodKey,custom);
+    if(!r.from||!r.to||r.to<r.from){ setErr(sr?"Proveri period – kraj ne može biti pre početka.":"Check the period – the end can't be before the start."); return; }
+    const uid=await getOrCreateUser();
+    setLoading(true);
+    try{
+      const res=await fetch(`/api/report-product-sales?client_id=${clientId}&user_id=${uid}&from=${r.from}&to=${r.to}`);
+      const d=await res.json();
+      if(!res.ok){
+        const e=String(d.error||"");
+        if(e==="no_ga4") setErr(sr?"GA4 nije povezan za ovog klijenta. Poveži ga u Clients.":"GA4 is not connected for this client. Connect it in Clients.");
+        else if(e.includes("invalid_grant")) setErr(sr?"Veza sa Google nalogom je istekla. U Clients otkači i ponovo poveži GA4.":"The Google connection has expired. In Clients, disconnect and reconnect GA4.");
+        else setErr(sr?"Podaci nisu učitani. Pokušaj ponovo.":"Data could not be loaded. Please try again.");
+      } else { setData(d); setInEur(false); }
+    }catch(e){ setErr(sr?"Podaci nisu učitani. Proveri internet vezu i pokušaj ponovo.":"Data could not be loaded. Check your connection and try again."); }
+    setLoading(false);
+  };
+
+  const cur=data?(inEur?"EUR":data.currency):"EUR";
+  const mul=data&&inEur&&data.eurRate?data.eurRate:1;
+  const money=v=>`${rsNum(v*mul)} ${cur==="RSD"?"din":cur}`;
+
+  const all=data?data.rows:[];
+  const cats=[...new Set(all.map(r=>r.category).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const typeCounts={}; all.forEach(r=>{typeCounts[r.type]=(typeCounts[r.type]||0)+r.revenue;});
+  const anyType=Object.values(types).some(Boolean);
+  const ql=q.trim().toLowerCase();
+  const rows=all.filter(r=>(!cat||r.category===cat)&&(!anyType||types[r.type])&&(!ql||String(r.itemName).toLowerCase().includes(ql)||String(r.campaign).toLowerCase().includes(ql)||String(r.itemId).includes(ql)));
+  const totQty=rows.reduce((s,r)=>s+r.qty,0), totRev=rows.reduce((s,r)=>s+r.revenue,0);
+
+  const group=(keyFn,labelFn)=>{
+    const m={};
+    rows.forEach(r=>{const k=keyFn(r); if(!m[k]) m[k]={k,label:labelFn(r),type:r.type,qty:0,revenue:0,items:[]}; m[k].qty+=r.qty; m[k].revenue+=r.revenue; m[k].items.push(r);});
+    return Object.values(m).sort((a,b)=>b.revenue-a.revenue);
+  };
+  const byCampaign=data?group(r=>`${r.campaign}|${r.type}`,r=>r.campaign):[];
+  const byProduct=data?group(r=>r.itemId||r.itemName,r=>r.itemName):[];
+
+  const pill=on=>({padding:"7px 13px",borderRadius:20,fontSize:12,fontWeight:600,cursor:"pointer",border:on?"1px solid #F59E0B":`1px solid ${C.brd}`,background:on?"rgba(245,158,11,0.15)":"transparent",color:on?"#fff":C.mut});
+  const cell={padding:"6px 8px",borderBottom:`1px solid ${C.brd}`};
+  const Badge=({t})=>{const x=rsType(t,sr);return <span style={{fontSize:10,fontWeight:700,color:x.c,border:`1px solid ${x.c}55`,borderRadius:20,padding:"1px 7px",whiteSpace:"nowrap"}}>{x.l}</span>;};
+
+  const downloadPdf=async()=>{
+    if(!data||pdfBusy) return;
+    setPdfBusy(true);
+    const esc=s=>String(s==null?"":s).replace(/\|/g,"/");
+    const typeRows=RS_TYPES.map(t=>{const rr=rows.filter(r=>r.type===t.k);return {t,qty:rr.reduce((s,r)=>s+r.qty,0),rev:rr.reduce((s,r)=>s+r.revenue,0)};}).filter(x=>x.qty>0).sort((a,b)=>b.rev-a.rev);
+    const pct=v=>totRev>0?`${rsNum(v/totRev*100,1)}%`:"–";
+    let md=`## ${sr?"Ukupno":"Total"}\n| ${sr?"Prodato komada":"Items sold"} | ${sr?"Prihod":"Revenue"} |\n|---|---|\n| ${rsNum(totQty)} | ${money(totRev)} |\n`;
+    md+=`## ${sr?"Po vrsti izvora":"By source type"}\n| ${sr?"Izvor":"Source"} | ${sr?"Komada":"Items"} | ${sr?"Prihod":"Revenue"} | ${sr?"Udeo":"Share"} |\n|---|---|---|---|\n`+typeRows.map(x=>`| ${sr?x.t.sr:x.t.en} | ${rsNum(x.qty)} | ${money(x.rev)} | ${pct(x.rev)} |`).join("\n")+"\n";
+    md+=`## ${sr?"Kampanje":"Campaigns"} (top ${Math.min(40,byCampaign.length)})\n| ${sr?"Kampanja":"Campaign"} | ${sr?"Izvor":"Source"} | ${sr?"Komada":"Items"} | ${sr?"Prihod":"Revenue"} | ${sr?"Udeo":"Share"} |\n|---|---|---|---|---|\n`+byCampaign.slice(0,40).map(g=>`| ${esc(g.label)} | ${rsType(g.type,sr).l} | ${rsNum(g.qty)} | ${money(g.revenue)} | ${pct(g.revenue)} |`).join("\n")+"\n";
+    md+=`## ${sr?"Najprodavaniji proizvodi":"Top products"} (top ${Math.min(40,byProduct.length)})\n| ${sr?"Proizvod":"Product"} | ${sr?"Kategorija":"Category"} | ${sr?"Komada":"Items"} | ${sr?"Prihod":"Revenue"} | ${sr?"Najviše iz":"Mostly from"} |\n|---|---|---|---|---|\n`+byProduct.slice(0,40).map(g=>{const top=[...g.items].sort((a,b)=>b.revenue-a.revenue)[0];return `| ${esc(g.label)} | ${esc(top.category)} | ${rsNum(g.qty)} | ${money(g.revenue)} | ${esc(top.campaign)} |`;}).join("\n")+"\n";
+    const filt=[cat&&`${sr?"kategorija":"category"}: ${cat}`,anyType&&`${sr?"izvori":"sources"}: ${RS_TYPES.filter(t=>types[t.k]).map(t=>sr?t.sr:t.en).join(", ")}`,ql&&`${sr?"pretraga":"search"}: "${q.trim()}"`].filter(Boolean).join(" · ");
+    const subtitle=`${rsDate(data.period.from,sr)} – ${rsDate(data.period.to,sr)}  ·  ${sr?"Izvor: GA4":"Source: GA4"}${filt?`  ·  ${filt}`:""}`;
+    const safe=s=>String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/đ/g,"dj").replace(/Đ/g,"Dj").replace(/[^A-Za-z0-9_-]+/g,"_").replace(/^_+|_+$/g,"");
+    try{
+      const pm=await rsLoadPdfMake();
+      pm.createPdf(rsPdfDocMd({title:sr?"Prodaja po kampanjama":"Sales by campaign",clientName:clientName||data.client.name,subtitle,md,sr})).download(`${safe(clientName||data.client.name)||"klijent"}_prodaja_po_kampanjama_${data.period.from}_${data.period.to}.pdf`);
+    }catch(e){ alert(sr?"PDF nije napravljen. Proveri internet vezu i pokušaj ponovo.":"The PDF could not be created. Check your connection and try again."); }
+    setPdfBusy(false);
+  };
+
+  if(!clientId) return <div style={{color:C.mut,fontSize:13,padding:"8px 0"}}>{sr?"Izaberi klijenta iznad.":"Choose a client above."}</div>;
+
+  return <div>
+    <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:14,padding:"16px",marginBottom:16}}>
+      <div style={{color:C.mut,fontSize:13,marginBottom:12}}>{sr?"Šta je prodato i iz koje kampanje je došlo – svi izvori (Meta, Google, organski, direktno...), uživo iz GA4.":"What was sold and which campaign it came from – all sources (Meta, Google, organic, direct...), live from GA4."}</div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:periodKey==="custom"?10:14}}>
+        {[["7",sr?"7 dana":"7 days"],["30",sr?"30 dana":"30 days"],["month",sr?"Ovaj mesec":"This month"],["lastmonth",sr?"Prošli mesec":"Last month"],["custom",sr?"Proizvoljno":"Custom"]].map(([k,l])=><button key={k} onClick={()=>setPeriodKey(k)} style={pill(periodKey===k)}>{l}</button>)}
+      </div>
+      {periodKey==="custom"&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+        <input type="date" value={custom.from||""} onChange={e=>setCustom(p=>({...p,from:e.target.value}))} style={bpInp} aria-label={sr?"Od":"From"}/>
+        <input type="date" value={custom.to||""} onChange={e=>setCustom(p=>({...p,to:e.target.value}))} style={bpInp} aria-label={sr?"Do":"To"}/>
+      </div>}
+      <button onClick={load} disabled={loading} style={{padding:"12px 18px",borderRadius:11,fontSize:14,fontWeight:700,cursor:loading?"not-allowed":"pointer",border:"none",background:"linear-gradient(135deg,#F59E0B,#D97706)",color:"#fff",opacity:loading?0.6:1}}>
+        {loading?(sr?"Učitavam iz GA4...":"Loading from GA4..."):(sr?"Prikaži prodaju po kampanjama":"Show sales by campaign")}
+      </button>
+      {err&&<div style={{color:C.red,fontSize:13,marginTop:10}}>{err}</div>}
+    </div>
+
+    {data&&<div>
+      {/* Zbir i akcije */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:12}}>
+        <div>
+          <div style={{fontWeight:800,fontSize:17}}>{rsNum(totQty)} {sr?"komada":"items"} · {money(totRev)}</div>
+          <div style={{color:C.mut,fontSize:12,marginTop:2}}>{rsDate(data.period.from,sr)} – {rsDate(data.period.to,sr)}{(cat||anyType||ql)?` · ${sr?"filtrirano":"filtered"}`:""}</div>
+        </div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          {data.currency!=="EUR"&&data.eurRate&&<button onClick={()=>setInEur(v=>!v)} style={bpBtn(false)}>{inEur?(data.currency==="RSD"?"din":data.currency):"EUR"}</button>}
+          <button onClick={downloadPdf} disabled={pdfBusy||!rows.length} style={{...bpBtn(false),opacity:pdfBusy||!rows.length?0.5:1}}>📄 {pdfBusy?(sr?"Pravim PDF...":"Creating PDF..."):(sr?"Preuzmi PDF":"Download PDF")}</button>
+        </div>
+      </div>
+      {data.truncated&&<div style={{color:C.yel,fontSize:12,marginBottom:10}}>{sr?"Period ima veoma mnogo redova – prikazano je prvih 60.000 (najveći prihod). Za potpune podatke izaberi kraći period.":"The period has a very large number of rows – the first 60,000 (highest revenue) are shown. Choose a shorter period for complete data."}</div>}
+      {inEur&&<div style={{color:C.mut,fontSize:11,marginBottom:10}}>{sr?"Preračunato u EUR po kursu":"Converted to EUR at the rate from"} {data.rateDate?new Date(data.rateDate).toLocaleDateString(sr?"sr-RS":"en-GB"):""}</div>}
+
+      {/* Filteri */}
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+        {RS_TYPES.filter(t=>typeCounts[t.k]).map(t=><button key={t.k} onClick={()=>setTypes(p=>({...p,[t.k]:!p[t.k]}))} style={{...pill(!!types[t.k]),borderColor:types[t.k]?t.c:C.brd}}>
+          <span style={{color:t.c}}>●</span> {sr?t.sr:t.en}
+        </button>)}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:mob?"1fr":"1fr 1fr",gap:10,marginBottom:12}}>
+        <select value={cat} onChange={e=>setCat(e.target.value)} style={bpInp}>
+          <option value="" style={{color:"#111"}}>{sr?"Sve kategorije":"All categories"}</option>
+          {cats.map(c=><option key={c} value={c} style={{color:"#111"}}>{c}</option>)}
+        </select>
+        <input value={q} onChange={e=>{setQ(e.target.value);setLimit(100);}} placeholder={sr?"Pretraži proizvod ili kampanju...":"Search product or campaign..."} style={bpInp}/>
+      </div>
+
+      {/* Prikazi */}
+      <div role="tablist" style={{display:"flex",gap:4,borderBottom:`1px solid ${C.brd}`,marginBottom:10}}>
+        {[["campaign",sr?"Po kampanji":"By campaign"],["product",sr?"Po proizvodu":"By product"],["table",sr?"Tabela":"Table"]].map(([k,l])=><button key={k} role="tab" aria-selected={view===k} onClick={()=>{setView(k);setOpen(null);setLimit(100);}} style={{padding:"8px 12px",fontSize:13,fontWeight:700,cursor:"pointer",background:"transparent",border:"none",borderBottom:view===k?"2px solid #F59E0B":"2px solid transparent",color:view===k?"#fff":C.mut,marginBottom:-1}}>{l}</button>)}
+      </div>
+
+      {rows.length===0&&<div style={{color:C.mut,fontSize:13,padding:"12px 0"}}>{sr?"Nema prodaje za izabrane filtere.":"No sales for the selected filters."}</div>}
+
+      {(view==="campaign"||view==="product")&&rows.length>0&&<div>
+        {(view==="campaign"?byCampaign:byProduct).slice(0,limit).map(g=>{
+          const isOpen=open===g.k;
+          const sub=view==="campaign"
+            ?group2(g.items,r=>r.itemId||r.itemName,r=>r.itemName)
+            :group2(g.items,r=>`${r.campaign}|${r.type}`,r=>r.campaign);
+          return <div key={g.k} style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:10,marginBottom:6}}>
+            <button onClick={()=>setOpen(isOpen?null:g.k)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:"transparent",border:"none",color:C.txt,cursor:"pointer",textAlign:"left"}}>
+              <span style={{color:C.mut,fontSize:11,width:10}}>{isOpen?"▾":"▸"}</span>
+              <span style={{flex:1,minWidth:0,fontSize:13,fontWeight:600,wordBreak:"break-word"}}>{g.label} {view==="campaign"&&<Badge t={g.type}/>}</span>
+              <span style={{fontSize:12,color:C.mut,whiteSpace:"nowrap"}}>{rsNum(g.qty)} {sr?"kom":"pcs"}</span>
+              <span style={{fontSize:13,fontWeight:700,whiteSpace:"nowrap",minWidth:mob?90:120,textAlign:"right"}}>{money(g.revenue)}</span>
+            </button>
+            {isOpen&&<div style={{padding:"0 12px 10px 32px",overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                <tbody>{sub.map(s=><tr key={s.k}>
+                  <td style={{...cell,wordBreak:"break-word"}}>{s.label} {view==="product"&&<Badge t={s.type}/>}</td>
+                  <td style={{...cell,textAlign:"right",color:C.mut,whiteSpace:"nowrap"}}>{rsNum(s.qty)} {sr?"kom":"pcs"}</td>
+                  <td style={{...cell,textAlign:"right",whiteSpace:"nowrap"}}>{money(s.revenue)}</td>
+                </tr>)}</tbody>
+              </table>
+            </div>}
+          </div>;
+        })}
+      </div>}
+
+      {view==="table"&&rows.length>0&&<div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"8px",overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:680}}>
+          <thead><tr>{["ID",sr?"Proizvod":"Product",sr?"Kategorija":"Category",sr?"Kampanja":"Campaign",sr?"Komada":"Items",sr?"Prihod":"Revenue"].map((hd,i)=><th key={hd} style={{...cell,color:C.mut,fontWeight:600,textAlign:i>=4?"right":"left"}}>{hd}</th>)}</tr></thead>
+          <tbody>{rows.slice(0,limit).map((r,i)=><tr key={i}>
+            <td style={{...cell,color:C.mut}}>{r.itemId}</td>
+            <td style={{...cell,wordBreak:"break-word"}}>{r.itemName}</td>
+            <td style={cell}>{r.category}</td>
+            <td style={{...cell,wordBreak:"break-word"}}>{r.campaign} <Badge t={r.type}/></td>
+            <td style={{...cell,textAlign:"right"}}>{rsNum(r.qty)}</td>
+            <td style={{...cell,textAlign:"right",whiteSpace:"nowrap"}}>{money(r.revenue)}</td>
+          </tr>)}</tbody>
+        </table>
+      </div>}
+
+      {(view==="table"?rows.length:(view==="campaign"?byCampaign:byProduct).length)>limit&&<button onClick={()=>setLimit(l=>l+200)} style={{...bpBtn(false),marginTop:10}}>{sr?"Prikaži još":"Show more"}</button>}
+    </div>}
+  </div>;
+}
+
+// Grupisanje za otvoren red (kampanja → proizvodi, proizvod → kampanje)
+function group2(items,keyFn,labelFn){
+  const m={};
+  items.forEach(r=>{const k=keyFn(r); if(!m[k]) m[k]={k,label:labelFn(r),type:r.type,qty:0,revenue:0}; m[k].qty+=r.qty; m[k].revenue+=r.revenue;});
+  return Object.values(m).sort((a,b)=>b.revenue-a.revenue);
+}
+
 // ── MODULE 15: REPORT STUDIO ─────────────────────────────────────────────────
 function ReportStudioMod({t,lang,initialTab}){
   const sr=lang==="sr";
@@ -1776,8 +1975,10 @@ function ReportStudioMod({t,lang,initialTab}){
 
     {/* Dva dela: Google Ads izvestaj (glavni) i izvestaj iz screenshota/fajla */}
     <div role="tablist" style={{display:"flex",gap:4,flexWrap:"wrap",borderBottom:`1px solid ${C.brd}`,marginBottom:14}}>
-      {[["gads",sr?"Google Ads izveštaj":"Google Ads report"],["import",sr?"Iz screenshota / fajla":"From screenshot / file"]].map(([k,l])=><button key={k} role="tab" aria-selected={tab===k} onClick={()=>setTab(k)} style={{padding:"9px 14px",fontSize:13,fontWeight:700,cursor:"pointer",background:"transparent",border:"none",borderBottom:tab===k?"2px solid #F59E0B":"2px solid transparent",color:tab===k?"#fff":C.mut,marginBottom:-1}}>{l}</button>)}
+      {[["gads",sr?"Google Ads izveštaj":"Google Ads report"],["sales",sr?"Prodaja po kampanjama":"Sales by campaign"],["import",sr?"Iz screenshota / fajla":"From screenshot / file"]].map(([k,l])=><button key={k} role="tab" aria-selected={tab===k} onClick={()=>setTab(k)} style={{padding:"9px 14px",fontSize:13,fontWeight:700,cursor:"pointer",background:"transparent",border:"none",borderBottom:tab===k?"2px solid #F59E0B":"2px solid transparent",color:tab===k?"#fff":C.mut,marginBottom:-1}}>{l}</button>)}
     </div>
+
+    {tab==="sales"&&<RsProductSales sr={sr} lang={lang} mob={mob} clientId={clientId} clientName={clients.find(c=>String(c.id)===String(clientId))?.name||""}/>}
 
     {tab==="import"&&<RsImports sr={sr} lang={lang} mob={mob} clientId={clientId} clientName={clients.find(c=>String(c.id)===String(clientId))?.name||""}/>}
 
@@ -3429,7 +3630,7 @@ const MOD_TAGS={
   12:{sr:["Proizvodi","Korpe","Trendovi"],en:["Products","Carts","Trends"]},
   13:{sr:["„Koji proizvod raste?“"],en:["“Which product is growing?”"]},
   2:{sr:["Meta","Google Ads"],en:["Meta","Google Ads"]},
-  15:{sr:["Google Ads","Screenshot","PDF"],en:["Google Ads","Screenshot","PDF"]},
+  15:{sr:["Google Ads","Prodaja po kampanjama","PDF"],en:["Google Ads","Sales by campaign","PDF"]},
   10:{sr:["GA4","Google Ads"],en:["GA4","Google Ads"]},
   1:{sr:["Screenshot","CSV"],en:["Screenshot","CSV"]},
 };
