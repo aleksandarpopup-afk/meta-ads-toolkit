@@ -1660,6 +1660,74 @@ function RsImports({sr,lang,mob,clientId,clientName}){
   </div>;
 }
 
+// Padajuci meni sa pretragom (za kategorije i kampanje u "Prodaja po kampanjama").
+// Lista se otvara kao plutajuci panel (position:fixed), pa je ne sece tabela sa horizontalnim skrolom.
+const rsFold=s=>String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/đ/g,"dj");
+function RsSearchSelect({value,onChange,options,allLabel,searchPlaceholder,compact,ariaLabel}){
+  const [open,setOpen]=useState(false);
+  const [q,setQ]=useState("");
+  const [hi,setHi]=useState(0);
+  const [pos,setPos]=useState(null);
+  const btnRef=useRef(null), panelRef=useRef(null), inputRef=useRef(null);
+  const filtered=options.filter(o=>!q.trim()||rsFold(o).includes(rsFold(q.trim())));
+  const items=[{v:"",l:allLabel},...filtered.map(o=>({v:o,l:o}))];
+
+  const place=()=>{
+    const r=btnRef.current?.getBoundingClientRect(); if(!r) return;
+    const w=Math.max(r.width,300), maxH=340;
+    const below=window.innerHeight-r.bottom-8;
+    const up=below<220&&r.top>below;
+    setPos({left:Math.max(8,Math.min(r.left,window.innerWidth-w-8)),width:w,
+      ...(up?{bottom:window.innerHeight-r.top+4}:{top:r.bottom+4}),
+      maxH:Math.min(maxH,Math.max(160,up?r.top-12:below))});
+  };
+  const openIt=()=>{ place(); setQ(""); setHi(0); setOpen(true); };
+  const close=()=>setOpen(false);
+  const pick=v=>{ onChange(v); close(); };
+
+  useEffect(()=>{
+    if(!open) return;
+    setTimeout(()=>inputRef.current&&inputRef.current.focus(),0);
+    const onDown=e=>{ if(panelRef.current?.contains(e.target)||btnRef.current?.contains(e.target)) return; close(); };
+    const onScroll=e=>{ if(panelRef.current?.contains(e.target)) return; close(); };
+    document.addEventListener("mousedown",onDown);
+    window.addEventListener("scroll",onScroll,true);
+    window.addEventListener("resize",close);
+    return()=>{ document.removeEventListener("mousedown",onDown); window.removeEventListener("scroll",onScroll,true); window.removeEventListener("resize",close); };
+  },[open]);
+
+  const onKey=e=>{
+    if(e.key==="Escape"){ close(); btnRef.current?.focus(); }
+    else if(e.key==="ArrowDown"){ e.preventDefault(); setHi(h=>Math.min(items.length-1,h+1)); }
+    else if(e.key==="ArrowUp"){ e.preventDefault(); setHi(h=>Math.max(0,h-1)); }
+    else if(e.key==="Enter"){ e.preventDefault(); const it=items[Math.min(hi,items.length-1)]; if(it) pick(it.v); }
+  };
+
+  const shown=value||allLabel;
+  return <>
+    <button ref={btnRef} type="button" onClick={()=>open?close():openIt()} aria-haspopup="listbox" aria-expanded={open} aria-label={ariaLabel}
+      style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,textAlign:"left",cursor:"pointer",
+        padding:compact?"5px 8px":"10px 12px",background:"rgba(255,255,255,0.06)",border:`1px solid ${open?"#F59E0B":C.brd}`,borderRadius:compact?7:9,
+        color:C.txt,fontSize:compact?11:14,fontWeight:compact?600:400,maxWidth:compact?220:"none",boxSizing:"border-box"}}>
+      <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{shown}</span>
+      <span style={{color:C.mut,fontSize:10,flexShrink:0}}>▾</span>
+    </button>
+    {open&&pos&&<div ref={panelRef} role="listbox" style={{position:"fixed",zIndex:1000,left:pos.left,width:pos.width,top:pos.top,bottom:pos.bottom,
+      background:"#15152a",border:`1px solid ${C.brd}`,borderRadius:10,boxShadow:"0 12px 32px rgba(0,0,0,0.55)",display:"flex",flexDirection:"column",maxHeight:pos.maxH,overflow:"hidden",textAlign:"left",textTransform:"none",letterSpacing:"normal"}}>
+      <div style={{padding:8,borderBottom:`1px solid ${C.brd}`}}>
+        <input ref={inputRef} value={q} onChange={e=>{setQ(e.target.value);setHi(0);}} onKeyDown={onKey} placeholder={searchPlaceholder}
+          style={{width:"100%",boxSizing:"border-box",padding:"8px 10px",background:"rgba(255,255,255,0.06)",border:`1px solid ${C.brd}`,borderRadius:8,color:C.txt,fontSize:13,outline:"none"}}/>
+      </div>
+      <div style={{overflowY:"auto",flex:1}}>
+        {items.map((it,i)=><div key={it.v||"__all"} role="option" aria-selected={value===it.v} onMouseEnter={()=>setHi(i)} onMouseDown={e=>{e.preventDefault();pick(it.v);}}
+          style={{padding:"8px 12px",fontSize:13,cursor:"pointer",color:value===it.v?"#F59E0B":C.txt,fontWeight:value===it.v||i===0?600:400,
+            background:i===hi?"rgba(245,158,11,0.15)":"transparent",wordBreak:"break-word"}}>{it.l}</div>)}
+        {filtered.length===0&&<div style={{padding:"8px 12px",fontSize:12,color:C.mut}}>—</div>}
+      </div>
+    </div>}
+  </>;
+}
+
 // ── REPORT STUDIO: PRODAJA PO KAMPANJAMA ─────────────────────────────────────
 const RS_TYPES=[
   {k:"meta",sr:"Meta",en:"Meta",c:"#60A5FA"},
@@ -1723,15 +1791,13 @@ function RsProductSales({sr,lang,mob,clientId,clientName}){
   const cats=[...new Set(all.filter(r=>pass(r,"cat")).map(r=>r.category).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
   const campRev={}; all.filter(r=>pass(r,"camp")).forEach(r=>{campRev[r.campaign]=(campRev[r.campaign]||0)+r.revenue;});
   const camps=Object.keys(campRev).sort((a,b)=>campRev[b]-campRev[a]);
-  const catSelect=(st)=><select value={cat} onChange={e=>{setCat(e.target.value);setLimit(100);setOpen(null);}} style={st} aria-label={sr?"Kategorija":"Category"}>
-    <option value="" style={{color:"#111"}}>{sr?"Sve kategorije":"All categories"}</option>
-    {(cat&&!cats.includes(cat)?[cat,...cats]:cats).map(c=><option key={c} value={c} style={{color:"#111"}}>{c}</option>)}
-  </select>;
-  const campSelect=(st)=><select value={camp} onChange={e=>{setCamp(e.target.value);setLimit(100);setOpen(null);}} style={st} aria-label={sr?"Kampanja":"Campaign"}>
-    <option value="" style={{color:"#111"}}>{sr?"Sve kampanje":"All campaigns"}</option>
-    {(camp&&!camps.includes(camp)?[camp,...camps]:camps).map(c=><option key={c} value={c} style={{color:"#111"}}>{c}</option>)}
-  </select>;
-  const hdrSel={width:"100%",padding:"5px 6px",background:"rgba(255,255,255,0.06)",border:`1px solid ${C.brd}`,borderRadius:7,color:C.txt,fontSize:11,fontWeight:600,outline:"none",maxWidth:220};
+  // Padajuci meniji sa pretragom; "compact" = verzija u zaglavlju tabele
+  const catSelect=(compact)=><RsSearchSelect value={cat} onChange={v=>{setCat(v);setLimit(100);setOpen(null);}}
+    options={cat&&!cats.includes(cat)?[cat,...cats]:cats} allLabel={sr?"Sve kategorije":"All categories"}
+    searchPlaceholder={sr?"Pretraži kategoriju...":"Search category..."} compact={compact} ariaLabel={sr?"Kategorija":"Category"}/>;
+  const campSelect=(compact)=><RsSearchSelect value={camp} onChange={v=>{setCamp(v);setLimit(100);setOpen(null);}}
+    options={camp&&!camps.includes(camp)?[camp,...camps]:camps} allLabel={sr?"Sve kampanje":"All campaigns"}
+    searchPlaceholder={sr?"Pretraži kampanju...":"Search campaign..."} compact={compact} ariaLabel={sr?"Kampanja":"Campaign"}/>;
   const totQty=rows.reduce((s,r)=>s+r.qty,0), totRev=rows.reduce((s,r)=>s+r.revenue,0);
 
   const group=(keyFn,labelFn)=>{
@@ -1806,8 +1872,8 @@ function RsProductSales({sr,lang,mob,clientId,clientName}){
         </button>)}
       </div>
       <div style={{display:"grid",gridTemplateColumns:mob?"1fr":"1fr 1fr 1fr",gap:10,marginBottom:12}}>
-        {catSelect(bpInp)}
-        {campSelect(bpInp)}
+        {catSelect(false)}
+        {campSelect(false)}
         <input value={q} onChange={e=>{setQ(e.target.value);setLimit(100);}} placeholder={sr?"Pretraži proizvod ili kampanju...":"Search product or campaign..."} style={bpInp}/>
       </div>
 
@@ -1849,8 +1915,8 @@ function RsProductSales({sr,lang,mob,clientId,clientName}){
           <thead><tr>
             <th style={{...cell,color:C.mut,fontWeight:600,textAlign:"left"}}>ID</th>
             <th style={{...cell,color:C.mut,fontWeight:600,textAlign:"left"}}>{sr?"Proizvod":"Product"}</th>
-            <th style={{...cell,color:C.mut,fontWeight:600,textAlign:"left",verticalAlign:"bottom"}}><div style={{marginBottom:4}}>{sr?"Kategorija":"Category"}</div>{catSelect(hdrSel)}</th>
-            <th style={{...cell,color:C.mut,fontWeight:600,textAlign:"left",verticalAlign:"bottom"}}><div style={{marginBottom:4}}>{sr?"Kampanja":"Campaign"}</div>{campSelect(hdrSel)}</th>
+            <th style={{...cell,color:C.mut,fontWeight:600,textAlign:"left",verticalAlign:"bottom"}}><div style={{marginBottom:4}}>{sr?"Kategorija":"Category"}</div>{catSelect(true)}</th>
+            <th style={{...cell,color:C.mut,fontWeight:600,textAlign:"left",verticalAlign:"bottom"}}><div style={{marginBottom:4}}>{sr?"Kampanja":"Campaign"}</div>{campSelect(true)}</th>
             <th style={{...cell,color:C.mut,fontWeight:600,textAlign:"right",verticalAlign:"bottom"}}>{sr?"Komada":"Items"}</th>
             <th style={{...cell,color:C.mut,fontWeight:600,textAlign:"right",verticalAlign:"bottom"}}>{sr?"Prihod":"Revenue"}</th>
           </tr></thead>
