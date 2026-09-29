@@ -3063,6 +3063,143 @@ function AskDataMod({t,lang}){
   </div>;
 }
 
+// ── CAMPAIGN INTELLIGENCE: POJMOVI PRETRAGE (korak B) ────────────────────────
+function CiSearchTerms({sr,mob,clientId,qs}){
+  const [data,setData]=useState(null);
+  const [loading,setLoading]=useState(false);
+  const [err,setErr]=useState("");
+  const [sub,setSub]=useState("neg"); // neg | opp | all
+  const [thr,setThr]=useState(20);
+  const [camp,setCamp]=useState("");
+  const [q,setQ]=useState("");
+  const [sel,setSel]=useState({});
+  const [fmt,setFmt]=useState("exact");
+  const [limit,setLimit]=useState(100);
+  const [copied,setCopied]=useState(false);
+
+  useEffect(()=>{
+    if(!clientId||!qs) return;
+    let cancelled=false;
+    (async()=>{
+      setLoading(true); setErr(""); setData(null); setSel({}); setCamp(""); setLimit(100);
+      try{
+        const uid=await getOrCreateUser();
+        const r=await fetch(`/api/search-terms?client_id=${clientId}&user_id=${uid}&${qs}`);
+        const d=await r.json();
+        if(cancelled) return;
+        if(!r.ok){
+          const e=String(d.error||"");
+          setErr(e==="no_gads"?(sr?"Google Ads nije povezan za ovog klijenta. Poveži ga u Clients.":"Google Ads is not connected for this client. Connect it in Clients.")
+            :e==="expired"||e.includes("invalid_grant")?(sr?"Veza sa Google Ads nalogom je istekla. U Clients otkači i ponovo poveži Google Ads.":"The Google Ads connection has expired. In Clients, disconnect and reconnect Google Ads.")
+            :(sr?"Pojmovi pretrage nisu učitani. Pokušaj ponovo.":"Search terms could not be loaded. Please try again."));
+        } else setData(d);
+      }catch(e){ if(!cancelled) setErr(sr?"Pojmovi pretrage nisu učitani. Proveri internet vezu i pokušaj ponovo.":"Search terms could not be loaded. Check your connection and try again."); }
+      if(!cancelled) setLoading(false);
+    })();
+    return()=>{cancelled=true;};
+  },[clientId,qs]);
+
+  if(loading) return <div style={{textAlign:"center",padding:"40px 0",color:C.acl,fontWeight:700,fontSize:15}}>✦ {sr?"Učitavam pojmove pretrage iz Google Ads-a...":"Loading search terms from Google Ads..."}</div>;
+  if(err) return <div style={{color:C.red,fontSize:13,padding:"12px 0"}}>{err}</div>;
+  if(!data) return null;
+
+  const eur=v=>v==null?"–":`${rsNum(v,v<100?2:0)} €`;
+  const all=data.terms;
+  const noSale=t=>(data.ga4?t.ga4Purchases<0.5:true)&&t.adsConversions<0.5;
+  const camps=[...new Set(all.flatMap(t=>t.campaigns))].sort((a,b)=>a.localeCompare(b));
+  const ql=rsFold(q.trim());
+  const base=all.filter(t=>(!camp||t.campaigns.includes(camp))&&(!ql||rsFold(t.text).includes(ql)));
+  const neg=base.filter(t=>t.spendEUR>=thr&&!t.isExcluded&&!t.isKeyword&&noSale(t));
+  const opp=base.filter(t=>!t.isKeyword&&!t.isExcluded&&(t.ga4Purchases>=1||t.adsConversions>=1))
+    .sort((a,b)=>((b.ga4RevenueEUR||b.adsConvValueEUR)-(a.ga4RevenueEUR||a.adsConvValueEUR)));
+  const rows=sub==="neg"?neg:sub==="opp"?opp:base;
+  const selected=rows.filter(t=>sel[t.text]);
+  const format=t=>fmt==="exact"?`[${t}]`:fmt==="phrase"?`"${t}"`:t;
+  const negSpend=neg.reduce((s,t)=>s+t.spendEUR,0);
+  const oppRev=opp.reduce((s,t)=>s+(data.ga4?t.ga4RevenueEUR:t.adsConvValueEUR),0);
+  const tt=data.totals;
+  const cover=tt.accountSpendEUR>0?tt.coveredSpendEUR/tt.accountSpendEUR:0;
+
+  const copy=async()=>{
+    const txt=selected.map(t=>format(t.text)).join("\n");
+    try{ await navigator.clipboard.writeText(txt); setCopied(true); setTimeout(()=>setCopied(false),2000); }
+    catch(e){ alert(txt); }
+  };
+  const allOn=rows.slice(0,limit).length>0&&rows.slice(0,limit).every(t=>sel[t.text]);
+  const toggleAll=()=>{ const on=!allOn; setSel(p=>{const n={...p}; rows.slice(0,limit).forEach(t=>{n[t.text]=on;}); return n;}); };
+
+  const pill=on=>({padding:"6px 12px",borderRadius:20,fontSize:12,fontWeight:600,cursor:"pointer",border:on?"1px solid rgba(99,102,241,0.7)":`1px solid ${C.brd}`,background:on?"rgba(99,102,241,0.2)":"transparent",color:on?"#fff":C.mut});
+  const td={padding:"8px 6px",borderBottom:`1px solid ${C.brd}`,fontSize:12,color:C.txt};
+  const thS={padding:"8px 6px",color:C.mut,fontWeight:600,fontSize:11,borderBottom:`1px solid ${C.brd}`,whiteSpace:"nowrap"};
+  const tag=(l,c)=><span style={{fontSize:10,fontWeight:700,color:c,border:`1px solid ${c}55`,borderRadius:20,padding:"0 6px",marginLeft:4,whiteSpace:"nowrap"}}>{l}</span>;
+
+  return <div>
+    <div style={{background:"rgba(99,102,241,0.06)",border:"1px solid rgba(99,102,241,0.25)",borderRadius:12,padding:"12px 14px",marginBottom:14,fontSize:12.5,color:C.txt,lineHeight:1.55}}>
+      {sr?"Pojmovi pretrage iz Search i Shopping kampanja":"Search terms from Search and Shopping campaigns"}: <b>{eur(tt.coveredSpendEUR)}</b> {sr?"od":"of"} {eur(tt.accountSpendEUR)} {sr?"ukupne potrošnje":"total spend"} (<b>{rsNum(cover*100,0)}%</b>). {sr?"Performance Max ne daje pojmove sa potrošnjom, pa nije obuhvaćen.":"Performance Max doesn't provide search terms with spend, so it isn't covered."}
+    </div>
+    {data.fxMissing&&<div style={{color:C.red,fontSize:12,marginBottom:10}}>⚠️ {sr?"Kurs za konverziju u EUR trenutno nije dostupan – deo iznosa je u originalnoj valuti.":"The EUR exchange rate is currently unavailable – some amounts are in the original currency."}</div>}
+    {!data.ga4&&<div style={{color:C.yel,fontSize:12,marginBottom:10}}>{data.ga4Error==="expired"?(sr?"Veza sa GA4 je istekla – kupovine se procenjuju samo po Google Ads konverzijama.":"The GA4 connection has expired – purchases are judged only by Google Ads conversions."):(sr?"GA4 prihod nije dostupan – kupovine se procenjuju samo po Google Ads konverzijama.":"GA4 revenue isn't available – purchases are judged only by Google Ads conversions.")}</div>}
+    {data.truncated&&<div style={{color:C.mut,fontSize:12,marginBottom:10}}>{sr?"Pojmova ima veoma mnogo – prikazani su svi sa kupovinom i 8.000 sa najvećom potrošnjom.":"There are very many terms – all with purchases and the 8,000 with the highest spend are shown."}</div>}
+
+    <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
+      {[["neg",`${sr?"Kandidati za negativne":"Negative candidates"} (${neg.length})`],["opp",`${sr?"Prilike":"Opportunities"} (${opp.length})`],["all",`${sr?"Svi pojmovi":"All terms"} (${base.length})`]].map(([k,l])=><button key={k} onClick={()=>{setSub(k);setLimit(100);}} style={pill(sub===k)}>{l}</button>)}
+    </div>
+
+    <div style={{color:C.mut,fontSize:12,lineHeight:1.55,marginBottom:10}}>
+      {sub==="neg"&&<>{sr?`Pojmovi na koje je potrošeno ${thr} € ili više bez ijedne kupovine, a koji nisu ni ključne reči ni već isključeni. Ukupno `:`Terms that spent ${thr} € or more with no purchase and are neither keywords nor already excluded. Total `}<b style={{color:negSpend>0?C.red:C.txt}}>{eur(negSpend)}</b>.</>}
+      {sub==="opp"&&<>{sr?"Pojmovi koji donose kupovine, a nisu dodati kao ključne reči – kandidati za dodavanje. Prihod ":"Terms that bring purchases but aren't added as keywords – candidates to add. Revenue "}<b style={{color:C.grn}}>{eur(oppRev)}</b>.</>}
+      {sub==="all"&&(sr?"Svi pojmovi pretrage u periodu.":"All search terms in the period.")}
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:mob?"1fr":"1fr 1fr",gap:10,marginBottom:10}}>
+      <RsSearchSelect value={camp} onChange={v=>{setCamp(v);setLimit(100);}} options={camps} allLabel={sr?"Sve kampanje":"All campaigns"} searchPlaceholder={sr?"Pretraži kampanju...":"Search campaign..."} ariaLabel={sr?"Kampanja":"Campaign"}/>
+      <input value={q} onChange={e=>{setQ(e.target.value);setLimit(100);}} placeholder={sr?"Pretraži pojam...":"Search term..."} style={bpInp}/>
+    </div>
+
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:12}}>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+        {sub==="neg"&&<><span style={{color:C.mut,fontSize:12}}>{sr?"Potrošeno najmanje:":"Spent at least:"}</span>{[5,20,50].map(v=><button key={v} onClick={()=>setThr(v)} style={pill(thr===v)}>{v} €</button>)}</>}
+      </div>
+      {sub!=="all"&&<div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+        <span style={{color:C.mut,fontSize:12}}>{sr?"Format:":"Format:"}</span>
+        {[["exact","[tačno]","[exact]"],["phrase","\"fraza\"","\"phrase\""],["broad",sr?"široko":"broad","broad"]].map(([k,a,b])=><button key={k} onClick={()=>setFmt(k)} style={pill(fmt===k)}>{sr?a:b}</button>)}
+        <button onClick={copy} disabled={!selected.length} style={{...bpBtn(true),background:"linear-gradient(135deg,#6366F1,#4f46e5)",opacity:selected.length?1:0.45,cursor:selected.length?"pointer":"not-allowed"}}>
+          {copied?(sr?"✓ Kopirano":"✓ Copied"):sub==="neg"?(sr?`Kopiraj kao negativne (${selected.length})`:`Copy as negatives (${selected.length})`):(sr?`Kopiraj kao ključne reči (${selected.length})`:`Copy as keywords (${selected.length})`)}
+        </button>
+      </div>}
+    </div>
+
+    {rows.length===0?<div style={{color:C.mut,fontSize:13,padding:"12px 0"}}>{sub==="neg"?(sr?"Nema pojmova koji rasipaju budžet za ovaj prag. 👍":"No terms wasting budget at this threshold. 👍"):sub==="opp"?(sr?"Nema novih pojmova sa kupovinom koji nisu već ključne reči.":"No new terms with purchases that aren't already keywords."):(sr?"Nema pojmova za izabrane filtere.":"No terms for the selected filters.")}</div>:
+    <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"4px 8px",overflowX:"auto"}}>
+      <table style={{width:"100%",borderCollapse:"collapse",minWidth:720}}>
+        <thead><tr>
+          {sub!=="all"&&<th style={{...thS,width:28}}><input type="checkbox" checked={allOn} onChange={toggleAll} aria-label={sr?"Izaberi sve prikazane":"Select all shown"}/></th>}
+          <th style={{...thS,textAlign:"left"}}>{sr?"Pojam pretrage":"Search term"}</th>
+          <th style={{...thS,textAlign:"right"}}>{sr?"Potrošnja":"Spend"}</th>
+          <th style={{...thS,textAlign:"right"}}>{sr?"Klikovi":"Clicks"}</th>
+          <th style={{...thS,textAlign:"right"}}>{sr?"GA4 prihod":"GA4 revenue"}</th>
+          <th style={{...thS,textAlign:"right"}}>{sr?"Kupovine":"Purchases"}</th>
+          <th style={{...thS,textAlign:"right"}}>{sr?"Ads konv.":"Ads conv."}</th>
+        </tr></thead>
+        <tbody>{rows.slice(0,limit).map((t,i)=><tr key={t.text+i} style={{background:sel[t.text]?"rgba(99,102,241,0.08)":"transparent"}}>
+          {sub!=="all"&&<td style={td}><input type="checkbox" checked={!!sel[t.text]} onChange={e=>setSel(p=>({...p,[t.text]:e.target.checked}))} aria-label={t.text}/></td>}
+          <td style={{...td,maxWidth:380}}>
+            <div style={{fontWeight:600,wordBreak:"break-word"}}>{t.text}{t.shopping&&tag("Shopping","#FBBF24")}{t.isKeyword&&tag(sr?"već ključna reč":"already a keyword","#34D399")}{t.isExcluded&&tag(sr?"već isključen":"already excluded","#9CA3AF")}</div>
+            <div style={{color:C.mut,fontSize:11,marginTop:2,wordBreak:"break-word"}}>{t.campaigns[0]}{t.campaignCount>1?` +${t.campaignCount-1}`:""}</div>
+          </td>
+          <td style={{...td,textAlign:"right",fontWeight:700,whiteSpace:"nowrap"}}>{eur(t.spendEUR)}</td>
+          <td style={{...td,textAlign:"right"}}>{rsNum(t.clicks)}</td>
+          <td style={{...td,textAlign:"right",whiteSpace:"nowrap"}}>{data.ga4?eur(t.ga4RevenueEUR):"–"}</td>
+          <td style={{...td,textAlign:"right"}}>{data.ga4?rsNum(t.ga4Purchases,0):"–"}</td>
+          <td style={{...td,textAlign:"right",color:C.mut}}>{rsNum(t.adsConversions,t.adsConversions%1?1:0)}</td>
+        </tr>)}</tbody>
+      </table>
+    </div>}
+    {rows.length>limit&&<button onClick={()=>setLimit(l=>l+200)} style={{...bpBtn(false),marginTop:10}}>{sr?`Prikaži još (${rows.length-limit})`:`Show more (${rows.length-limit})`}</button>}
+    <div style={{color:C.dim,fontSize:11,marginTop:10,lineHeight:1.5}}>{sr?"Iznosi u EUR. App ništa ne menja u Google Ads nalogu – kopiranu listu nalepiš u Google Ads (negativne ključne reči ili nove ključne reči). \"Ads konv.\" su konverzije koje beleži Google Ads.":"Amounts in EUR. The app changes nothing in the Google Ads account – paste the copied list into Google Ads (negative keywords or new keywords). \"Ads conv.\" are conversions recorded by Google Ads."}</div>
+  </div>;
+}
+
 // ── CAMPAIGN INTELLIGENCE: KLJUČNE REČI (korak A) ───────────────────────────
 const KW_MATCH={exact:{sr:"Tačno",en:"Exact",c:"#34D399"},phrase:{sr:"Fraza",en:"Phrase",c:"#60A5FA"},broad:{sr:"Široko",en:"Broad",c:"#FBBF24"},other:{sr:"Ostalo",en:"Other",c:"#9CA3AF"}};
 
@@ -3143,15 +3280,22 @@ function CiKeywords({sr,mob,clientId,qs}){
 
   return <div>
     {/* Pokrivenost: koliki deo potrosnje ima kljucne reci */}
-    <div style={{background:"rgba(99,102,241,0.06)",border:"1px solid rgba(99,102,241,0.25)",borderRadius:12,padding:"12px 14px",marginBottom:14,fontSize:12.5,color:C.txt,lineHeight:1.55}}>
+    {view!=="terms"&&<div style={{background:"rgba(99,102,241,0.06)",border:"1px solid rgba(99,102,241,0.25)",borderRadius:12,padding:"12px 14px",marginBottom:14,fontSize:12.5,color:C.txt,lineHeight:1.55}}>
       {t.searchSpendEUR>0
         ?<>{sr?"Ključne reči postoje samo u Search kampanjama":"Keywords exist only in Search campaigns"}: <b>{eur(t.searchSpendEUR)}</b> {sr?"od":"of"} {eur(t.accountSpendEUR)} {sr?"ukupne potrošnje":"total spend"} (<b>{rsNum(share*100,0)}%</b>). {share<0.3&&(sr?"Ostatak (Performance Max, Shopping...) ovde nije obuhvaćen.":"The rest (Performance Max, Shopping...) isn't covered here.")}</>
         :<>{sr?"Ovaj nalog u izabranom periodu nema potrošnju na Search kampanje, pa nema ni ključnih reči. Pojmovi pretrage (sledeći korak) pokrivaće i Shopping kampanje.":"This account has no Search campaign spend in the selected period, so there are no keywords. Search terms (next step) will also cover Shopping campaigns."}</>}
-    </div>
+    </div>}
     {data.fxMissing&&<div style={{color:C.red,fontSize:12,marginBottom:10}}>⚠️ {sr?"Kurs za konverziju u EUR trenutno nije dostupan – deo iznosa je u originalnoj valuti.":"The EUR exchange rate is currently unavailable – some amounts are in the original currency."}</div>}
     {!data.ga4&&<div style={{color:C.yel,fontSize:12,marginBottom:10}}>{data.ga4Error==="expired"?(sr?"Veza sa GA4 je istekla – prikazani su samo Google Ads podaci. U Clients ponovo poveži GA4.":"The GA4 connection has expired – only Google Ads data is shown. Reconnect GA4 in Clients."):data.ga4Error?(sr?"GA4 prihod trenutno nije dostupan – prikazani su samo Google Ads podaci.":"GA4 revenue is currently unavailable – only Google Ads data is shown."):(sr?"GA4 nije povezan – prikazani su samo Google Ads podaci (konverzije koje beleži Google Ads).":"GA4 isn't connected – only Google Ads data is shown (conversions recorded by Google Ads).")}</div>}
 
-    {all.length>0&&<>
+    {/* Prikaz: kljucne reci, rasipanje, pojmovi pretrage */}
+    <div role="tablist" style={{display:"flex",gap:4,borderBottom:`1px solid ${C.brd}`,marginBottom:12,flexWrap:"wrap"}}>
+      {[["all",sr?"Sve ključne reči":"All keywords"],["bleed",`${sr?"Rasipanje budžeta":"Budget waste"} (${bleeders.length})`],["terms",sr?"Pojmovi pretrage":"Search terms"]].map(([k,l])=><button key={k} role="tab" aria-selected={view===k} onClick={()=>{setView(k);setLimit(100);}} style={{padding:"8px 12px",fontSize:13,fontWeight:700,cursor:"pointer",background:"transparent",border:"none",borderBottom:view===k?"2px solid #6366F1":"2px solid transparent",color:view===k?"#fff":C.mut,marginBottom:-1}}>{l}</button>)}
+    </div>
+
+    {view==="terms"&&<CiSearchTerms sr={sr} mob={mob} clientId={clientId} qs={qs}/>}
+    {view!=="terms"&&all.length===0&&<div style={{color:C.mut,fontSize:13,padding:"8px 0"}}>{sr?"Nema ključnih reči sa prikazima u ovom periodu. Pogledaj \"Pojmovi pretrage\" – oni pokrivaju i Shopping kampanje.":"No keywords with impressions in this period. See \"Search terms\" – they also cover Shopping campaigns."}</div>}
+    {view!=="terms"&&all.length>0&&<>
       <div style={{display:"grid",gridTemplateColumns:mob?"1fr 1fr":"repeat(5,1fr)",gap:10,marginBottom:14}}>
         {card(sr?"Potrošnja":"Spend",eur(tot.spend),`${rsNum(base.length)} ${sr?"ključnih reči":"keywords"}`)}
         {card(sr?"GA4 prihod":"GA4 revenue",data.ga4?eur(tot.rev):"–")}
@@ -3160,10 +3304,6 @@ function CiKeywords({sr,mob,clientId,qs}){
         {card(sr?"Rasipanje":"Wasted",eur(bleedSpend),`${rsNum(tot.spend>0?bleedSpend/tot.spend*100:0,0)}% ${sr?"potrošnje":"of spend"} · ${bleeders.length} ${sr?"reči":"kw"}`,bleedSpend>0?C.red:C.grn)}
       </div>
 
-      {/* Prikaz */}
-      <div role="tablist" style={{display:"flex",gap:4,borderBottom:`1px solid ${C.brd}`,marginBottom:12}}>
-        {[["all",sr?"Sve ključne reči":"All keywords"],["bleed",`${sr?"Rasipanje budžeta":"Budget waste"} (${bleeders.length})`]].map(([k,l])=><button key={k} role="tab" aria-selected={view===k} onClick={()=>{setView(k);setLimit(100);}} style={{padding:"8px 12px",fontSize:13,fontWeight:700,cursor:"pointer",background:"transparent",border:"none",borderBottom:view===k?"2px solid #6366F1":"2px solid transparent",color:view===k?"#fff":C.mut,marginBottom:-1}}>{l}</button>)}
-      </div>
 
       {/* Filteri */}
       <div style={{display:"grid",gridTemplateColumns:mob?"1fr":"1fr 1fr",gap:10,marginBottom:10}}>
@@ -3222,7 +3362,7 @@ function CampaignsMod({t,lang}){
   const [clients,setClients]=useState([]);
   const [clientsLoading,setClientsLoading]=useState(true);
   const [selectedClient,setSelectedClient]=useState(null);
-  const [period,setPeriod]=useState("30");
+  const [period,setPeriod]=useState("7"); // podrazumevano 7 dana (brze ucitavanje, najcesce se gleda)
   const [customFrom,setCustomFrom]=useState("");
   const [customTo,setCustomTo]=useState("");
   const [mode,setMode]=useState("byCampaign"); // byCampaign | byProduct | byCategory | byKeyword
