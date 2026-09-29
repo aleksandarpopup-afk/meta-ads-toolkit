@@ -3063,6 +3063,160 @@ function AskDataMod({t,lang}){
   </div>;
 }
 
+// ── CAMPAIGN INTELLIGENCE: KLJUČNE REČI (korak A) ───────────────────────────
+const KW_MATCH={exact:{sr:"Tačno",en:"Exact",c:"#34D399"},phrase:{sr:"Fraza",en:"Phrase",c:"#60A5FA"},broad:{sr:"Široko",en:"Broad",c:"#FBBF24"},other:{sr:"Ostalo",en:"Other",c:"#9CA3AF"}};
+
+function CiKeywords({sr,mob,clientId,qs}){
+  const [data,setData]=useState(null);
+  const [loading,setLoading]=useState(false);
+  const [err,setErr]=useState("");
+  const [view,setView]=useState("all"); // all | bleed
+  const [camp,setCamp]=useState("");
+  const [match,setMatch]=useState({});
+  const [q,setQ]=useState("");
+  const [sort,setSort]=useState({k:"spendEUR",d:-1});
+  const [limit,setLimit]=useState(100);
+  const [thr,setThr]=useState(50);
+  const [copied,setCopied]=useState(false);
+
+  useEffect(()=>{
+    if(!clientId||!qs) return;
+    let cancelled=false;
+    (async()=>{
+      setLoading(true); setErr(""); setData(null); setCamp(""); setLimit(100);
+      try{
+        const uid=await getOrCreateUser();
+        const r=await fetch(`/api/keywords?client_id=${clientId}&user_id=${uid}&${qs}`);
+        const d=await r.json();
+        if(cancelled) return;
+        if(!r.ok){
+          const e=String(d.error||"");
+          setErr(e==="no_gads"?(sr?"Google Ads nije povezan za ovog klijenta. Poveži ga u Clients.":"Google Ads is not connected for this client. Connect it in Clients.")
+            :e==="expired"||e.includes("invalid_grant")?(sr?"Veza sa Google Ads nalogom je istekla. U Clients otkači i ponovo poveži Google Ads.":"The Google Ads connection has expired. In Clients, disconnect and reconnect Google Ads.")
+            :(sr?"Ključne reči nisu učitane. Pokušaj ponovo.":"Keywords could not be loaded. Please try again."));
+        } else setData(d);
+      }catch(e){ if(!cancelled) setErr(sr?"Ključne reči nisu učitane. Proveri internet vezu i pokušaj ponovo.":"Keywords could not be loaded. Check your connection and try again."); }
+      if(!cancelled) setLoading(false);
+    })();
+    return()=>{cancelled=true;};
+  },[clientId,qs]);
+
+  const eur=v=>v==null?"–":`${rsNum(v,v<100?2:0)} €`;
+  const all=data?data.keywords:[];
+  const camps=[...new Set(all.map(k=>k.campaignName))].sort((a,b)=>a.localeCompare(b));
+  const anyMatch=Object.values(match).some(Boolean);
+  const ql=rsFold(q.trim());
+  const base=all.filter(k=>(!camp||k.campaignName===camp)&&(!anyMatch||match[k.matchType])&&(!ql||rsFold(k.text).includes(ql)||rsFold(k.adGroupName).includes(ql)));
+  const isBleeder=k=>k.spendEUR>=thr&&(data.ga4?k.ga4Purchases<0.5:true)&&k.adsConversions<0.5;
+  const bleeders=data?base.filter(isBleeder):[];
+  const bleedSpend=bleeders.reduce((s,k)=>s+k.spendEUR,0);
+  const rows=(view==="bleed"?bleeders:base).slice().sort((a,b)=>{
+    const av=a[sort.k], bv=b[sort.k];
+    if(typeof av==="string") return sort.d*String(av).localeCompare(String(bv));
+    return sort.d*((av??-1)-(bv??-1));
+  });
+  const tot=base.reduce((o,k)=>({spend:o.spend+k.spendEUR,rev:o.rev+k.ga4RevenueEUR,pur:o.pur+k.ga4Purchases,ads:o.ads+k.adsConversions,clicks:o.clicks+k.clicks}),{spend:0,rev:0,pur:0,ads:0,clicks:0});
+
+  const copyList=async()=>{
+    const txt=bleeders.map(k=>k.text).join("\n");
+    try{ await navigator.clipboard.writeText(txt); setCopied(true); setTimeout(()=>setCopied(false),2000); }
+    catch(e){ alert(txt); }
+  };
+
+  const th=(k,l,right)=><th onClick={()=>setSort(s=>({k,d:s.k===k?-s.d:(typeof all[0]?.[k]==="string"?1:-1)}))}
+    style={{padding:"8px 6px",textAlign:right?"right":"left",color:sort.k===k?C.acl:C.mut,fontWeight:600,fontSize:11,cursor:"pointer",whiteSpace:"nowrap",borderBottom:`1px solid ${C.brd}`}}>
+    {l}{sort.k===k?(sort.d<0?" ▾":" ▴"):""}</th>;
+  const td={padding:"8px 6px",borderBottom:`1px solid ${C.brd}`,fontSize:12,color:C.txt};
+  const pill=on=>({padding:"6px 12px",borderRadius:20,fontSize:12,fontWeight:600,cursor:"pointer",border:on?"1px solid rgba(99,102,241,0.7)":`1px solid ${C.brd}`,background:on?"rgba(99,102,241,0.2)":"transparent",color:on?"#fff":C.mut});
+  const card=(l,v,sub,col)=><div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"12px 14px"}}>
+    <div style={{color:C.dim,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.6px"}}>{l}</div>
+    <div style={{fontSize:18,fontWeight:800,marginTop:4,color:col||C.txt}}>{v}</div>
+    {sub&&<div style={{color:C.mut,fontSize:11,marginTop:2}}>{sub}</div>}
+  </div>;
+
+  if(loading) return <div style={{textAlign:"center",padding:"40px 0",color:C.acl,fontWeight:700,fontSize:15}}>✦ {sr?"Učitavam ključne reči iz Google Ads-a...":"Loading keywords from Google Ads..."}</div>;
+  if(err) return <div style={{color:C.red,fontSize:13,padding:"12px 0"}}>{err}</div>;
+  if(!data) return null;
+
+  const t=data.totals;
+  const share=t.accountSpendEUR>0?t.searchSpendEUR/t.accountSpendEUR:0;
+
+  return <div>
+    {/* Pokrivenost: koliki deo potrosnje ima kljucne reci */}
+    <div style={{background:"rgba(99,102,241,0.06)",border:"1px solid rgba(99,102,241,0.25)",borderRadius:12,padding:"12px 14px",marginBottom:14,fontSize:12.5,color:C.txt,lineHeight:1.55}}>
+      {t.searchSpendEUR>0
+        ?<>{sr?"Ključne reči postoje samo u Search kampanjama":"Keywords exist only in Search campaigns"}: <b>{eur(t.searchSpendEUR)}</b> {sr?"od":"of"} {eur(t.accountSpendEUR)} {sr?"ukupne potrošnje":"total spend"} (<b>{rsNum(share*100,0)}%</b>). {share<0.3&&(sr?"Ostatak (Performance Max, Shopping...) ovde nije obuhvaćen.":"The rest (Performance Max, Shopping...) isn't covered here.")}</>
+        :<>{sr?"Ovaj nalog u izabranom periodu nema potrošnju na Search kampanje, pa nema ni ključnih reči. Pojmovi pretrage (sledeći korak) pokrivaće i Shopping kampanje.":"This account has no Search campaign spend in the selected period, so there are no keywords. Search terms (next step) will also cover Shopping campaigns."}</>}
+    </div>
+    {data.fxMissing&&<div style={{color:C.red,fontSize:12,marginBottom:10}}>⚠️ {sr?"Kurs za konverziju u EUR trenutno nije dostupan – deo iznosa je u originalnoj valuti.":"The EUR exchange rate is currently unavailable – some amounts are in the original currency."}</div>}
+    {!data.ga4&&<div style={{color:C.yel,fontSize:12,marginBottom:10}}>{data.ga4Error==="expired"?(sr?"Veza sa GA4 je istekla – prikazani su samo Google Ads podaci. U Clients ponovo poveži GA4.":"The GA4 connection has expired – only Google Ads data is shown. Reconnect GA4 in Clients."):data.ga4Error?(sr?"GA4 prihod trenutno nije dostupan – prikazani su samo Google Ads podaci.":"GA4 revenue is currently unavailable – only Google Ads data is shown."):(sr?"GA4 nije povezan – prikazani su samo Google Ads podaci (konverzije koje beleži Google Ads).":"GA4 isn't connected – only Google Ads data is shown (conversions recorded by Google Ads).")}</div>}
+
+    {all.length>0&&<>
+      <div style={{display:"grid",gridTemplateColumns:mob?"1fr 1fr":"repeat(5,1fr)",gap:10,marginBottom:14}}>
+        {card(sr?"Potrošnja":"Spend",eur(tot.spend),`${rsNum(base.length)} ${sr?"ključnih reči":"keywords"}`)}
+        {card(sr?"GA4 prihod":"GA4 revenue",data.ga4?eur(tot.rev):"–")}
+        {card("ROAS",data.ga4&&tot.spend>0?`${rsNum(tot.rev/tot.spend,2)}x`:"–")}
+        {card(sr?"Kupovine":"Purchases",data.ga4?rsNum(tot.pur,0):"–",`Google Ads: ${rsNum(tot.ads,0)} ${sr?"konv.":"conv."}`)}
+        {card(sr?"Rasipanje":"Wasted",eur(bleedSpend),`${rsNum(tot.spend>0?bleedSpend/tot.spend*100:0,0)}% ${sr?"potrošnje":"of spend"} · ${bleeders.length} ${sr?"reči":"kw"}`,bleedSpend>0?C.red:C.grn)}
+      </div>
+
+      {/* Prikaz */}
+      <div role="tablist" style={{display:"flex",gap:4,borderBottom:`1px solid ${C.brd}`,marginBottom:12}}>
+        {[["all",sr?"Sve ključne reči":"All keywords"],["bleed",`${sr?"Rasipanje budžeta":"Budget waste"} (${bleeders.length})`]].map(([k,l])=><button key={k} role="tab" aria-selected={view===k} onClick={()=>{setView(k);setLimit(100);}} style={{padding:"8px 12px",fontSize:13,fontWeight:700,cursor:"pointer",background:"transparent",border:"none",borderBottom:view===k?"2px solid #6366F1":"2px solid transparent",color:view===k?"#fff":C.mut,marginBottom:-1}}>{l}</button>)}
+      </div>
+
+      {/* Filteri */}
+      <div style={{display:"grid",gridTemplateColumns:mob?"1fr":"1fr 1fr",gap:10,marginBottom:10}}>
+        <RsSearchSelect value={camp} onChange={v=>{setCamp(v);setLimit(100);}} options={camps} allLabel={sr?"Sve kampanje":"All campaigns"} searchPlaceholder={sr?"Pretraži kampanju...":"Search campaign..."} ariaLabel={sr?"Kampanja":"Campaign"}/>
+        <input value={q} onChange={e=>{setQ(e.target.value);setLimit(100);}} placeholder={sr?"Pretraži ključnu reč ili ad grupu...":"Search keyword or ad group..."} style={bpInp}/>
+      </div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12,alignItems:"center"}}>
+        {Object.entries(KW_MATCH).filter(([k])=>all.some(x=>x.matchType===k)).map(([k,m])=><button key={k} onClick={()=>setMatch(p=>({...p,[k]:!p[k]}))} style={{...pill(!!match[k]),borderColor:match[k]?m.c:C.brd}}><span style={{color:m.c}}>●</span> {sr?m.sr:m.en}</button>)}
+        {view==="bleed"&&<>
+          <span style={{color:C.mut,fontSize:12,marginLeft:8}}>{sr?"Potrošeno najmanje:":"Spent at least:"}</span>
+          {[20,50,100].map(v=><button key={v} onClick={()=>setThr(v)} style={pill(thr===v)}>{v} €</button>)}
+        </>}
+      </div>
+
+      {view==="bleed"&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:10}}>
+        <div style={{color:C.mut,fontSize:12,lineHeight:1.5}}>{sr?`Ključne reči koje su potrošile ${thr} € ili više, a nisu donele nijednu kupovinu${data.ga4?" ni u GA4 ni u Google Ads-u":" u Google Ads-u"}. Kandidati za pauziranje ili izmenu.`:`Keywords that spent ${thr} € or more with no purchase${data.ga4?" in either GA4 or Google Ads":" in Google Ads"}. Candidates to pause or change.`}</div>
+        {bleeders.length>0&&<button onClick={copyList} style={bpBtn(false)}>{copied?(sr?"✓ Kopirano":"✓ Copied"):(sr?"Kopiraj listu reči":"Copy keyword list")}</button>}
+      </div>}
+
+      {rows.length===0?<div style={{color:C.mut,fontSize:13,padding:"12px 0"}}>{view==="bleed"?(sr?"Nema ključnih reči koje rasipaju budžet za ovaj prag. 👍":"No keywords wasting budget at this threshold. 👍"):(sr?"Nema ključnih reči za izabrane filtere.":"No keywords for the selected filters.")}</div>:
+      <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"4px 8px",overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",minWidth:760}}>
+          <thead><tr>
+            {th("text",sr?"Ključna reč":"Keyword")}
+            {th("spendEUR",sr?"Potrošnja":"Spend",true)}
+            {th("clicks",sr?"Klikovi":"Clicks",true)}
+            {th("cpcEUR","CPC",true)}
+            {th("ga4RevenueEUR",sr?"GA4 prihod":"GA4 revenue",true)}
+            {th("roas","ROAS",true)}
+            {th("ga4Purchases",sr?"Kupovine":"Purchases",true)}
+            {th("adsConversions",sr?"Ads konv.":"Ads conv.",true)}
+          </tr></thead>
+          <tbody>{rows.slice(0,limit).map((k,i)=>{const m=KW_MATCH[k.matchType]||KW_MATCH.other;return <tr key={i}>
+            <td style={{...td,maxWidth:340}}>
+              <div style={{fontWeight:600,wordBreak:"break-word"}}>{k.text} <span style={{fontSize:10,fontWeight:700,color:m.c,border:`1px solid ${m.c}55`,borderRadius:20,padding:"0 6px",marginLeft:4}}>{sr?m.sr:m.en}</span>{k.status==="PAUSED"&&<span style={{fontSize:10,color:C.mut,marginLeft:6}}>{sr?"pauzirana":"paused"}</span>}</div>
+              <div style={{color:C.mut,fontSize:11,marginTop:2,wordBreak:"break-word"}}>{k.campaignName} › {k.adGroupName}</div>
+            </td>
+            <td style={{...td,textAlign:"right",fontWeight:700,whiteSpace:"nowrap"}}>{eur(k.spendEUR)}</td>
+            <td style={{...td,textAlign:"right"}}>{rsNum(k.clicks)}</td>
+            <td style={{...td,textAlign:"right",whiteSpace:"nowrap"}}>{eur(k.cpcEUR)}</td>
+            <td style={{...td,textAlign:"right",whiteSpace:"nowrap"}}>{data.ga4?eur(k.ga4RevenueEUR):"–"}{k.shared&&data.ga4&&k.ga4RevenueEUR>0&&<span title={sr?"Približno: ista reč postoji u više ad grupa, prihod je podeljen prema klikovima":"Approximate: the same keyword is in several ad groups, revenue split by clicks"} style={{color:C.mut,marginLeft:3}}>≈</span>}</td>
+            <td style={{...td,textAlign:"right",fontWeight:700,color:k.roas==null?C.mut:k.roas>=1?C.grn:C.red}}>{k.roas==null?"–":`${rsNum(k.roas,2)}x`}</td>
+            <td style={{...td,textAlign:"right"}}>{data.ga4?rsNum(k.ga4Purchases,k.ga4Purchases%1?1:0):"–"}</td>
+            <td style={{...td,textAlign:"right",color:C.mut}}>{rsNum(k.adsConversions,k.adsConversions%1?1:0)}</td>
+          </tr>;})}</tbody>
+        </table>
+      </div>}
+      {rows.length>limit&&<button onClick={()=>setLimit(l=>l+200)} style={{...bpBtn(false),marginTop:10}}>{sr?`Prikaži još (${rows.length-limit})`:`Show more (${rows.length-limit})`}</button>}
+      <div style={{color:C.dim,fontSize:11,marginTop:10,lineHeight:1.5}}>{sr?"Iznosi u EUR. GA4 prihod po ključnoj reči je približan (GA4 ne zna ad grupu ni tip meča; ≈ označava podelu između ad grupa). \"Ads konv.\" su konverzije koje beleži Google Ads.":"Amounts in EUR. GA4 revenue per keyword is approximate (GA4 doesn't know the ad group or match type; ≈ marks a split between ad groups). \"Ads conv.\" are conversions recorded by Google Ads."}</div>
+    </>}
+  </div>;
+}
+
 function CampaignsMod({t,lang}){
   const sr=lang==="sr";
   const [clients,setClients]=useState([]);
@@ -3071,7 +3225,9 @@ function CampaignsMod({t,lang}){
   const [period,setPeriod]=useState("30");
   const [customFrom,setCustomFrom]=useState("");
   const [customTo,setCustomTo]=useState("");
-  const [mode,setMode]=useState("byCampaign"); // byCampaign | byProduct | byCategory
+  const [mode,setMode]=useState("byCampaign"); // byCampaign | byProduct | byCategory | byKeyword
+  const [appliedQs,setAppliedQs]=useState(""); // period koji je stvarno ucitan (za tab Kljucne reci)
+  const kwMob=typeof window!=="undefined"&&window.innerWidth<700;
   const [loading,setLoading]=useState(false);
   const [data,setData]=useState(null);
   const [err,setErr]=useState("");
@@ -3156,6 +3312,7 @@ function CampaignsMod({t,lang}){
 
   const load=async(client,qsOverride)=>{
     const qs=qsOverride||periodQS();
+    setAppliedQs(qs);
     lastLoadRef.current={client,qs};
     setLoading(true); setErr(""); setData(null); setCampaignSearch("");
     resetDrill();
@@ -3331,7 +3488,8 @@ function CampaignsMod({t,lang}){
   const modes=[
     {v:"byCampaign",l:sr?"📢 Po kampanji":"📢 By campaign"},
     {v:"byProduct",l:sr?"🔍 Po proizvodu":"🔍 By product"},
-    {v:"byCategory",l:sr?"📁 Po kategoriji":"📁 By category"}
+    {v:"byCategory",l:sr?"📁 Po kategoriji":"📁 By category"},
+    {v:"byKeyword",l:sr?"🔑 Po ključnoj reči":"🔑 By keyword"}
   ];
 
   // KONTROLNA TABLA
@@ -3595,6 +3753,8 @@ function CampaignsMod({t,lang}){
         </div>
       </>}
     </div>}
+
+    {mode==="byKeyword"&&<CiKeywords sr={sr} mob={kwMob} clientId={selectedClient.id} qs={appliedQs}/>}
 
     {mode==="byCategory"&&<div>
       {categoryListLoading&&<div style={{color:C.mut,fontSize:13,textAlign:"center",padding:"20px 0"}}>{sr?"Učitavam kategorije...":"Loading categories..."}</div>}
