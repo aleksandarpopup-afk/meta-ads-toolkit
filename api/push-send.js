@@ -14,6 +14,8 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).end();
+  // Slanje obavestenja dozvoljeno je samo jutarnjem cron-u (ranije je svako mogao da posalje obavestenje bilo kom korisniku)
+  if (req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) return res.status(401).json({ error: "Unauthorized" });
 
   try {
     const { user_id, title, body, url } = req.body;
