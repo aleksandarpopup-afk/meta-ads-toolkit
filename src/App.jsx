@@ -2212,7 +2212,7 @@ function MyClientsMod({t,lang,goMod}){
     setGa4Loading(true);
     setGads(null);
     setGadsLoading(true);
-    fetch(`/api/analyses?client_id=${client.id}&limit=20`)
+    fetch(`/api/analyses?client_id=${client.id}&user_id=${localStorage.getItem("mat_user_id")}&limit=20`)
       .then(r=>r.json())
       .then(data=>{ setAnalyses(Array.isArray(data)?data:[]); setLoadingA(false); })
       .catch(()=>setLoadingA(false));
@@ -2352,17 +2352,19 @@ function MyClientsMod({t,lang,goMod}){
   const deleteAnalysis=async(id)=>{
     if(!window.confirm(sr?"Obriši ovu analizu?":"Delete this analysis?")) return;
     try{
-      await fetch(`/api/analyses?id=${id}`,{method:"DELETE"});
+      const r=await fetch(`/api/analyses?id=${id}&user_id=${localStorage.getItem("mat_user_id")}`,{method:"DELETE"});
+      if(!r.ok) throw new Error();
       setAnalyses(prev=>prev.filter(a=>a.id!==id));
-    }catch(e){}
+    }catch(e){ alert(sr?"Analiza nije obrisana. Pokušaj ponovo.":"The analysis was not deleted. Please try again."); }
   };
 
   const deleteClient=async(id)=>{
     if(!window.confirm(sr?"Obriši klijenta i sve njegove analize?":"Delete client and all their analyses?")) return;
     try{
-      await fetch(`/api/clients?id=${id}`,{method:"DELETE"});
+      const r=await fetch(`/api/clients?id=${id}&user_id=${localStorage.getItem("mat_user_id")}`,{method:"DELETE"});
+      if(!r.ok) throw new Error();
       setClients(prev=>prev.filter(c=>c.id!==id));
-    }catch(e){}
+    }catch(e){ alert(sr?"Klijent nije obrisan. Pokušaj ponovo.":"The client was not deleted. Please try again."); }
   };
 
   const addClient=async()=>{
@@ -2395,7 +2397,7 @@ function MyClientsMod({t,lang,goMod}){
     if(!renameValue.trim()) return;
     setRenamingSaving(true);
     try{
-      const r=await fetch(`/api/clients?id=${selected.id}`,{
+      const r=await fetch(`/api/clients?id=${selected.id}&user_id=${localStorage.getItem("mat_user_id")}`,{
         method:"PATCH",
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({name:renameValue.trim()})
@@ -2405,8 +2407,8 @@ function MyClientsMod({t,lang,goMod}){
         setSelected(s=>({...s,name:updated.name}));
         setClients(prev=>prev.map(c=>c.id===updated.id?{...c,name:updated.name}:c));
         setRenaming(false);
-      }
-    }catch(e){}
+      } else alert(sr?"Ime nije promenjeno. Pokušaj ponovo.":"The name was not changed. Please try again.");
+    }catch(e){ alert(sr?"Ime nije promenjeno. Pokušaj ponovo.":"The name was not changed. Please try again."); }
     setRenamingSaving(false);
   };
 
