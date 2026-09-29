@@ -3652,6 +3652,9 @@ const MOD_TAGS={
   10:{sr:["GA4","Google Ads"],en:["GA4","Google Ads"]},
   1:{sr:["Screenshot","CSV"],en:["Screenshot","CSV"]},
 };
+// Maksimalna sirina sadrzaja po modulu na racunaru: tabele i izvestaji koriste siroki ekran,
+// chat i forme ostaju uze da bi se lako citali
+const MOD_WIDTH={14:1320,12:1320,15:1320,2:1320,10:1320,9:1320,13:1040,1:920};
 const MOD_GROUPS=[{k:"an",tk:"grpAn"},{k:"dw",tk:"grpDw"}];
 const gridCols=n=>n<=4?n:3;
 const CARD_CSS=`.mc{transition:transform .18s ease,border-color .18s ease}
@@ -4002,7 +4005,7 @@ export default function App(){
             </div>;
           })}
         </div>}
-        {!showHome&&<div style={{padding:"40px 48px 60px",maxWidth:860}}><Comp t={t} lang={lang} goMod={goMod} initialTab={mod===9?"import":undefined}/></div>}
+        {!showHome&&<div style={{padding:"40px 48px 60px",maxWidth:MOD_WIDTH[mod]||1100}}><Comp t={t} lang={lang} goMod={goMod} initialTab={mod===9?"import":undefined}/></div>}
       </div>
     </div>
   </div>;
