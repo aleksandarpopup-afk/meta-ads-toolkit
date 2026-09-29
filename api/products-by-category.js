@@ -106,6 +106,15 @@ export default async function handler(req, res) {
       if (rateData.length) rates = rateData[0].rates;
     }
 
+    // Ako kurs fali, iznos ostaje u originalnoj valuti i salje se upozorenje (umesto praznog iznosa)
+    let fxMissing = false;
+    const toEUR = (amount, cur) => {
+      if (cur === "EUR") return amount;
+      const v = rates ? convert(amount, cur, "EUR", rates) : null;
+      if (v == null) { fxMissing = true; return amount; }
+      return v;
+    };
+
     // BEZ ?category= - vraćamo listu SVIH kategorija (za picker)
     if (!category) {
       const catReport = await ga4Fetch(property_id, accessToken, {
@@ -113,26 +122,26 @@ export default async function handler(req, res) {
         dimensions: [{ name: "itemCategory" }],
         metrics: [{ name: "itemRevenue" }, { name: "itemsPurchased" }],
         orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }],
-        limit: 50
+        limit: 250 // ranije 50 - klijenti sa puno kategorija nisu videli sve u listi
       });
       const categories = (catReport.rows || []).map((row) => {
         const revenue = parseFloat(row.metricValues[0].value) || 0;
         return {
           name: row.dimensionValues[0].value,
           revenue,
-          revenueEUR: rates ? convert(revenue, currency, "EUR", rates) : revenue,
+          revenueEUR: toEUR(revenue, currency),
           purchased: parseInt(row.metricValues[1].value) || 0
         };
       });
       const realCategories = categories.filter((c) => c.name && c.name !== "(not set)");
       const hasCategories = realCategories.length > 0;
-      return res.status(200).json({ currency, gadsCurrency, showSpendNative, showRevenueNative, categories: hasCategories ? realCategories : [], hasCategories });
+      return res.status(200).json({ currency, gadsCurrency, showSpendNative, showRevenueNative, categories: hasCategories ? realCategories : [], hasCategories, fxMissing });
     }
 
     // SA ?category= - raščlanjenje TE kategorije po kampanjama (isti obrazac kao products-by-campaign.js)
     const report = await ga4Fetch(property_id, accessToken, {
       dateRanges: [{ startDate: startStr, endDate: endStr }],
-      dimensions: [{ name: "sessionGoogleAdsCampaignId" }],
+      dimensions: [{ name: "sessionGoogleAdsCampaignId" }, { name: "sessionGoogleAdsCampaignName" }],
       metrics: [
         { name: "itemsViewed" },
         { name: "itemsAddedToCart" },
@@ -147,9 +156,12 @@ export default async function handler(req, res) {
     });
 
     const catByCampaignId = {};
+    const ga4NameById = {};
     let unattributed = { viewed: 0, addedToCart: 0, purchased: 0, revenue: 0 };
     for (const row of report.rows || []) {
       const id = row.dimensionValues[0].value;
+      const gName = row.dimensionValues[1]?.value;
+      if (gName && gName !== "(not set)" && !ga4NameById[id]) ga4NameById[id] = gName;
       const m = {
         viewed: parseInt(row.metricValues[0].value) || 0,
         addedToCart: parseInt(row.metricValues[1].value) || 0,
@@ -162,7 +174,10 @@ export default async function handler(req, res) {
         unattributed.purchased += m.purchased;
         unattributed.revenue += m.revenue;
       } else {
-        catByCampaignId[id] = m;
+        // ista kampanja moze doci u vise redova (zbog naziva) - sabira se
+        const cur = catByCampaignId[id] || { viewed: 0, addedToCart: 0, purchased: 0, revenue: 0 };
+        cur.viewed += m.viewed; cur.addedToCart += m.addedToCart; cur.purchased += m.purchased; cur.revenue += m.revenue;
+        catByCampaignId[id] = cur;
       }
     }
 
@@ -197,14 +212,17 @@ export default async function handler(req, res) {
 
     const results = matchedIds.map((id) => {
       const p = catByCampaignId[id];
-      const info = campaignInfo[id] || { campaign_name: `Kampanja ${id}`, totalSpend: 0 };
+      // Kampanja bez potrosnje u periodu nema red u bazi - naziv se uzima iz GA4
+      const noSpend = !campaignInfo[id];
+      const info = campaignInfo[id] || { campaign_name: ga4NameById[id] || `Kampanja ${id}`, totalSpend: 0 };
       const totalRev = campaignTotalRevenue[id] || 0;
-      const spendEUR = rates ? convert(info.totalSpend, gadsCurrency, "EUR", rates) : info.totalSpend;
-      const totalRevEUR = rates ? convert(totalRev, currency, "EUR", rates) : totalRev;
-      const categoryRevenueEUR = rates ? convert(p.revenue, currency, "EUR", rates) : p.revenue;
+      const spendEUR = toEUR(info.totalSpend, gadsCurrency);
+      const totalRevEUR = toEUR(totalRev, currency);
+      const categoryRevenueEUR = toEUR(p.revenue, currency);
       return {
         campaign_id: id,
         campaign_name: info.campaign_name,
+        no_spend_in_period: noSpend,
         categoryViewed: p.viewed,
         categoryAddedToCart: p.addedToCart,
         categoryPurchased: p.purchased,
@@ -218,7 +236,7 @@ export default async function handler(req, res) {
       };
     }).sort((a, b) => b.categoryRevenue - a.categoryRevenue);
 
-    return res.status(200).json({ currency, gadsCurrency, showSpendNative, showRevenueNative, results, unattributed, noMatch: false });
+    return res.status(200).json({ currency, gadsCurrency, showSpendNative, showRevenueNative, results, unattributed, noMatch: false, fxMissing });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
