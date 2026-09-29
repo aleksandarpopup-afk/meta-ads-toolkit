@@ -3550,6 +3550,7 @@ function CampaignsMod({t,lang}){
       {byProductData&&byProductData.noMatch&&<div style={{color:C.mut,fontSize:13,textAlign:"center",padding:"20px 0"}}>{sr?"Nema podudaranja za taj proizvod u ovom periodu.":"No matches for that product in this period."}</div>}
 
       {byProductData&&!byProductData.noMatch&&<>
+        {byProductData.fxMissing&&<div style={{background:"rgba(248,113,113,0.08)",border:"1px solid rgba(248,113,113,0.3)",borderRadius:12,padding:"12px 16px",color:C.red,fontSize:12,marginBottom:12}}>⚠️ {sr?"Kurs za konverziju u EUR trenutno nije dostupan. Deo iznosa je prikazan u originalnoj valuti, pa iznosi i ROAS mogu biti netačni.":"The EUR exchange rate is currently unavailable. Some amounts are in the original currency, so amounts and ROAS may be inaccurate."}</div>}
         <div style={{color:C.mut,fontSize:11,marginBottom:12}}>{sr?"Prihod prikazan je za PRETRAŽENI proizvod. \"ROAS kampanje\" je za CELU kampanju, ne za ovaj proizvod (Google Ads ne prati trošak po pojedinačnom proizvodu).":"Revenue shown is for the SEARCHED product. \"Campaign ROAS\" is for the WHOLE campaign, not this product (Google Ads doesn't track cost per individual product)."}</div>
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",fontSize:12,borderCollapse:"collapse"}}>
@@ -3564,14 +3565,14 @@ function CampaignsMod({t,lang}){
             </thead>
             <tbody>
               {byProductData.results.map((r,i)=><tr key={i} style={{borderTop:`1px solid ${C.brd}`}}>
-                <td style={{padding:"7px 4px",color:C.txt}}>{r.campaign_name} <span style={{color:C.mut}}>({r.campaign_id})</span></td>
+                <td style={{padding:"7px 4px",color:C.txt}}>{r.campaign_name} <span style={{color:C.mut}}>({r.campaign_id})</span>{r.no_spend_in_period&&<span style={{display:"inline-block",marginLeft:6,color:C.yel,fontSize:10}}>{sr?"bez potrošnje u periodu":"no spend in period"}</span>}</td>
                 <td style={{padding:"7px 4px",textAlign:"right",color:C.mut}}>{r.productViewed.toLocaleString()}</td>
                 <td style={{padding:"7px 4px",textAlign:"right",fontWeight:600,color:C.txt}}>{r.productPurchased.toLocaleString()}</td>
                 <td style={{padding:"7px 4px",textAlign:"right",color:C.grn}}>
                   {fmtMoney(r.productRevenueEUR,"EUR")}
                   {byProductData.showRevenueNative&&<div style={{color:C.mut,fontSize:10}}>≈ {fmtMoney(r.productRevenue,byProductData.currency)}</div>}
                 </td>
-                <td style={{padding:"7px 4px",textAlign:"right",fontWeight:700,color:r.campaignRoas>=1?C.grn:C.red}}>{r.campaignRoas.toFixed(2)}x</td>
+                <td style={{padding:"7px 4px",textAlign:"right",fontWeight:700,color:r.campaignTotalSpendEUR>0?(r.campaignRoas>=1?C.grn:C.red):C.mut}}>{r.campaignTotalSpendEUR>0?`${r.campaignRoas.toFixed(2)}x`:"–"}</td>
               </tr>)}
             </tbody>
           </table>
