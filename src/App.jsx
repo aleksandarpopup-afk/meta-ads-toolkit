@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Fragment } from "react";
 
 // ── IMAGE TYPE DETECTOR ───────────────────────────────────────────────────────
 function getImageMediaType(base64){
@@ -3110,13 +3110,18 @@ function CiSearchTerms({sr,mob,clientId,qs}){
   const ql=rsFold(q.trim());
   const base=all.filter(t=>(!camp||t.campaigns.includes(camp))&&(!ql||rsFold(t.text).includes(ql)));
   const neg=base.filter(t=>t.spendEUR>=thr&&!t.isExcluded&&!t.isKeyword&&noSale(t));
-  const opp=base.filter(t=>!t.isKeyword&&!t.isExcluded&&(t.ga4Purchases>=1||t.adsConversions>=1))
-    .sort((a,b)=>((b.ga4RevenueEUR||b.adsConvValueEUR)-(a.ga4RevenueEUR||a.adsConvValueEUR)));
+  // Prilike: kad je GA4 povezan, glavnu listu cine samo pojmovi sa STVARNOM kupovinom u GA4 (po GA4 prihodu, najveci prvo);
+  // pojmovi koji imaju samo Google Ads konverzije idu na dno, odvojeno, sa oznakom "samo Google Ads".
+  const oppCand=base.filter(t=>!t.isKeyword&&!t.isExcluded);
+  const oppMain=(data.ga4?oppCand.filter(t=>t.ga4Purchases>=1).sort((a,b)=>b.ga4RevenueEUR-a.ga4RevenueEUR||b.ga4Purchases-a.ga4Purchases)
+    :oppCand.filter(t=>t.adsConversions>=1).sort((a,b)=>b.adsConvValueEUR-a.adsConvValueEUR||b.adsConversions-a.adsConversions));
+  const oppAdsOnly=data.ga4?oppCand.filter(t=>t.ga4Purchases<1&&t.adsConversions>=1).sort((a,b)=>b.adsConvValueEUR-a.adsConvValueEUR||b.adsConversions-a.adsConversions).map(t=>({...t,adsOnly:true})):[];
+  const opp=oppMain.concat(oppAdsOnly);
   const rows=sub==="neg"?neg:sub==="opp"?opp:base;
   const selected=rows.filter(t=>sel[t.text]);
   const format=t=>fmt==="exact"?`[${t}]`:fmt==="phrase"?`"${t}"`:t;
   const negSpend=neg.reduce((s,t)=>s+t.spendEUR,0);
-  const oppRev=opp.reduce((s,t)=>s+(data.ga4?t.ga4RevenueEUR:t.adsConvValueEUR),0);
+  const oppRev=oppMain.reduce((s,t)=>s+(data.ga4?t.ga4RevenueEUR:t.adsConvValueEUR),0);
   const tt=data.totals;
   const cover=tt.accountSpendEUR>0?tt.coveredSpendEUR/tt.accountSpendEUR:0;
 
@@ -3142,12 +3147,12 @@ function CiSearchTerms({sr,mob,clientId,qs}){
     {data.truncated&&<div style={{color:C.mut,fontSize:12,marginBottom:10}}>{sr?"Pojmova ima veoma mnogo – prikazani su svi sa kupovinom i 8.000 sa najvećom potrošnjom.":"There are very many terms – all with purchases and the 8,000 with the highest spend are shown."}</div>}
 
     <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
-      {[["neg",`${sr?"Kandidati za negativne":"Negative candidates"} (${neg.length})`],["opp",`${sr?"Prilike":"Opportunities"} (${opp.length})`],["all",`${sr?"Svi pojmovi":"All terms"} (${base.length})`]].map(([k,l])=><button key={k} onClick={()=>{setSub(k);setLimit(100);}} style={pill(sub===k)}>{l}</button>)}
+      {[["neg",`${sr?"Kandidati za negativne":"Negative candidates"} (${neg.length})`],["opp",`${sr?"Prilike":"Opportunities"} (${oppMain.length})`],["all",`${sr?"Svi pojmovi":"All terms"} (${base.length})`]].map(([k,l])=><button key={k} onClick={()=>{setSub(k);setLimit(100);}} style={pill(sub===k)}>{l}</button>)}
     </div>
 
     <div style={{color:C.mut,fontSize:12,lineHeight:1.55,marginBottom:10}}>
       {sub==="neg"&&<>{sr?`Pojmovi na koje je potrošeno ${thr} € ili više bez ijedne kupovine, a koji nisu ni ključne reči ni već isključeni. Ukupno `:`Terms that spent ${thr} € or more with no purchase and are neither keywords nor already excluded. Total `}<b style={{color:negSpend>0?C.red:C.txt}}>{eur(negSpend)}</b>.</>}
-      {sub==="opp"&&<>{sr?"Pojmovi koji donose kupovine, a nisu dodati kao ključne reči – kandidati za dodavanje. Prihod ":"Terms that bring purchases but aren't added as keywords – candidates to add. Revenue "}<b style={{color:C.grn}}>{eur(oppRev)}</b>.</>}
+      {sub==="opp"&&<>{sr?`Pojmovi koji donose kupovine${data.ga4?" (po GA4)":""}, a nisu dodati kao ključne reči – kandidati za dodavanje, poređani po prihodu. Prihod `:`Terms that bring purchases${data.ga4?" (per GA4)":""} but aren't added as keywords – candidates to add, sorted by revenue. Revenue `}<b style={{color:C.grn}}>{eur(oppRev)}</b>.{oppAdsOnly.length>0&&(sr?` Na dnu su i pojmovi sa konverzijama samo po Google Ads-u (${oppAdsOnly.length}) – proveri ih pre dodavanja.`:` At the bottom are terms with conversions only per Google Ads (${oppAdsOnly.length}) – check them before adding.`)}</>}
       {sub==="all"&&(sr?"Svi pojmovi pretrage u periodu.":"All search terms in the period.")}
     </div>
 
@@ -3181,10 +3186,12 @@ function CiSearchTerms({sr,mob,clientId,qs}){
           <th style={{...thS,textAlign:"right"}}>{sr?"Kupovine":"Purchases"}</th>
           <th style={{...thS,textAlign:"right"}}>{sr?"Ads konv.":"Ads conv."}</th>
         </tr></thead>
-        <tbody>{rows.slice(0,limit).map((t,i)=><tr key={t.text+i} style={{background:sel[t.text]?"rgba(99,102,241,0.08)":"transparent"}}>
+        <tbody>{rows.slice(0,limit).map((t,i,arr)=><Fragment key={t.text+i}>
+          {sub==="opp"&&t.adsOnly&&(i===0||!arr[i-1].adsOnly)&&<tr><td colSpan={7} style={{padding:"12px 6px 6px",color:C.yel,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.6px",borderBottom:`1px solid ${C.brd}`}}>{sr?"Samo po Google Ads-u (GA4 nema kupovinu) – proveri pre dodavanja":"Only per Google Ads (no GA4 purchase) – check before adding"}</td></tr>}
+          <tr style={{background:sel[t.text]?"rgba(99,102,241,0.08)":"transparent",opacity:t.adsOnly?0.8:1}}>
           {sub!=="all"&&<td style={td}><input type="checkbox" checked={!!sel[t.text]} onChange={e=>setSel(p=>({...p,[t.text]:e.target.checked}))} aria-label={t.text}/></td>}
           <td style={{...td,maxWidth:380}}>
-            <div style={{fontWeight:600,wordBreak:"break-word"}}>{t.text}{t.shopping&&tag("Shopping","#FBBF24")}{t.isKeyword&&tag(sr?"već ključna reč":"already a keyword","#34D399")}{t.isExcluded&&tag(sr?"već isključen":"already excluded","#9CA3AF")}</div>
+            <div style={{fontWeight:600,wordBreak:"break-word"}}>{t.text}{t.adsOnly&&tag(sr?"samo Google Ads":"Google Ads only","#FBBF24")}{t.shopping&&tag("Shopping","#FBBF24")}{t.isKeyword&&tag(sr?"već ključna reč":"already a keyword","#34D399")}{t.isExcluded&&tag(sr?"već isključen":"already excluded","#9CA3AF")}</div>
             <div style={{color:C.mut,fontSize:11,marginTop:2,wordBreak:"break-word"}}>{t.campaigns[0]}{t.campaignCount>1?` +${t.campaignCount-1}`:""}</div>
           </td>
           <td style={{...td,textAlign:"right",fontWeight:700,whiteSpace:"nowrap"}}>{eur(t.spendEUR)}</td>
@@ -3192,7 +3199,7 @@ function CiSearchTerms({sr,mob,clientId,qs}){
           <td style={{...td,textAlign:"right",whiteSpace:"nowrap"}}>{data.ga4?eur(t.ga4RevenueEUR):"–"}</td>
           <td style={{...td,textAlign:"right"}}>{data.ga4?rsNum(t.ga4Purchases,0):"–"}</td>
           <td style={{...td,textAlign:"right",color:C.mut}}>{rsNum(t.adsConversions,t.adsConversions%1?1:0)}</td>
-        </tr>)}</tbody>
+        </tr></Fragment>)}</tbody>
       </table>
     </div>}
     {rows.length>limit&&<button onClick={()=>setLimit(l=>l+200)} style={{...bpBtn(false),marginTop:10}}>{sr?`Prikaži još (${rows.length-limit})`:`Show more (${rows.length-limit})`}</button>}
