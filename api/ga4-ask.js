@@ -48,7 +48,7 @@ async function execQueryProducts(propertyId, accessToken, p) {
     dimensions: [{ name: "itemId" }, { name: "itemName" }],
     metrics: [{ name: "itemsViewed" }, { name: "itemsAddedToCart" }, { name: "itemsPurchased" }, { name: "itemRevenue" }],
     orderBys: [{ metric: { metricName: orderMetric }, desc: true }],
-    limit: Math.min(p.limit || 10, 50)
+    limit: Math.min(Math.max(p.limit || 25, 1), 250)
   };
   if (p.nameContains) {
     body.dimensionFilter = { filter: { fieldName: "itemName", stringFilter: { matchType: "CONTAINS", value: p.nameContains, caseSensitive: false } } };
@@ -70,12 +70,14 @@ async function execQueryProducts(propertyId, accessToken, p) {
     if (rangeIdx === "date_range_0") byItem[id].current = m;
     else byItem[id].previous = m;
   }
-  return Object.values(byItem).map((it) => ({
+  const list = Object.values(byItem).map((it) => ({
     id: it.id,
     name: it.name,
     ...(it.current || { viewed: 0, addedToCart: 0, purchased: 0, revenue: 0 }),
     ...(hasComparison ? { previousPeriod: it.previous || { viewed: 0, addedToCart: 0, purchased: 0, revenue: 0 } } : {})
   }));
+  const total = data.rowCount || 0;
+  return { rows: list, totalRowsInGA4: total, moreRowsExist: total > (data.rows || []).length };
 }
 
 // ── Alat 2: podaci na nivou kampanje/saobraćaja ──
@@ -84,15 +86,15 @@ async function execQueryCampaigns(propertyId, accessToken, p) {
   const hasComparison = !!(p.previousStartDate && p.previousEndDate);
   if (hasComparison) dateRanges.push({ startDate: p.previousStartDate, endDate: p.previousEndDate });
 
-  const orderMetricMap = { sessions: "sessions", conversions: "conversions", revenue: "totalRevenue" };
+  const orderMetricMap = { sessions: "sessions", purchases: "transactions", conversions: "transactions", revenue: "totalRevenue" };
   const orderMetric = orderMetricMap[p.orderBy] || "totalRevenue";
 
   const body = {
     dateRanges,
     dimensions: [{ name: "sessionCampaignName" }, { name: "sessionSource" }],
-    metrics: [{ name: "sessions" }, { name: "conversions" }, { name: "totalRevenue" }],
+    metrics: [{ name: "sessions" }, { name: "transactions" }, { name: "totalRevenue" }],
     orderBys: [{ metric: { metricName: orderMetric }, desc: true }],
-    limit: Math.min(p.limit || 10, 50)
+    limit: Math.min(Math.max(p.limit || 25, 1), 250)
   };
   const filters = [];
   if (p.campaignNameContains) filters.push({ filter: { fieldName: "sessionCampaignName", stringFilter: { matchType: "CONTAINS", value: p.campaignNameContains, caseSensitive: false } } });
@@ -109,19 +111,21 @@ async function execQueryCampaigns(propertyId, accessToken, p) {
     const key = name + "||" + source;
     const m = {
       sessions: parseInt(row.metricValues[0].value) || 0,
-      conversions: parseFloat(row.metricValues[1].value) || 0,
+      purchases: parseFloat(row.metricValues[1].value) || 0,
       revenue: parseFloat(row.metricValues[2].value) || 0
     };
     if (!byCampaign[key]) byCampaign[key] = { name, source, current: null, previous: null };
     if (rangeIdx === "date_range_0") byCampaign[key].current = m;
     else byCampaign[key].previous = m;
   }
-  return Object.values(byCampaign).map((c) => ({
+  const list = Object.values(byCampaign).map((c) => ({
     name: c.name,
     source: c.source,
-    ...(c.current || { sessions: 0, conversions: 0, revenue: 0 }),
-    ...(hasComparison ? { previousPeriod: c.previous || { sessions: 0, conversions: 0, revenue: 0 } } : {})
+    ...(c.current || { sessions: 0, purchases: 0, revenue: 0 }),
+    ...(hasComparison ? { previousPeriod: c.previous || { sessions: 0, purchases: 0, revenue: 0 } } : {})
   }));
+  const total = data.rowCount || 0;
+  return { rows: list, totalRowsInGA4: total, moreRowsExist: total > (data.rows || []).length };
 }
 
 // ── Alat 3: proizvodi FILTRIRANI po izvoru saobraćaja (npr. samo Meta, samo Google) ──
@@ -138,7 +142,7 @@ async function execQueryProductsBySource(propertyId, accessToken, p) {
     dimensions: [{ name: "itemId" }, { name: "itemName" }],
     metrics: [{ name: "itemsViewed" }, { name: "itemsAddedToCart" }, { name: "itemsPurchased" }, { name: "itemRevenue" }],
     orderBys: [{ metric: { metricName: orderMetric }, desc: true }],
-    limit: Math.min(p.limit || 10, 50)
+    limit: Math.min(Math.max(p.limit || 25, 1), 250)
   };
   const filters = [{ filter: { fieldName: "sessionSource", stringFilter: { matchType: "CONTAINS", value: p.sourceContains, caseSensitive: false } } }];
   if (p.nameContains) filters.push({ filter: { fieldName: "itemName", stringFilter: { matchType: "CONTAINS", value: p.nameContains, caseSensitive: false } } });
@@ -160,12 +164,78 @@ async function execQueryProductsBySource(propertyId, accessToken, p) {
     if (rangeIdx === "date_range_0") byItem[id].current = m;
     else byItem[id].previous = m;
   }
-  return Object.values(byItem).map((it) => ({
+  const list = Object.values(byItem).map((it) => ({
     id: it.id,
     name: it.name,
     ...(it.current || { viewed: 0, addedToCart: 0, purchased: 0, revenue: 0 }),
     ...(hasComparison ? { previousPeriod: it.previous || { viewed: 0, addedToCart: 0, purchased: 0, revenue: 0 } } : {})
   }));
+  const total = data.rowCount || 0;
+  return { rows: list, totalRowsInGA4: total, moreRowsExist: total > (data.rows || []).length };
+}
+
+
+// ── Alat 4: spisak svih dostupnih GA4 metrika i dimenzija za ovaj nalog (ukljucujuci custom polja) ──
+async function execListFields(propertyId, accessToken, p) {
+  const r = await fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}/metadata`, {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error?.message || JSON.stringify(data));
+  const q = String(p.search || "").toLowerCase().trim();
+  const pick = (arr) => (arr || [])
+    .filter((f) => !q || String(f.apiName).toLowerCase().includes(q) || String(f.uiName || "").toLowerCase().includes(q) || String(f.category || "").toLowerCase().includes(q))
+    .map((f) => ({ apiName: f.apiName, name: f.uiName, category: f.category, ...(f.customDefinition ? { custom: true } : {}) }));
+  const dims = pick(data.dimensions), mets = pick(data.metrics);
+  const cap = 120;
+  return {
+    dimensions: dims.slice(0, cap), metrics: mets.slice(0, cap),
+    note: (dims.length > cap || mets.length > cap) ? "Lista je skracena - suzi pretragu parametrom search." : undefined
+  };
+}
+
+// ── Alat 5: opsti GA4 izvestaj (bilo koje dimenzije i metrike koje nalog ima) ──
+async function execRunReport(propertyId, accessToken, p) {
+  const dims = (Array.isArray(p.dimensions) ? p.dimensions : []).slice(0, 5);
+  const mets = (Array.isArray(p.metrics) ? p.metrics : []).slice(0, 8);
+  if (!mets.length) return { error: "Potrebna je bar jedna metrika." };
+  const dateRanges = [{ startDate: p.startDate, endDate: p.endDate }];
+  const hasComparison = !!(p.previousStartDate && p.previousEndDate);
+  if (hasComparison) dateRanges.push({ startDate: p.previousStartDate, endDate: p.previousEndDate });
+  const body = {
+    dateRanges,
+    dimensions: dims.map((name) => ({ name })),
+    metrics: mets.map((name) => ({ name })),
+    limit: Math.min(Math.max(p.limit || 25, 1), 250)
+  };
+  if (p.orderBy) {
+    body.orderBys = [mets.includes(p.orderBy)
+      ? { metric: { metricName: p.orderBy }, desc: p.orderDesc !== false }
+      : { dimension: { dimensionName: p.orderBy }, desc: p.orderDesc === true }];
+  }
+  const matchMap = { contains: "CONTAINS", exact: "EXACT", begins_with: "BEGINS_WITH", ends_with: "ENDS_WITH" };
+  const filters = (Array.isArray(p.filters) ? p.filters : []).slice(0, 5).filter((f) => f && f.field && f.value != null).map((f) => ({
+    filter: { fieldName: f.field, stringFilter: { matchType: matchMap[f.match] || "CONTAINS", value: String(f.value), caseSensitive: false } }
+  }));
+  if (filters.length === 1) body.dimensionFilter = filters[0];
+  else if (filters.length > 1) body.dimensionFilter = { andGroup: { expressions: filters } };
+
+  const data = await ga4Fetch(propertyId, accessToken, body);
+  const dimHeaders = (data.dimensionHeaders || []).map((h) => h.name);
+  const metHeaders = (data.metricHeaders || []).map((h) => h.name);
+  const rows = (data.rows || []).map((row) => {
+    const o = {};
+    row.dimensionValues.forEach((v, i) => { o[dimHeaders[i] || `dim${i}`] = v.value; });
+    row.metricValues.forEach((v, i) => { const n = parseFloat(v.value); o[metHeaders[i] || `met${i}`] = isNaN(n) ? v.value : n; });
+    return o;
+  });
+  const total = data.rowCount || 0;
+  return {
+    rows,
+    ...(hasComparison ? { note: "Kolona dateRange: date_range_0 = trenutni period, date_range_1 = prethodni period." } : {}),
+    totalRowsInGA4: total,
+    moreRowsExist: total > rows.length
+  };
 }
 
 const tools = [
@@ -188,7 +258,7 @@ const tools = [
   },
   {
     name: "query_campaigns",
-    description: "Vraća GA4 metrike na nivou kampanje/saobraćaja (sesije, konverzije, prihod) za dati period. Opciono filtrira po nazivu kampanje (sadrži tekst) ili izvoru saobraćaja, opciono poredi sa prethodnim periodom.",
+    description: "Vraća GA4 metrike na nivou kampanje/saobraćaja (sesije, kupovine = broj transakcija, prihod) za dati period. Opciono filtrira po nazivu kampanje (sadrži tekst) ili izvoru saobraćaja, opciono poredi sa prethodnim periodom.",
     input_schema: {
       type: "object",
       properties: {
@@ -198,7 +268,7 @@ const tools = [
         previousEndDate: { type: "string" },
         campaignNameContains: { type: "string", description: "Opciono - vraća samo kampanje čiji naziv sadrži ovaj tekst." },
         sourceContains: { type: "string", description: "Opciono - filtrira po izvoru, npr 'facebook', 'google', 'tiktok'." },
-        orderBy: { type: "string", enum: ["sessions", "conversions", "revenue"] },
+        orderBy: { type: "string", enum: ["sessions", "purchases", "revenue"] },
         limit: { type: "integer" }
       },
       required: ["startDate", "endDate"]
@@ -221,6 +291,48 @@ const tools = [
       },
       required: ["startDate", "endDate", "sourceContains"]
     }
+  },
+  {
+    name: "list_available_fields",
+    description: "Vraća spisak GA4 dimenzija i metrika dostupnih za ovaj nalog (apiName, naziv, kategorija; custom polja klijenta su oznacena). Koristi ga kad nisi siguran kako se tacno zove polje za run_report, ili kad pitanje trazi nesto neuobicajeno/custom. Parametar search suzava listu (npr. 'advertiser', 'device', 'country', 'landing', 'event').",
+    input_schema: {
+      type: "object",
+      properties: {
+        search: { type: "string", description: "Opciono - deo naziva ili kategorije polja, npr. 'advertiser' (Google Ads trosak), 'device', 'country', 'page', 'event', 'user'." }
+      }
+    }
+  },
+  {
+    name: "run_report",
+    description: "Opsti GA4 izvestaj sa bilo kojim dimenzijama i metrikama koje nalog ima. Koristi ga za sve sto tri specijalizovana alata ne pokrivaju: kanali (sessionDefaultChannelGroup), izvor/medijum (sessionSourceMedium), uredjaji (deviceCategory), zemlje/gradovi (country, city), landing stranice (landingPage), kretanje po danima (date), dogadjaji (eventName), korisnici (totalUsers, newUsers), angazovanost (engagementRate, bounceRate), Google Ads trosak i ROAS iz GA4 (advertiserAdCost, advertiserAdClicks, advertiserAdImpressions, returnOnAdSpend, sa dimenzijom sessionGoogleAdsCampaignName), kategorije proizvoda (itemCategory). Nazive polja uvek pisi kao GA4 apiName. Ako GA4 vrati gresku o nekompatibilnim poljima, promeni kombinaciju i pokusaj ponovo.",
+    input_schema: {
+      type: "object",
+      properties: {
+        startDate: { type: "string", description: "Pocetak perioda (YYYY-MM-DD ili '30daysAgo', '7daysAgo', 'yesterday', 'today')." },
+        endDate: { type: "string" },
+        previousStartDate: { type: "string", description: "Opciono - pocetak perioda za poredjenje." },
+        previousEndDate: { type: "string" },
+        dimensions: { type: "array", items: { type: "string" }, description: "Do 5 GA4 dimenzija (apiName), npr. ['sessionDefaultChannelGroup'] ili ['date']. Moze i prazno za ukupan zbir." },
+        metrics: { type: "array", items: { type: "string" }, description: "1 do 8 GA4 metrika (apiName), npr. ['sessions','totalRevenue','transactions']." },
+        filters: {
+          type: "array",
+          description: "Opciono - do 5 filtera po dimenzijama (svi moraju da vaze).",
+          items: {
+            type: "object",
+            properties: {
+              field: { type: "string", description: "GA4 dimenzija (apiName)." },
+              match: { type: "string", enum: ["contains", "exact", "begins_with", "ends_with"] },
+              value: { type: "string" }
+            },
+            required: ["field", "value"]
+          }
+        },
+        orderBy: { type: "string", description: "Opciono - metrika ili dimenzija po kojoj se sortira." },
+        orderDesc: { type: "boolean", description: "Opciono - opadajuce (podrazumevano za metrike)." },
+        limit: { type: "integer", description: "Broj redova, podrazumevano 25, najvise 250." }
+      },
+      required: ["startDate", "endDate", "metrics"]
+    }
   }
 ];
 
@@ -228,16 +340,20 @@ function buildSystemPrompt(sr, todayStr, clientName, currency) {
   if (sr) {
     return `Ti si AI asistent koji odgovara na pitanja o GA4 (Google Analytics 4) podacima za e-commerce sajt klijenta "${clientName}". Današnji datum je ${todayStr}. VAŽNO: svi novčani iznosi koje dobiješ od alata su u valuti ${currency} - kad navodiš iznose u odgovoru, uvek koristi ovu valutu (npr. "${currency} 123" ili odgovarajući simbol ako postoji), NIKAD ne pretpostavljaj drugu valutu poput EUR ako klijent koristi nešto drugo.
 
-Imaš dva alata za dobijanje stvarnih podataka: query_products (nivo proizvoda) i query_campaigns (nivo kampanje/saobraćaja). NIKAD ne izmišljaj brojeve - uvek pozovi odgovarajući alat da dobiješ prave podatke pre nego što odgovoriš.
+Imaš pet alata za dobijanje stvarnih podataka (detalji u pravilima ispod). NIKAD ne izmišljaj brojeve - uvek pozovi odgovarajući alat da dobiješ prave podatke pre nego što odgovoriš.
 
 Pravila:
 - Piši isključivo na srpskom jeziku, ekavski (ne "prosječan" već "prosečan", ne "također" već "takođe", ne "riječi" već "reči", ne "tjedan" već "nedelja").
 - Ne koristi markdown formatiranje (bez **, #, tabela) - piši običnim, kratkim tekstom.
 - Budi koncizan - obično je 2-4 rečenice dovoljno, osim ako pitanje eksplicitno traži listu/nabrajanje.
 - Ako je pitanje nejasno (npr. "najbolji proizvod" bez definisanog merila), izaberi razumnu pretpostavku (npr. po prihodu) i to kratko napomeni ("Gledao sam po prihodu - javi ako si mislio nešto drugo").
-- Ako pitanje traži nešto što GA4 ne prati (profit, marža, troškovi, plate, zalihe i slično), jasno reci da GA4 to ne prati, i predloži šta GA4 STVARNO zna da pokaže umesto toga.
+- Ako pitanje traži nešto što GA4 ne prati (profit, marža, plate, zalihe i slično), jasno reci da GA4 to ne prati, i predloži šta GA4 STVARNO zna da pokaže umesto toga.
+- Troškove oglašavanja GA4 ima SAMO kad je nalog povezan sa Google Ads: tada preko run_report postoje metrike advertiserAdCost (trošak), advertiserAdClicks, advertiserAdImpressions i returnOnAdSpend (ROAS), uz dimenziju sessionGoogleAdsCampaignName za raščlanjavanje po kampanji. Ako te metrike vrate 0 ili grešku, reci da podaci o trošku nisu dostupni u GA4 za ovaj nalog. Trošak Meta i drugih platformi obično NIJE u GA4 - to jasno reci, ne izmišljaj.
 - Ako za traženi period/proizvod/kampanju nema podataka, jasno to reci - nikad ne izmišljaj brojeve.
 - Imaš TRI alata: query_products (proizvod-nivo, bez filtera po izvoru), query_campaigns (kampanja/saobraćaj-nivo), i query_products_by_source (proizvod-nivo, ALI filtrirano po konkretnom izvoru/platformi). Ako pitanje pominje SAMO "kampanju" ili izvor/kanal (bez konkretnog proizvoda), koristi query_campaigns. Ako pitanje pominje SAMO "proizvod" (bez izvora/platforme), koristi query_products. Ako pitanje KOMBINUJE proizvod I izvor/platformu istovremeno (npr. "koji proizvod je najprodavaniji preko Meta oglasa"), koristi query_products_by_source.
+- Pored ta tri, imaš i run_report (opšti GA4 izveštaj sa bilo kojim dimenzijama i metrikama) i list_available_fields (spisak polja koja nalog ima). Za pitanja o proizvodima i kampanjama prvo koristi tri specijalizovana alata. Za SVE ostalo (kanali, izvor/medijum, uređaji, zemlje, gradovi, landing stranice, kretanje po danima, događaji, korisnici, angažovanost, Google Ads trošak i ROAS iz GA4, kategorije proizvoda) koristi run_report. Ako nisi siguran kako se polje tačno zove, ili pitanje traži nešto neuobičajeno (custom polja klijenta), prvo pozovi list_available_fields sa kratkim search pojmom.
+- Svaki alat vraća moreRowsExist i totalRowsInGA4. Ako je moreRowsExist=true a pitanje traži ukupno ili "sve", pozovi alat ponovo sa većim limitom (do 250) ili preciznijim filterom umesto da korisniku pričaš o ograničenjima. Tek ako ni 250 redova nije dovoljno, kratko napomeni da je prikazan deo.
+- Metrika "kupovine" (purchases/transactions) je broj stvarnih kupovina, ne svih konverzija/ciljeva.
 - Za pitanja o rastu/padu/promeni u odnosu na prethodni period, uvek prosledi i previousStartDate/previousEndDate alatu da dobiješ oba perioda u jednom pozivu.
 - Ako alat vrati više redova sa sličnim/istim osnovnim nazivom proizvoda (varijante - npr. različite boje ili veličine, svaka sa svojim ID-om), NIKAD ih sam ne sabiraj u odgovoru. Navedi tačan broj za tačno onaj red (ID) koji odgovara pitanju, i ako postoji više sličnih varijanti, to pomeni ("postoji i nekoliko drugih varijanti ovog proizvoda sa sličnim imenom").
 - Za period NIKAD sam ne računaj apsolutne datume - uvek koristi GA4-ove ugrađene relativne izraze (npr. "poslednjih 30 dana" = startDate:"30daysAgo", endDate:"yesterday"; "poslednjih 7 dana" = startDate:"7daysAgo", endDate:"yesterday"). Ovo garantuje da se tvoj odgovor tačno poklapa sa onim što app inače prikazuje. Apsolutne datume (YYYY-MM-DD) koristi SAMO ako korisnik eksplicitno navede tačan datum ili mesec.
@@ -248,15 +364,19 @@ Pravila:
   }
   return `You are an AI assistant answering questions about GA4 (Google Analytics 4) data for client "${clientName}"'s e-commerce site. Today's date is ${todayStr}. IMPORTANT: all monetary amounts you get from the tools are in ${currency} currency - when stating amounts in your answer, always use this currency (e.g. "${currency} 123" or the appropriate symbol if one exists), NEVER assume a different currency like EUR if the client uses something else.
 
-You have two tools to get real data: query_products (product-level) and query_campaigns (campaign/traffic-level). NEVER make up numbers - always call the relevant tool to get real data before answering.
+You have five tools to get real data (details in the rules below). NEVER make up numbers - always call the relevant tool to get real data before answering.
 
 Rules:
 - Write in English, no markdown formatting (no **, #, tables) - plain, concise text.
 - Be concise - 2-4 sentences is usually enough, unless the question explicitly asks for a list.
 - If the question is ambiguous (e.g. "best product" with no defined metric), pick a reasonable assumption (e.g. by revenue) and briefly note it ("I looked at this by revenue - let me know if you meant something else").
-- If the question asks for something GA4 doesn't track (profit, margin, costs, payroll, inventory, etc.), clearly say GA4 doesn't track that, and suggest what GA4 actually can show instead.
+- If the question asks for something GA4 doesn't track (profit, margin, payroll, inventory, etc.), clearly say GA4 doesn't track that, and suggest what GA4 actually can show instead.
+- GA4 has ad COSTS only when the property is linked to Google Ads: then run_report offers the metrics advertiserAdCost (cost), advertiserAdClicks, advertiserAdImpressions and returnOnAdSpend (ROAS), with the dimension sessionGoogleAdsCampaignName for a per-campaign breakdown. If those return 0 or an error, say cost data isn't available in GA4 for this property. Meta and other platforms' costs are usually NOT in GA4 - say so clearly, don't make anything up.
 - If there's no data for the requested period/product/campaign, clearly say so - never make up numbers.
 - You have THREE tools: query_products (product-level, no source filter), query_campaigns (campaign/traffic-level), and query_products_by_source (product-level, BUT filtered by a specific source/platform). If the question mentions ONLY a "campaign" or traffic source/channel (no specific product), use query_campaigns. If it mentions ONLY a "product" (no source/platform), use query_products. If the question COMBINES a product AND a source/platform (e.g. "which product sells best via Meta ads"), use query_products_by_source.
+- Besides those three, you also have run_report (a general GA4 report with any dimensions and metrics) and list_available_fields (the list of fields the property has). For product and campaign questions use the three specialized tools first. For EVERYTHING else (channels, source/medium, devices, countries, cities, landing pages, daily trends, events, users, engagement, Google Ads cost and ROAS from GA4, product categories) use run_report. If you're not sure of a field's exact name, or the question asks for something unusual (client custom fields), call list_available_fields with a short search term first.
+- Every tool returns moreRowsExist and totalRowsInGA4. If moreRowsExist=true and the question asks for a total or "all", call the tool again with a larger limit (up to 250) or a narrower filter instead of telling the user about limits. Only if even 250 rows aren't enough, briefly note that a subset is shown.
+- The "purchases" metric (transactions) is the number of actual purchases, not all conversions/goals.
 - For growth/drop/change questions, always pass previousStartDate/previousEndDate to the tool to get both periods in one call.
 - If the tool returns multiple rows with similar/identical base product names (variants - e.g. different colors or sizes, each with its own ID), NEVER sum them yourself in your answer. State the exact number for the specific row (ID) that matches the question, and if several similar variants exist, mention that ("there are also a few other variants of this product with a similar name").
 - Never compute absolute dates yourself for periods - always use GA4's built-in relative expressions (e.g. "last 30 days" = startDate:"30daysAgo", endDate:"yesterday"; "last 7 days" = startDate:"7daysAgo", endDate:"yesterday"). This guarantees your answer exactly matches what the app otherwise displays. Only use absolute dates (YYYY-MM-DD) if the user explicitly names a specific date or month.
@@ -305,13 +425,13 @@ export default async function handler(req, res) {
     ];
 
     let finalText = "";
-    for (let step = 0; step < 5; step++) {
+    for (let step = 0; step < 8; step++) {
       const apiRes = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
-          max_tokens: 1000,
+          max_tokens: 1500,
           system: systemPrompt,
           tools,
           messages
@@ -330,11 +450,15 @@ export default async function handler(req, res) {
             if (block.name === "query_products") result = await execQueryProducts(property_id, accessToken, block.input);
             else if (block.name === "query_campaigns") result = await execQueryCampaigns(property_id, accessToken, block.input);
             else if (block.name === "query_products_by_source") result = await execQueryProductsBySource(property_id, accessToken, block.input);
+            else if (block.name === "list_available_fields") result = await execListFields(property_id, accessToken, block.input || {});
+            else if (block.name === "run_report") result = await execRunReport(property_id, accessToken, block.input || {});
             else result = { error: "Unknown tool" };
           } catch (e) {
             result = { error: e.message };
           }
-          toolResults.push({ type: "tool_result", tool_use_id: block.id, content: JSON.stringify(result) });
+          let content = JSON.stringify(result);
+          if (content.length > 60000) content = content.slice(0, 60000) + ' ... [skraceno - koristi manji limit ili precizniji filter]';
+          toolResults.push({ type: "tool_result", tool_use_id: block.id, content });
         }
         messages.push({ role: "user", content: toolResults });
         continue;
@@ -352,6 +476,11 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ answer: finalText });
   } catch (err) {
+    if (String(err.message || "").includes("invalid_grant")) {
+      return res.status(200).json({ answer: sr
+        ? "Veza sa GA4 nalogom ovog klijenta je istekla. U Clients otkači GA4 za ovog klijenta i ponovo ga poveži, pa postavi pitanje ponovo."
+        : "The GA4 connection for this client has expired. In Clients, disconnect GA4 for this client and connect it again, then ask your question again." });
+    }
     return res.status(500).json({ error: err.message });
   }
 }
