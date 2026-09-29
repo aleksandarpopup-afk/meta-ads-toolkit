@@ -4000,6 +4000,64 @@ function useWindowSize(){
   return w;
 }
 
+// ── OBAVEŠTENJA: izbor i ukljucivanje push obavestenja ─────────────────────
+function NotifModal({lang,notifStatus,onEnable,onClose}){
+  const sr=lang==="sr";
+  const [prefs,setPrefs]=useState(null);
+  const [saving,setSaving]=useState(false);
+  const [enabling,setEnabling]=useState(false);
+  const [err,setErr]=useState("");
+  useEffect(()=>{
+    const uid=localStorage.getItem("mat_user_id");
+    if(!uid){ setPrefs({budget_digest:true,gads_alerts:true}); return; }
+    fetch(`/api/notification-prefs?user_id=${uid}`).then(r=>r.ok?r.json():null).then(d=>setPrefs(d||{budget_digest:true,gads_alerts:true})).catch(()=>setPrefs({budget_digest:true,gads_alerts:true}));
+  },[]);
+  const toggle=async k=>{
+    const next={...prefs,[k]:!prefs[k]};
+    setPrefs(next); setSaving(true); setErr("");
+    try{
+      const uid=await getOrCreateUser();
+      const r=await fetch("/api/notification-prefs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:uid,...next})});
+      if(!r.ok) throw new Error();
+    }catch(e){ setPrefs(prefs); setErr(sr?"Izmena nije sačuvana. Pokušaj ponovo.":"The change was not saved. Please try again."); }
+    setSaving(false);
+  };
+  const enable=async()=>{ setEnabling(true); await onEnable(); setEnabling(false); };
+  const isIOS=typeof navigator!=="undefined"&&/iPhone|iPad|iPod/.test(navigator.userAgent||"");
+  const items=[
+    {k:"budget_digest",t:sr?"Jutarnji pregled budžeta":"Morning budget overview",d:sr?"Svakog radnog dana ujutru: koliko budžeta je u underspend-u, overspend-u, na tempu i koliko nema svež unos potrošnje.":"Every workday morning: how many budgets are underspending, overspending, on pace and how many lack a fresh spend entry."},
+    {k:"gads_alerts",t:sr?"Upozorenja za Google Ads kampanje":"Google Ads campaign alerts",d:sr?"Samo kad postoji problem: kampanja je juče stala (a inače troši) ili je potrošila bar 3× više nego inače. Ponedeljkom se proverava i vikend.":"Only when there's a problem: a campaign stopped yesterday (while it normally spends) or spent at least 3× more than usual. On Mondays the weekend is checked too."},
+  ];
+  return <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+    <div onClick={e=>e.stopPropagation()} role="dialog" aria-modal="true" style={{background:"#12121f",border:`1px solid ${C.brd}`,borderRadius:16,padding:"20px",width:"100%",maxWidth:460,color:C.txt}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+        <div style={{fontWeight:800,fontSize:17}}>🔔 {sr?"Obaveštenja":"Notifications"}</div>
+        <button onClick={onClose} aria-label={sr?"Zatvori":"Close"} style={{background:"rgba(255,255,255,0.06)",border:`1px solid ${C.brd}`,borderRadius:8,color:C.txt,padding:"4px 10px",cursor:"pointer"}}>✕</button>
+      </div>
+      {notifStatus!=="granted"&&<div style={{background:"rgba(251,191,36,0.08)",border:"1px solid rgba(251,191,36,0.3)",borderRadius:12,padding:"12px",marginBottom:14,fontSize:13,lineHeight:1.5}}>
+        {notifStatus==="denied"
+          ?(sr?"Obaveštenja su blokirana u ovom browseru. Dozvoli ih u podešavanjima browsera za ovaj sajt (ikonica katanca pored adrese), pa osveži stranicu.":"Notifications are blocked in this browser. Allow them in the browser's site settings (padlock icon next to the address), then refresh the page.")
+          :<>{sr?"Obaveštenja na ovom uređaju još nisu uključena.":"Notifications aren't enabled on this device yet."}
+            <div style={{marginTop:10}}><button onClick={enable} disabled={enabling} style={{padding:"9px 14px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#F59E0B,#D97706)",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",opacity:enabling?0.6:1}}>{enabling?"...":(sr?"Uključi na ovom uređaju":"Enable on this device")}</button></div></>}
+        {isIOS&&<div style={{color:C.mut,fontSize:12,marginTop:8}}>{sr?"Na iPhone-u obaveštenja rade samo ako je app dodat na početni ekran (Share → Add to Home Screen).":"On iPhone, notifications only work if the app is added to the home screen (Share → Add to Home Screen)."}</div>}
+      </div>}
+      {notifStatus==="granted"&&<div style={{color:C.grn,fontSize:12,fontWeight:600,marginBottom:12}}>✓ {sr?"Obaveštenja su uključena na ovom uređaju.":"Notifications are enabled on this device."}</div>}
+      {!prefs?<div style={{color:C.acl,fontSize:13}}>✦ {sr?"Učitavam...":"Loading..."}</div>:items.map(it=><div key={it.k} style={{display:"flex",gap:12,alignItems:"flex-start",padding:"12px 0",borderTop:`1px solid ${C.brd}`}}>
+        <div style={{flex:1}}>
+          <div style={{fontWeight:700,fontSize:14}}>{it.t}</div>
+          <div style={{color:C.mut,fontSize:12,lineHeight:1.5,marginTop:3}}>{it.d}</div>
+        </div>
+        <button role="switch" aria-checked={!!prefs[it.k]} onClick={()=>toggle(it.k)} disabled={saving} aria-label={it.t}
+          style={{width:44,height:24,borderRadius:12,border:"none",cursor:"pointer",flexShrink:0,marginTop:2,position:"relative",background:prefs[it.k]?"#10B981":"rgba(255,255,255,0.15)",transition:"background .2s"}}>
+          <span style={{position:"absolute",top:3,left:prefs[it.k]?23:3,width:18,height:18,borderRadius:9,background:"#fff",transition:"left .2s"}}/>
+        </button>
+      </div>)}
+      {err&&<div style={{color:C.red,fontSize:12,marginTop:6}}>{err}</div>}
+      <div style={{color:C.dim,fontSize:11,marginTop:10,lineHeight:1.5}}>{sr?"Obaveštenja stižu radnim danima ujutru. Izbor važi za sve tvoje uređaje.":"Notifications arrive on workday mornings. The choice applies to all your devices."}</div>
+    </div>
+  </div>;
+}
+
 export default function App(){
   const [lang,setLang]=useState(()=>localStorage.getItem("mat_lang")||"sr");
   const [mod,setMod]=useState(()=>{
@@ -4008,6 +4066,7 @@ export default function App(){
     return m?parseInt(m):null;
   });
   const [showQR,setShowQR]=useState(false);
+  const [showNotif,setShowNotif]=useState(false);
   const [notifStatus,setNotifStatus]=useState(()=>
     typeof Notification!=="undefined"?Notification.permission:"default"
   );
@@ -4199,6 +4258,7 @@ export default function App(){
   // ── MOBILE ─────────────────────────────────────────────────────────────────
   if(!isDesktop) return <div style={{minHeight:"100vh",background:C.bg,fontFamily:"'Plus Jakarta Sans',sans-serif",color:C.txt}}>
     {showQR&&<QRModal/>}
+    {showNotif&&<NotifModal lang={lang} notifStatus={notifStatus} onEnable={handleEnableNotif} onClose={()=>setShowNotif(false)}/>}
     <style>{CARD_CSS}</style>
     <div style={{background:"rgba(255,255,255,0.02)",borderBottom:`1px solid ${C.brd}`,padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:100,backdropFilter:"blur(10px)"}}>
       <div style={{display:"flex",alignItems:"center",gap:9,cursor:mod?"pointer":"default"}} onClick={()=>goMod(null)}>
@@ -4208,7 +4268,7 @@ export default function App(){
       <div style={{display:"flex",alignItems:"center",gap:6}}>
         {!showHome&&<button onClick={()=>goMod(null)} style={{background:"rgba(255,255,255,0.08)",border:"none",borderRadius:20,color:"#fff",fontSize:12,fontWeight:600,padding:"7px 14px",cursor:"pointer"}}>{t.back}</button>}
         <button onClick={()=>setShowQR(true)} style={{background:"rgba(99,102,241,0.2)",border:"none",borderRadius:20,color:C.acl,fontSize:12,fontWeight:600,padding:"7px 12px",cursor:"pointer"}} title="Poveži telefon">📱</button>
-        <button onClick={handleEnableNotif} style={{background:notifStatus==="granted"?"rgba(52,211,153,0.2)":"rgba(251,191,36,0.2)",border:"none",borderRadius:20,color:notifStatus==="granted"?C.grn:C.yel,fontSize:14,padding:"7px 10px",cursor:"pointer"}} title="Notifikacije">🔔</button>
+        <button onClick={()=>setShowNotif(true)} aria-label={lang==="sr"?"Obaveštenja":"Notifications"} style={{background:notifStatus==="granted"?"rgba(52,211,153,0.2)":"rgba(251,191,36,0.2)",border:"none",borderRadius:20,color:notifStatus==="granted"?C.grn:C.yel,fontSize:14,padding:"7px 10px",cursor:"pointer"}} title={lang==="sr"?"Obaveštenja":"Notifications"}>🔔</button>
         {["sr","en"].map(l=><button key={l} onClick={()=>setLang(l)} style={{padding:"6px 12px",borderRadius:20,fontSize:12,fontWeight:700,cursor:"pointer",border:"none",background:lang===l?"rgba(99,102,241,0.3)":"rgba(255,255,255,0.07)",color:lang===l?"#A5B4FC":"rgba(255,255,255,0.4)"}}>{l.toUpperCase()}</button>)}
       </div>
     </div>
@@ -4237,6 +4297,7 @@ export default function App(){
   // ── DESKTOP ────────────────────────────────────────────────────────────────
   return <div style={{height:"100vh",background:C.bg,fontFamily:"'Plus Jakarta Sans',sans-serif",color:C.txt,display:"flex",flexDirection:"column",overflow:"hidden"}}>
     {showQR&&<QRModal/>}
+    {showNotif&&<NotifModal lang={lang} notifStatus={notifStatus} onEnable={handleEnableNotif} onClose={()=>setShowNotif(false)}/>}
     <style>{CARD_CSS}</style>
 
     {/* TOP NAV */}
@@ -4261,10 +4322,9 @@ export default function App(){
           <button onClick={()=>setShowQR(true)} style={{background:"rgba(99,102,241,0.15)",border:"1px solid rgba(99,102,241,0.3)",borderRadius:10,color:C.acl,fontSize:12,fontWeight:600,padding:"7px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:6}} title="Poveži telefon">
             📱 {lang==="sr"?"Poveži telefon":"Connect Phone"}
           </button>
-          {notifStatus!=="granted"&&<button onClick={handleEnableNotif} style={{background:"rgba(251,191,36,0.15)",border:"1px solid rgba(251,191,36,0.3)",borderRadius:10,color:C.yel,fontSize:12,fontWeight:600,padding:"7px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:6}} title="Uključi notifikacije">
-            🔔 {lang==="sr"?"Notifikacije":"Notifications"}
-          </button>}
-          {notifStatus==="granted"&&<div style={{color:C.grn,fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4}}>🔔 ✓</div>}
+          <button onClick={()=>setShowNotif(true)} style={{background:notifStatus==="granted"?"rgba(52,211,153,0.12)":"rgba(251,191,36,0.15)",border:`1px solid ${notifStatus==="granted"?"rgba(52,211,153,0.35)":"rgba(251,191,36,0.3)"}`,borderRadius:10,color:notifStatus==="granted"?C.grn:C.yel,fontSize:12,fontWeight:600,padding:"7px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+            🔔 {lang==="sr"?"Obaveštenja":"Notifications"}
+          </button>
           {["sr","en"].map(l=><button key={l} onClick={()=>setLang(l)} style={{padding:"7px 16px",borderRadius:20,fontSize:13,fontWeight:700,cursor:"pointer",border:"none",background:lang===l?"rgba(99,102,241,0.3)":"rgba(255,255,255,0.07)",color:lang===l?"#A5B4FC":"rgba(255,255,255,0.4)"}}>{l.toUpperCase()}</button>)}
         </div>
       </div>
