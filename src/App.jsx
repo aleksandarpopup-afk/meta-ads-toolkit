@@ -1680,6 +1680,7 @@ function RsProductSales({sr,lang,mob,clientId,clientName}){
   const [err,setErr]=useState("");
   const [view,setView]=useState("campaign");
   const [cat,setCat]=useState("");
+  const [camp,setCamp]=useState("");
   const [types,setTypes]=useState({});
   const [q,setQ]=useState("");
   const [inEur,setInEur]=useState(false);
@@ -1687,10 +1688,10 @@ function RsProductSales({sr,lang,mob,clientId,clientName}){
   const [limit,setLimit]=useState(100);
   const [pdfBusy,setPdfBusy]=useState(false);
 
-  useEffect(()=>{ setData(null); setErr(""); },[clientId]);
+  useEffect(()=>{ setData(null); setErr(""); setCat(""); setCamp(""); },[clientId]);
 
   const load=async()=>{
-    setErr(""); setData(null); setOpen(null); setLimit(100);
+    setErr(""); setData(null); setOpen(null); setLimit(100); setCat(""); setCamp("");
     if(!clientId){ setErr(sr?"Izaberi klijenta.":"Choose a client."); return; }
     const r=rsPeriodRange(periodKey,custom);
     if(!r.from||!r.to||r.to<r.from){ setErr(sr?"Proveri period – kraj ne može biti pre početka.":"Check the period – the end can't be before the start."); return; }
@@ -1714,11 +1715,23 @@ function RsProductSales({sr,lang,mob,clientId,clientName}){
   const money=v=>`${rsNum(v*mul)} ${cur==="RSD"?"din":cur}`;
 
   const all=data?data.rows:[];
-  const cats=[...new Set(all.map(r=>r.category).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
   const typeCounts={}; all.forEach(r=>{typeCounts[r.type]=(typeCounts[r.type]||0)+r.revenue;});
   const anyType=Object.values(types).some(Boolean);
   const ql=q.trim().toLowerCase();
-  const rows=all.filter(r=>(!cat||r.category===cat)&&(!anyType||types[r.type])&&(!ql||String(r.itemName).toLowerCase().includes(ql)||String(r.campaign).toLowerCase().includes(ql)||String(r.itemId).includes(ql)));
+  const pass=(r,skip)=>(skip==="cat"||!cat||r.category===cat)&&(skip==="camp"||!camp||r.campaign===camp)&&(!anyType||types[r.type])&&(!ql||String(r.itemName).toLowerCase().includes(ql)||String(r.campaign).toLowerCase().includes(ql)||String(r.itemId).includes(ql));
+  const rows=all.filter(r=>pass(r));
+  const cats=[...new Set(all.filter(r=>pass(r,"cat")).map(r=>r.category).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const campRev={}; all.filter(r=>pass(r,"camp")).forEach(r=>{campRev[r.campaign]=(campRev[r.campaign]||0)+r.revenue;});
+  const camps=Object.keys(campRev).sort((a,b)=>campRev[b]-campRev[a]);
+  const catSelect=(st)=><select value={cat} onChange={e=>{setCat(e.target.value);setLimit(100);setOpen(null);}} style={st} aria-label={sr?"Kategorija":"Category"}>
+    <option value="" style={{color:"#111"}}>{sr?"Sve kategorije":"All categories"}</option>
+    {(cat&&!cats.includes(cat)?[cat,...cats]:cats).map(c=><option key={c} value={c} style={{color:"#111"}}>{c}</option>)}
+  </select>;
+  const campSelect=(st)=><select value={camp} onChange={e=>{setCamp(e.target.value);setLimit(100);setOpen(null);}} style={st} aria-label={sr?"Kampanja":"Campaign"}>
+    <option value="" style={{color:"#111"}}>{sr?"Sve kampanje":"All campaigns"}</option>
+    {(camp&&!camps.includes(camp)?[camp,...camps]:camps).map(c=><option key={c} value={c} style={{color:"#111"}}>{c}</option>)}
+  </select>;
+  const hdrSel={width:"100%",padding:"5px 6px",background:"rgba(255,255,255,0.06)",border:`1px solid ${C.brd}`,borderRadius:7,color:C.txt,fontSize:11,fontWeight:600,outline:"none",maxWidth:220};
   const totQty=rows.reduce((s,r)=>s+r.qty,0), totRev=rows.reduce((s,r)=>s+r.revenue,0);
 
   const group=(keyFn,labelFn)=>{
@@ -1743,7 +1756,7 @@ function RsProductSales({sr,lang,mob,clientId,clientName}){
     md+=`## ${sr?"Po vrsti izvora":"By source type"}\n| ${sr?"Izvor":"Source"} | ${sr?"Komada":"Items"} | ${sr?"Prihod":"Revenue"} | ${sr?"Udeo":"Share"} |\n|---|---|---|---|\n`+typeRows.map(x=>`| ${sr?x.t.sr:x.t.en} | ${rsNum(x.qty)} | ${money(x.rev)} | ${pct(x.rev)} |`).join("\n")+"\n";
     md+=`## ${sr?"Kampanje":"Campaigns"} (top ${Math.min(40,byCampaign.length)})\n| ${sr?"Kampanja":"Campaign"} | ${sr?"Izvor":"Source"} | ${sr?"Komada":"Items"} | ${sr?"Prihod":"Revenue"} | ${sr?"Udeo":"Share"} |\n|---|---|---|---|---|\n`+byCampaign.slice(0,40).map(g=>`| ${esc(g.label)} | ${rsType(g.type,sr).l} | ${rsNum(g.qty)} | ${money(g.revenue)} | ${pct(g.revenue)} |`).join("\n")+"\n";
     md+=`## ${sr?"Najprodavaniji proizvodi":"Top products"} (top ${Math.min(40,byProduct.length)})\n| ${sr?"Proizvod":"Product"} | ${sr?"Kategorija":"Category"} | ${sr?"Komada":"Items"} | ${sr?"Prihod":"Revenue"} | ${sr?"Najviše iz":"Mostly from"} |\n|---|---|---|---|---|\n`+byProduct.slice(0,40).map(g=>{const top=[...g.items].sort((a,b)=>b.revenue-a.revenue)[0];return `| ${esc(g.label)} | ${esc(top.category)} | ${rsNum(g.qty)} | ${money(g.revenue)} | ${esc(top.campaign)} |`;}).join("\n")+"\n";
-    const filt=[cat&&`${sr?"kategorija":"category"}: ${cat}`,anyType&&`${sr?"izvori":"sources"}: ${RS_TYPES.filter(t=>types[t.k]).map(t=>sr?t.sr:t.en).join(", ")}`,ql&&`${sr?"pretraga":"search"}: "${q.trim()}"`].filter(Boolean).join(" · ");
+    const filt=[cat&&`${sr?"kategorija":"category"}: ${cat}`,camp&&`${sr?"kampanja":"campaign"}: ${camp}`,anyType&&`${sr?"izvori":"sources"}: ${RS_TYPES.filter(t=>types[t.k]).map(t=>sr?t.sr:t.en).join(", ")}`,ql&&`${sr?"pretraga":"search"}: "${q.trim()}"`].filter(Boolean).join(" · ");
     const subtitle=`${rsDate(data.period.from,sr)} – ${rsDate(data.period.to,sr)}  ·  ${sr?"Izvor: GA4":"Source: GA4"}${filt?`  ·  ${filt}`:""}`;
     const safe=s=>String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/đ/g,"dj").replace(/Đ/g,"Dj").replace(/[^A-Za-z0-9_-]+/g,"_").replace(/^_+|_+$/g,"");
     try{
@@ -1776,7 +1789,7 @@ function RsProductSales({sr,lang,mob,clientId,clientName}){
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:12}}>
         <div>
           <div style={{fontWeight:800,fontSize:17}}>{rsNum(totQty)} {sr?"komada":"items"} · {money(totRev)}</div>
-          <div style={{color:C.mut,fontSize:12,marginTop:2}}>{rsDate(data.period.from,sr)} – {rsDate(data.period.to,sr)}{(cat||anyType||ql)?` · ${sr?"filtrirano":"filtered"}`:""}</div>
+          <div style={{color:C.mut,fontSize:12,marginTop:2}}>{rsDate(data.period.from,sr)} – {rsDate(data.period.to,sr)}{(cat||camp||anyType||ql)?` · ${sr?"filtrirano":"filtered"}`:""}</div>
         </div>
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
           {data.currency!=="EUR"&&data.eurRate&&<button onClick={()=>setInEur(v=>!v)} style={bpBtn(false)}>{inEur?(data.currency==="RSD"?"din":data.currency):"EUR"}</button>}
@@ -1792,11 +1805,9 @@ function RsProductSales({sr,lang,mob,clientId,clientName}){
           <span style={{color:t.c}}>●</span> {sr?t.sr:t.en}
         </button>)}
       </div>
-      <div style={{display:"grid",gridTemplateColumns:mob?"1fr":"1fr 1fr",gap:10,marginBottom:12}}>
-        <select value={cat} onChange={e=>setCat(e.target.value)} style={bpInp}>
-          <option value="" style={{color:"#111"}}>{sr?"Sve kategorije":"All categories"}</option>
-          {cats.map(c=><option key={c} value={c} style={{color:"#111"}}>{c}</option>)}
-        </select>
+      <div style={{display:"grid",gridTemplateColumns:mob?"1fr":"1fr 1fr 1fr",gap:10,marginBottom:12}}>
+        {catSelect(bpInp)}
+        {campSelect(bpInp)}
         <input value={q} onChange={e=>{setQ(e.target.value);setLimit(100);}} placeholder={sr?"Pretraži proizvod ili kampanju...":"Search product or campaign..."} style={bpInp}/>
       </div>
 
@@ -1835,7 +1846,14 @@ function RsProductSales({sr,lang,mob,clientId,clientName}){
 
       {view==="table"&&rows.length>0&&<div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"8px",overflowX:"auto"}}>
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:680}}>
-          <thead><tr>{["ID",sr?"Proizvod":"Product",sr?"Kategorija":"Category",sr?"Kampanja":"Campaign",sr?"Komada":"Items",sr?"Prihod":"Revenue"].map((hd,i)=><th key={hd} style={{...cell,color:C.mut,fontWeight:600,textAlign:i>=4?"right":"left"}}>{hd}</th>)}</tr></thead>
+          <thead><tr>
+            <th style={{...cell,color:C.mut,fontWeight:600,textAlign:"left"}}>ID</th>
+            <th style={{...cell,color:C.mut,fontWeight:600,textAlign:"left"}}>{sr?"Proizvod":"Product"}</th>
+            <th style={{...cell,color:C.mut,fontWeight:600,textAlign:"left",verticalAlign:"bottom"}}><div style={{marginBottom:4}}>{sr?"Kategorija":"Category"}</div>{catSelect(hdrSel)}</th>
+            <th style={{...cell,color:C.mut,fontWeight:600,textAlign:"left",verticalAlign:"bottom"}}><div style={{marginBottom:4}}>{sr?"Kampanja":"Campaign"}</div>{campSelect(hdrSel)}</th>
+            <th style={{...cell,color:C.mut,fontWeight:600,textAlign:"right",verticalAlign:"bottom"}}>{sr?"Komada":"Items"}</th>
+            <th style={{...cell,color:C.mut,fontWeight:600,textAlign:"right",verticalAlign:"bottom"}}>{sr?"Prihod":"Revenue"}</th>
+          </tr></thead>
           <tbody>{rows.slice(0,limit).map((r,i)=><tr key={i}>
             <td style={{...cell,color:C.mut}}>{r.itemId}</td>
             <td style={{...cell,wordBreak:"break-word"}}>{r.itemName}</td>
