@@ -2174,9 +2174,6 @@ function MyClientsMod({t,lang,goMod}){
   const [clients,setClients]=useState([]);
   const [loading,setLoading]=useState(true);
   const [selected,setSelected]=useState(null);
-  const [analyses,setAnalyses]=useState([]);
-  const [loadingA,setLoadingA]=useState(false);
-  const [expanded,setExpanded]=useState(null);
   const [ga4,setGa4]=useState(null);
   const [ga4Loading,setGa4Loading]=useState(false);
   const [ga4Setup,setGa4Setup]=useState(null);
@@ -2206,16 +2203,10 @@ function MyClientsMod({t,lang,goMod}){
 
   const loadAnalyses=(client)=>{
     setSelected(client);
-    setLoadingA(true);
-    setAnalyses([]);
     setGa4(null);
     setGa4Loading(true);
     setGads(null);
     setGadsLoading(true);
-    fetch(`/api/analyses?client_id=${client.id}&user_id=${localStorage.getItem("mat_user_id")}&limit=20`)
-      .then(r=>r.json())
-      .then(data=>{ setAnalyses(Array.isArray(data)?data:[]); setLoadingA(false); })
-      .catch(()=>setLoadingA(false));
     fetch(`/api/ga4-connect?client_id=${client.id}`)
       .then(r=>r.json())
       .then(data=>{ setGa4(Array.isArray(data)&&data.length>0?data[0]:null); setGa4Loading(false); })
@@ -2344,22 +2335,8 @@ function MyClientsMod({t,lang,goMod}){
     setGadsSaving(false);
   };
 
-  const toolLabel=(tool)=>{
-    const map={import:sr?"Uvoz":"Import",bookmark:sr?"Uvoz":"Import",report_single:"Report Generator",report_compare:"Report Generator (Comparison)"};
-    return map[tool]||tool;
-  };
-
-  const deleteAnalysis=async(id)=>{
-    if(!window.confirm(sr?"Obriši ovu analizu?":"Delete this analysis?")) return;
-    try{
-      const r=await fetch(`/api/analyses?id=${id}&user_id=${localStorage.getItem("mat_user_id")}`,{method:"DELETE"});
-      if(!r.ok) throw new Error();
-      setAnalyses(prev=>prev.filter(a=>a.id!==id));
-    }catch(e){ alert(sr?"Analiza nije obrisana. Pokušaj ponovo.":"The analysis was not deleted. Please try again."); }
-  };
-
   const deleteClient=async(id)=>{
-    if(!window.confirm(sr?"Obriši klijenta i sve njegove analize?":"Delete client and all their analyses?")) return;
+    if(!window.confirm(sr?"Obrisati klijenta i sve njegove podatke (veze sa GA4 i Google Ads, budžete, uvoze)?":"Delete the client and all their data (GA4 and Google Ads connections, budgets, imports)?")) return;
     try{
       const r=await fetch(`/api/clients?id=${id}&user_id=${localStorage.getItem("mat_user_id")}`,{method:"DELETE"});
       if(!r.ok) throw new Error();
@@ -2414,7 +2391,7 @@ function MyClientsMod({t,lang,goMod}){
 
   if(selected) return <div>
     <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
-      <button onClick={()=>{setSelected(null);setAnalyses([]);}} style={{background:"none",border:"none",color:C.acl,cursor:"pointer",fontSize:13,fontWeight:600,padding:0}}>← {sr?"Svi klijenti":"All clients"}</button>
+      <button onClick={()=>{setSelected(null);}} style={{background:"none",border:"none",color:C.acl,cursor:"pointer",fontSize:13,fontWeight:600,padding:0}}>← {sr?"Svi klijenti":"All clients"}</button>
     </div>
     {!renaming&&<div style={{display:"flex",alignItems:"center",gap:10,margin:"0 0 4px"}}>
       <h2 style={{fontSize:20,fontWeight:800,margin:0}}>{selected.name}</h2>
@@ -2425,7 +2402,7 @@ function MyClientsMod({t,lang,goMod}){
       <button onClick={saveRename} disabled={renamingSaving||!renameValue.trim()} style={{background:"rgba(52,211,153,0.15)",border:"1px solid rgba(52,211,153,0.3)",borderRadius:8,color:C.grn,fontSize:12,fontWeight:700,padding:"8px 12px",cursor:"pointer"}}>{sr?"Sačuvaj":"Save"}</button>
       <button onClick={()=>setRenaming(false)} style={{background:"none",border:"none",color:C.mut,cursor:"pointer",fontSize:12,padding:"8px"}}>{sr?"Otkaži":"Cancel"}</button>
     </div>}
-    <p style={{color:C.mut,fontSize:13,margin:"0 0 16px"}}>{sr?"Istorija analiza":"Analysis history"}</p>
+    <p style={{color:C.mut,fontSize:13,margin:"0 0 16px"}}>{sr?"Povezani nalozi":"Connected accounts"}</p>
 
     <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px 16px",marginBottom:20}}>
       {ga4Loading&&<div style={{color:C.mut,fontSize:12}}>{sr?"Proveravam GA4 status...":"Checking GA4 status..."}</div>}
@@ -2488,35 +2465,6 @@ function MyClientsMod({t,lang,goMod}){
 
     {gadsError&&<div style={{color:C.red,fontSize:12,marginBottom:16}}>⚠️ {sr?"Greška pri povezivanju Google Ads":"Google Ads connection error"}: {gadsError}</div>}
 
-    {loadingA&&<div style={{textAlign:"center",padding:"24px 0"}}>
-      <div style={{color:C.acl,fontSize:14}}>✦ {sr?"Učitavam...":"Loading..."}</div>
-    </div>}
-
-    {!loadingA&&analyses.length===0&&<div style={{textAlign:"center",padding:"32px 0"}}>
-      <div style={{fontSize:32,marginBottom:10}}>📭</div>
-      <div style={{color:C.mut,fontSize:14}}>{sr?"Nema analiza za ovog klijenta.":"No analyses for this client."}</div>
-    </div>}
-
-    {analyses.map((a,i)=><div key={a.id} style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,marginBottom:10,overflow:"hidden"}}>
-      <div style={{padding:"14px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <div onClick={()=>setExpanded(expanded===i?null:i)} style={{cursor:"pointer",flex:1}}>
-          <div style={{color:C.txt,fontWeight:700,fontSize:13}}>{toolLabel(a.tool)}</div>
-          <div style={{color:C.mut,fontSize:11,marginTop:3}}>
-            {a.period_from&&a.period_to?`${a.period_from} → ${a.period_to}`:a.period_from||""}
-            {" · "}{new Date(a.created_at).toLocaleDateString(sr?"sr-RS":"en-US")}
-          </div>
-        </div>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <button onClick={()=>deleteAnalysis(a.id)} style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.2)",borderRadius:8,color:C.red,fontSize:11,fontWeight:600,padding:"4px 10px",cursor:"pointer"}}>
-            {sr?"Obriši":"Delete"}
-          </button>
-          <span onClick={()=>setExpanded(expanded===i?null:i)} style={{color:C.mut,fontSize:12,cursor:"pointer"}}>{expanded===i?"▲":"▼"}</span>
-        </div>
-      </div>
-      {expanded===i&&<div style={{padding:"0 16px 16px",borderTop:`1px solid ${C.brd}`}}>
-        <div style={{color:"rgba(255,255,255,0.75)",fontSize:12,lineHeight:1.8,whiteSpace:"pre-wrap",paddingTop:12}}>{a.analysis_text}</div>
-      </div>}
-    </div>)}
   </div>;
 
   return <div>
