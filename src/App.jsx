@@ -2872,10 +2872,12 @@ ${summary}`;
         </div>
       </div>}
 
+      {filter==="all"&&data.catalogTruncated&&<div style={{color:C.mut,fontSize:12,marginBottom:10}}>{sr?`Katalog ima ${data.totalProducts} proizvoda u ovom periodu – prikazano je ${data.catalog.length} najvažnijih (svi sa kupovinom ili korpom, pa najgledaniji). Ukupan prihod je za ceo katalog.`:`The catalog has ${data.totalProducts} products in this period – the ${data.catalog.length} most relevant are shown (all with purchases or carts, then most viewed). Total revenue covers the full catalog.`}</div>}
+
       {filter==="sources"&&<div style={{marginBottom:10}}>
         <Lbl c={sr?"💰 Plaćeno":"💰 Paid"}/>
         <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
-          {["meta","google","tiktok"].map(p=><button key={p} onClick={()=>{setPaidOrganic("paid");setSourcePlatform(p);setSearch("");setVisibleCount(50);}} style={{flex:"1 1 100px",padding:"10px",borderRadius:10,border:`1px solid ${paidOrganic==="paid"&&sourcePlatform===p?"rgba(0,212,255,0.6)":C.brd}`,background:paidOrganic==="paid"&&sourcePlatform===p?"rgba(0,212,255,0.15)":"rgba(255,255,255,0.03)",cursor:"pointer",textAlign:"left"}}>
+          {["meta","google","tiktok","other"].map(p=><button key={p} onClick={()=>{setPaidOrganic("paid");setSourcePlatform(p);setSearch("");setVisibleCount(50);}} style={{flex:"1 1 100px",padding:"10px",borderRadius:10,border:`1px solid ${paidOrganic==="paid"&&sourcePlatform===p?"rgba(0,212,255,0.6)":C.brd}`,background:paidOrganic==="paid"&&sourcePlatform===p?"rgba(0,212,255,0.15)":"rgba(255,255,255,0.03)",cursor:"pointer",textAlign:"left"}}>
             <div style={{color:C.mut,fontSize:11,fontWeight:700,marginBottom:2}}>{platformLabels[p]}</div>
             <div style={{color:paidOrganic==="paid"&&sourcePlatform===p?"#00D4FF":C.txt,fontSize:14,fontWeight:700}}>{fmtMoney(data.sourceTotals.paid[p]||0,data.currency)}</div>
           </button>)}
