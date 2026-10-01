@@ -2578,7 +2578,7 @@ function ProductIntelligenceMod({t,lang}){
   const [clients,setClients]=useState([]);
   const [clientsLoading,setClientsLoading]=useState(true);
   const [selectedClient,setSelectedClient]=useState(null);
-  const [period,setPeriod]=useState("30");
+  const [period,setPeriod]=useState("7"); // podrazumevano 7 dana (brze ucitavanje, najcesce se gleda)
   const [customFrom,setCustomFrom]=useState("");
   const [customTo,setCustomTo]=useState("");
   const [loading,setLoading]=useState(false);
@@ -2674,9 +2674,9 @@ ${summary}`;
     if(myId===briefReqId.current) setAiLoading(false);
   };
 
-  // Ponovo generiši AI uvid ako korisnik promeni jezik dok su podaci već učitani
+  // AI uvid se pise samo na dugme (stedi tokene). Kad se promeni jezik, stari uvid se brise - korisnik ga po zelji ponovo napise.
   useEffect(()=>{
-    if(lastData.current) generateBrief(lastData.current);
+    briefReqId.current++; setAiBrief(""); setAiLoading(false);
   },[lang]);
 
   const load=async(client,params)=>{
@@ -2692,7 +2692,7 @@ ${summary}`;
       if(!res.ok) throw new Error(d.error||(sr?"Greška pri učitavanju":"Loading error"));
       setData(d);
       lastData.current=d;
-      generateBrief(d);
+      briefReqId.current++; // stari AI uvid (ako je jos u izradi) vise ne vazi za nove podatke
     }catch(e){ setErr(e.message); }
     setLoading(false);
   };
@@ -2839,12 +2839,18 @@ ${summary}`;
         <div style={{color:C.acl,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"1px",marginBottom:8}}>{sr?"AI Uvid":"AI Insight"}</div>
         {aiLoading
           ?<div style={{color:C.mut,fontSize:13}}>{sr?"Analiziram...":"Analyzing..."}</div>
+          :!aiBrief
+          ?<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+            <div style={{color:C.mut,fontSize:13}}>{sr?"Kratak rezime: best-selleri, skokovi i napuštene korpe za izabrani period.":"A short summary: bestsellers, spikes and abandoned carts for the selected period."}</div>
+            <button onClick={()=>lastData.current&&generateBrief(lastData.current)} style={{padding:"8px 14px",borderRadius:10,border:"1px solid rgba(99,102,241,0.5)",background:"rgba(99,102,241,0.15)",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>✦ {sr?"Napiši AI uvid":"Write AI insight"}</button>
+          </div>
           :<div style={{color:C.txt,fontSize:13,lineHeight:1.7}}>
             {aiBrief.split("\n").filter(l=>l.trim()).map((line,i)=>{
               const idx=line.indexOf(":");
               if(idx===-1) return <div key={i}>{line}</div>;
               return <div key={i}><b>{line.slice(0,idx+1)}</b>{line.slice(idx+1)}</div>;
             })}
+            <button onClick={()=>lastData.current&&generateBrief(lastData.current)} style={{marginTop:8,padding:"5px 10px",borderRadius:8,border:`1px solid ${C.brd}`,background:"transparent",color:C.mut,fontSize:11,fontWeight:600,cursor:"pointer"}}>{sr?"Napiši ponovo":"Rewrite"}</button>
           </div>
         }
       </div>
