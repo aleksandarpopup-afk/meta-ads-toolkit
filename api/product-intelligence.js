@@ -36,7 +36,7 @@ async function ga4Fetch(propertyId, accessToken, body) {
 // Platforma (meta/google/tiktok/direct/other) na osnovu izvora
 function detectPlatform(source) {
   const s = (source || "").toLowerCase();
-  if (s.includes("facebook") || s.includes("instagram") || s === "fb") return "meta";
+  if (s.includes("facebook") || s.includes("instagram") || s === "fb" || s === "ig" || s === "meta") return "meta";
   if (s.includes("google")) return "google";
   if (s.includes("tiktok")) return "tiktok";
   if (s === "(direct)") return "direct";
@@ -47,7 +47,22 @@ function detectPlatform(source) {
 // Cross-network (Performance Max i slične kampanje) je TAKOĐE plaćeno, samo ne počinje rečju "Paid".
 function isPaid(channelGroup) {
   const cg = (channelGroup || "").toLowerCase();
-  return cg.startsWith("paid") || cg === "cross-network";
+  return cg.startsWith("paid") || cg === "cross-network" || cg === "display" || cg === "audio";
+}
+
+// GA4 izvestaj sa stranicenjem: ranije je bio jedan poziv sa limitom, pa su kod velikih prodavnica
+// proizvodi nedostajali (i ukupni prihod je ispadao manji). Najvise maxRows redova.
+async function ga4FetchAll(propertyId, accessToken, body, maxRows = 100000) {
+  const PAGE = 10000;
+  let rows = [], offset = 0, total = 0;
+  while (offset < maxRows) {
+    const data = await ga4Fetch(propertyId, accessToken, { ...body, limit: PAGE, offset });
+    total = data.rowCount || 0;
+    rows = rows.concat(data.rows || []);
+    offset += PAGE;
+    if (!data.rows || data.rows.length < PAGE || offset >= total) break;
+  }
+  return { rows, rowCount: total };
 }
 
 function dateStr(d) {
@@ -76,7 +91,7 @@ export default async function handler(req, res) {
     previousRange = { startDate: dateStr(prevFrom), endDate: dateStr(prevTo) };
     periodLabel = Math.round(lengthMs / (24 * 60 * 60 * 1000)) + 1;
   } else {
-    const periodDays = parseInt(days) || 30;
+    const periodDays = parseInt(days) || 7;
     currentRange = { startDate: `${periodDays}daysAgo`, endDate: "yesterday" };
     previousRange = { startDate: `${periodDays * 2}daysAgo`, endDate: `${periodDays + 1}daysAgo` };
     periodLabel = periodDays;
@@ -98,7 +113,7 @@ export default async function handler(req, res) {
     const accessToken = await refreshAccessToken(refresh_token);
 
     // 1. Glavni izveštaj - ceo katalog, grupisano po itemId (ne po nazivu - varijante se ne mešaju!)
-    const report = await ga4Fetch(property_id, accessToken, {
+    const report = await ga4FetchAll(property_id, accessToken, {
       dateRanges: [currentRange, previousRange],
       dimensions: [{ name: "itemId" }, { name: "itemName" }],
       metrics: [
@@ -107,8 +122,7 @@ export default async function handler(req, res) {
         { name: "itemsPurchased" },
         { name: "itemRevenue" }
       ],
-      orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }],
-      limit: 2000
+      orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }]
     });
 
     const byItem = {};
@@ -150,33 +164,41 @@ export default async function handler(req, res) {
     });
 
     const totalRevenue = catalog.reduce((s, i) => s + i.revenue, 0);
+    const totalProducts = catalog.length;
+    // Odgovor ne sme biti prevelik: zadrzavaju se svi proizvodi sa kupovinom ili korpom (sada ili ranije),
+    // pa ostali po broju pregleda. Tako best-selleri, padovi, korpe i skokovi ostaju kompletni.
+    const MAX_CATALOG = 6000;
+    let catalogOut = catalog;
+    if (catalog.length > MAX_CATALOG) {
+      const score = (i) => (i.purchased > 0 || i.addedToCart > 0 || i.previousPurchased > 0 || i.previousAddedToCart > 0 ? 1e12 : 0) + i.revenue * 1000 + i.viewed + i.previousViewed;
+      catalogOut = [...catalog].sort((a, b) => score(b) - score(a)).slice(0, MAX_CATALOG);
+    }
 
     // 2. Izvori - PRAVI ukupni prihod po kanalu (totalRevenue, isti nivo merenja kao GA4-ov sopstveni izveštaj).
     // Ovo je NAMERNO odvojeno od proizvod-nivo podataka ispod - itemRevenue zna da bude manji od totalRevenue
     // kad transakcija nema potpune podatke o proizvodu (GA4-ovo poznato ograničenje, ne naša greška).
-    const totalsReport = await ga4Fetch(property_id, accessToken, {
+    const totalsReport = await ga4FetchAll(property_id, accessToken, {
       dateRanges: [currentRange],
       dimensions: [{ name: "sessionSource" }, { name: "sessionDefaultChannelGroup" }],
-      metrics: [{ name: "totalRevenue" }],
-      limit: 500
-    });
+      metrics: [{ name: "totalRevenue" }]
+    }, 20000);
 
     const sourceTotals = {
-      paid: { meta: 0, google: 0, tiktok: 0 },
+      paid: { meta: 0, google: 0, tiktok: 0, other: 0 },
       organic: { meta: 0, google: 0, tiktok: 0, direct: 0, other: 0 }
     };
     for (const row of totalsReport.rows || []) {
       const src = row.dimensionValues[0].value;
       const channelGroup = row.dimensionValues[1].value;
       const platform = detectPlatform(src);
-      const paid = (platform === "direct" || platform === "other") ? false : isPaid(channelGroup);
+      const paid = platform === "direct" ? false : isPaid(channelGroup);
       const bucket = paid ? "paid" : "organic";
       const revenue = parseFloat(row.metricValues[0].value) || 0;
       sourceTotals[bucket][platform] += revenue;
     }
 
     // 3. Izvori - proizvod-nivo raščlanjavanje PO kanalu (za tabelu kad klikneš na kanal)
-    const sourceReport = await ga4Fetch(property_id, accessToken, {
+    const sourceReport = await ga4FetchAll(property_id, accessToken, {
       dateRanges: [currentRange],
       dimensions: [
         { name: "sessionSource" },
@@ -190,12 +212,11 @@ export default async function handler(req, res) {
         { name: "itemsPurchased" },
         { name: "itemRevenue" }
       ],
-      orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }],
-      limit: 5000
+      orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }]
     });
 
     const sourceCatalogMap = {
-      paid: { meta: {}, google: {}, tiktok: {} },
+      paid: { meta: {}, google: {}, tiktok: {}, other: {} },
       organic: { meta: {}, google: {}, tiktok: {}, direct: {}, other: {} }
     };
 
@@ -205,7 +226,7 @@ export default async function handler(req, res) {
       const itemId = row.dimensionValues[2].value;
       const itemName = row.dimensionValues[3].value;
       const platform = detectPlatform(src);
-      const paid = (platform === "direct" || platform === "other") ? false : isPaid(channelGroup);
+      const paid = platform === "direct" ? false : isPaid(channelGroup);
       const bucket = paid ? "paid" : "organic";
 
       const m = {
@@ -251,7 +272,7 @@ export default async function handler(req, res) {
         { name: "itemRevenue" }
       ],
       orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }],
-      limit: 100
+      limit: 250 // ranije 100
     });
 
     const categoriesRaw = (categoryReport.rows || []).map((row) => {
@@ -275,10 +296,11 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       periodDays: periodLabel,
-      totalProducts: catalog.length,
+      totalProducts,
       totalRevenue,
       currency,
-      catalog,
+      catalog: catalogOut,
+      catalogTruncated: catalogOut.length < totalProducts,
       sourceTotals,
       sourceCatalog,
       categories,
