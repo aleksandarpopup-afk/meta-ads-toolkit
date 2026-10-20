@@ -58,7 +58,7 @@ function Pills({opts,val,ch,multi=false}){
 // ── TRANSLATIONS ────────────────────────────────────────────────────────────
 const T={
   sr:{
-    appTitle:"Meta Ads Toolkit", appSub:"Profesionalni alati za performance marketing",
+    appTitle:"Ads Toolkit", appSub:"Profesionalni alati za performance marketing",
     back:"← Nazad",
     m1t:"Health Check", m1s:"Brza dijagnoza kampanje iz screenshota ili CSV-a",
     m2t:"Budget Pacing", m2s:"Tempo potrošnje po klijentu, underspend i overspend na prvi pogled",
@@ -100,7 +100,7 @@ const T={
     hGl:"Cilj", hMsub:"analiziranih metrika",
   },
   en:{
-    appTitle:"Meta Ads Toolkit", appSub:"Professional tools for performance marketing",
+    appTitle:"Ads Toolkit", appSub:"Professional tools for performance marketing",
     back:"← Back",
     m1t:"Health Check", m1s:"Quick campaign diagnosis from a screenshot or CSV",
     m2t:"Budget Pacing", m2s:"Spend pace per client, underspend and overspend at a glance",
@@ -4296,7 +4296,7 @@ export default function App(){
             </div>
           </div>;
         })}
-        <div style={{padding:"24px 16px 0",textAlign:"center"}}><div style={{color:"rgba(255,255,255,0.2)",fontSize:11}}>Meta Ads Toolkit · v1.0 · by aleksandarpopup</div></div>
+        <div style={{padding:"24px 16px 0",textAlign:"center"}}><div style={{color:"rgba(255,255,255,0.2)",fontSize:11}}>Ads Toolkit · v1.0 · by aleksandarpopup</div></div>
       </>}
       {!showHome&&<div style={{padding:"20px 16px"}}><Comp t={t} lang={lang} goMod={goMod} initialTab={mod===9?"import":undefined}/></div>}
     </div>
@@ -4375,7 +4375,7 @@ export default function App(){
               </button>
             </div>
           </div>
-          <div style={{color:"rgba(255,255,255,0.2)",fontSize:11}}>Meta Ads Toolkit · v1.0</div>
+          <div style={{color:"rgba(255,255,255,0.2)",fontSize:11}}>Ads Toolkit · v1.0</div>
           <div style={{color:"rgba(255,255,255,0.15)",fontSize:10,marginTop:3}}>by aleksandarpopup</div>
         </div>
       </div>
