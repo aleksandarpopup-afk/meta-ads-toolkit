@@ -34,6 +34,7 @@ function gOverall(ss){ const vs=Object.values(ss).filter(Boolean); if(!vs.length
 function useIsMobile(){ const [m,setM]=useState(window.innerWidth<520); useEffect(()=>{ const h=()=>setM(window.innerWidth<520); window.addEventListener("resize",h); return()=>window.removeEventListener("resize",h); },[]); return m; }
 
 // ── UI ATOMS ────────────────────────────────────────────────────────────────
+const BrandName=()=><span>Perf<span style={{background:"linear-gradient(90deg,#00E5FF,#A855F7)",WebkitBackgroundClip:"text",backgroundClip:"text",WebkitTextFillColor:"transparent",color:"#00E5FF"}}>Mind</span></span>;
 const Lbl=({c})=><div style={{color:C.mut,fontSize:11,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8}}>{c}</div>;
 const TIn=({v,ch,ph})=><input value={v} onChange={e=>ch(e.target.value)} placeholder={ph} style={{width:"100%",padding:"13px 14px",background:"rgba(255,255,255,0.06)",border:`1px solid ${C.brd}`,borderRadius:10,color:C.txt,fontSize:16,outline:"none",boxSizing:"border-box"}} onFocus={e=>e.target.style.borderColor="rgba(99,102,241,0.5)"} onBlur={e=>e.target.style.borderColor=C.brd}/>;
 
@@ -58,7 +59,7 @@ function Pills({opts,val,ch,multi=false}){
 // ── TRANSLATIONS ────────────────────────────────────────────────────────────
 const T={
   sr:{
-    appTitle:"Ads Toolkit", appSub:"Profesionalni alati za performance marketing",
+    appTitle:"PerfMind", appSub:"Performance Intelligence Platform",
     back:"← Nazad",
     m1t:"Health Check", m1s:"Brza dijagnoza kampanje iz screenshota ili CSV-a",
     m2t:"Budget Pacing", m2s:"Tempo potrošnje po klijentu, underspend i overspend na prvi pogled",
@@ -100,7 +101,7 @@ const T={
     hGl:"Cilj", hMsub:"analiziranih metrika",
   },
   en:{
-    appTitle:"Ads Toolkit", appSub:"Professional tools for performance marketing",
+    appTitle:"PerfMind", appSub:"Performance Intelligence Platform",
     back:"← Back",
     m1t:"Health Check", m1s:"Quick campaign diagnosis from a screenshot or CSV",
     m2t:"Budget Pacing", m2s:"Spend pace per client, underspend and overspend at a glance",
@@ -4270,8 +4271,8 @@ export default function App(){
     <style>{CARD_CSS}</style>
     <div style={{background:"rgba(255,255,255,0.02)",borderBottom:`1px solid ${C.brd}`,padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:100,backdropFilter:"blur(10px)"}}>
       <div style={{display:"flex",alignItems:"center",gap:9,cursor:mod?"pointer":"default"}} onClick={()=>goMod(null)}>
-        <div style={{width:32,height:32,borderRadius:9,background:"linear-gradient(135deg,#6366F1,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>📊</div>
-        <div style={{fontWeight:800,fontSize:15}}>{t.appTitle}</div>
+        <img src="/logo-64.png" alt="PerfMind" width={32} height={32} style={{width:32,height:32,borderRadius:9,display:"block"}}/>
+        <div style={{fontWeight:800,fontSize:15}}><BrandName/></div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:6}}>
         {!showHome&&<button onClick={()=>goMod(null)} style={{background:"rgba(255,255,255,0.08)",border:"none",borderRadius:20,color:"#fff",fontSize:12,fontWeight:600,padding:"7px 14px",cursor:"pointer"}}>{t.back}</button>}
@@ -4296,7 +4297,7 @@ export default function App(){
             </div>
           </div>;
         })}
-        <div style={{padding:"24px 16px 0",textAlign:"center"}}><div style={{color:"rgba(255,255,255,0.2)",fontSize:11}}>Ads Toolkit · v1.0 · by aleksandarpopup</div></div>
+        <div style={{padding:"24px 16px 0",textAlign:"center"}}><div style={{color:"rgba(255,255,255,0.2)",fontSize:11}}>PerfMind · v1.0 · by aleksandarpopup</div></div>
       </>}
       {!showHome&&<div style={{padding:"20px 16px"}}><Comp t={t} lang={lang} goMod={goMod} initialTab={mod===9?"import":undefined}/></div>}
     </div>
@@ -4311,9 +4312,9 @@ export default function App(){
     {/* TOP NAV */}
     <div style={{background:"rgba(255,255,255,0.02)",borderBottom:`1px solid ${C.brd}`,padding:"0 32px",display:"flex",justifyContent:"space-between",alignItems:"center",height:64,flexShrink:0,zIndex:100}}>
       <div style={{display:"flex",alignItems:"center",gap:12,cursor:"pointer"}} onClick={()=>goMod(null)}>
-        <div style={{width:38,height:38,borderRadius:10,background:"linear-gradient(135deg,#6366F1,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:19}}>📊</div>
+        <img src="/logo-64.png" alt="PerfMind" width={38} height={38} style={{width:38,height:38,borderRadius:10,display:"block"}}/>
         <div>
-          <div style={{fontWeight:800,fontSize:17,letterSpacing:"-0.3px"}}>{t.appTitle}</div>
+          <div style={{fontWeight:800,fontSize:17,letterSpacing:"-0.3px"}}><BrandName/></div>
           <div style={{color:"rgba(255,255,255,0.35)",fontSize:11}}>{t.appSub}</div>
         </div>
       </div>
@@ -4375,7 +4376,7 @@ export default function App(){
               </button>
             </div>
           </div>
-          <div style={{color:"rgba(255,255,255,0.2)",fontSize:11}}>Ads Toolkit · v1.0</div>
+          <div style={{color:"rgba(255,255,255,0.2)",fontSize:11}}>PerfMind · v1.0</div>
           <div style={{color:"rgba(255,255,255,0.15)",fontSize:10,marginTop:3}}>by aleksandarpopup</div>
         </div>
       </div>
