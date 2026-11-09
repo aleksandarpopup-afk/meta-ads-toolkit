@@ -1,3 +1,5 @@
+import { guard, clientInWorkspace } from "./_lib/auth.js";
+
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
@@ -46,11 +48,13 @@ async function bulkUpsertSpend(rows, headers) {
   const chunkSize = 500;
   for (let i = 0; i < rows.length; i += chunkSize) {
     const chunk = rows.slice(i, i + chunkSize);
-    await fetch(`${SUPABASE_URL}/rest/v1/google_ads_daily_spend?on_conflict=client_id,campaign_id,date`, {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/google_ads_daily_spend?on_conflict=client_id,campaign_id,date`, {
       method: "POST",
       headers: { ...headers, Prefer: "resolution=merge-duplicates" },
       body: JSON.stringify(chunk)
     });
+    // Greska pri upisu se vise ne prikriva (ranije je "Gotovo" stizalo i kad upis nije uspeo)
+    if (!r.ok) throw new Error(`google_ads_daily_spend: ${await r.text()}`);
   }
 }
 
@@ -59,10 +63,14 @@ function dateStr(d) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.status(200).end();
+
+  // Samo prijavljen korisnik, i samo za klijenta iz svog radnog prostora
+  const ctx = await guard(req, res);
+  if (!ctx) return;
+  const ws = ctx.membership.workspace_id;
+  const clientIdIn = req.method === "POST" ? (req.body || {}).client_id : req.query.client_id;
+  if (!(await clientInWorkspace(clientIdIn, ws))) return res.status(404).json({ error: "client_not_found" });
 
   const headers = {
     "Content-Type": "application/json",
@@ -72,9 +80,14 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === "POST") {
-      const { user_id, client_id, customer_id, manager_id, account_name, currency_code, refresh_token } = req.body;
-      if (!user_id || !client_id || !customer_id || !refresh_token) {
+      const { client_id, customer_id, manager_id, account_name, currency_code, refresh_token } = req.body || {};
+      const user_id = ws; // vlasnik veze je radni prostor iz prijave, ne vrednost koju posalje pregledac
+      if (!client_id || !customer_id || !refresh_token) {
         return res.status(400).json({ error: "Missing fields" });
+      }
+      // ID-jevi idu u Google Ads adresu - dozvoljeni su samo brojevi
+      if (!/^\d{1,20}$/.test(String(customer_id)) || (manager_id && !/^\d{1,20}$/.test(String(manager_id)))) {
+        return res.status(400).json({ error: "Invalid customer_id" });
       }
 
       await fetch(
@@ -129,6 +142,7 @@ export default async function handler(req, res) {
         { headers }
       );
       const data = await r.json();
+      if (!r.ok) throw new Error(JSON.stringify(data));
       return res.status(200).json(data);
     }
 
@@ -141,6 +155,8 @@ export default async function handler(req, res) {
       });
       return res.status(200).json({ success: true });
     }
+
+    return res.status(405).json({ error: "Method not allowed" });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
