@@ -2340,14 +2340,15 @@ function MyClientsMod({t,lang,goMod}){
     setGa4Saving(true);
     const uid=localStorage.getItem("mat_user_id");
     try{
-      await fetch("/api/ga4-connect",{
+      const r=await fetch("/api/ga4-connect",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({user_id:uid,client_id:ga4Setup.client_id,property_id:prop.property_id,property_name:prop.property_name,refresh_token:ga4Setup.refresh_token})
       });
+      if(!r.ok){ const d=await r.json().catch(()=>({})); throw new Error(d.error||String(r.status)); }
       setGa4({property_id:prop.property_id,property_name:prop.property_name});
       setGa4Setup(null);
-    }catch(e){}
+    }catch(e){ alert((lang==="sr"?"Povezivanje GA4 naloga nije uspelo: ":"Connecting the GA4 property failed: ")+e.message); }
     setGa4Saving(false);
   };
 
@@ -2384,7 +2385,7 @@ function MyClientsMod({t,lang,goMod}){
     setGadsSaving(true);
     const uid=localStorage.getItem("mat_user_id");
     try{
-      await fetch("/api/google-ads-connect",{
+      const r=await fetch("/api/google-ads-connect",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({
@@ -2397,9 +2398,11 @@ function MyClientsMod({t,lang,goMod}){
           refresh_token:gadsSetup.refresh_token
         })
       });
+      // Ranije se "povezano" prikazivalo i kad čuvanje ne uspe
+      if(!r.ok){ const d=await r.json().catch(()=>({})); throw new Error(d.error||String(r.status)); }
       setGads({customer_id:acc.customer_id,manager_id:acc.manager_id,account_name:acc.account_name,currency_code:acc.currency_code});
       setGadsSetup(null);
-    }catch(e){}
+    }catch(e){ alert((lang==="sr"?"Povezivanje Google Ads naloga nije uspelo: ":"Connecting the Google Ads account failed: ")+e.message); }
     setGadsSaving(false);
   };
 
@@ -4069,7 +4072,7 @@ function NotifModal({lang,notifStatus,onEnable,onClose}){
 }
 
 function MainApp({account}){
-  const [lang,setLang]=useState(()=>localStorage.getItem("mat_lang")||"sr");
+  const [lang,setLang]=useState(()=>localStorage.getItem("mat_lang")||"en");
   const [mod,setMod]=useState(()=>{
     const params=new URLSearchParams(window.location.search);
     const m=params.get("mod");
@@ -4576,6 +4579,7 @@ function TeamModal({lang,onClose}){
   const [lastLink,setLastLink]=useState(null);
   const [copied,setCopied]=useState(false);
   const [wsName,setWsName]=useState("");
+  const [nameSaved,setNameSaved]=useState(false);
   const load=async()=>{
     try{
       const r=await fetch("/api/team"); const d=await r.json();
@@ -4610,7 +4614,7 @@ function TeamModal({lang,onClose}){
     setErr(null);
     try{
       const r=await fetch("/api/team",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"rename",name:wsName})});
-      const d=await r.json(); if(!r.ok) throw new Error(d.error); load();
+      const d=await r.json(); if(!r.ok) throw new Error(d.error); setNameSaved(true); load();
     }catch(e){ setErr(e.message); }
   };
   const copy=async(t)=>{ try{ await navigator.clipboard.writeText(t); setCopied(true); }catch(e){ window.prompt(sr?"Kopirajte link:":"Copy the link:",t); } };
@@ -4629,8 +4633,8 @@ function TeamModal({lang,onClose}){
         {isOwner&&<div style={{marginBottom:20}}>
           <div style={{...small,marginBottom:6}}>{sr?"Naziv radnog prostora":"Workspace name"}</div>
           <div style={{display:"flex",gap:8}}>
-            <input value={wsName} onChange={e=>setWsName(e.target.value)} maxLength={80} placeholder={sr?"npr. naziv agencije":"e.g. agency name"} style={{...AU.input,flex:1}}/>
-            <button onClick={saveName} style={{...AU.ghost,width:"auto"}}>{sr?"Sačuvaj":"Save"}</button>
+            <input value={wsName} onChange={e=>{setWsName(e.target.value);setNameSaved(false);}} onKeyDown={e=>{ if(e.key==="Enter") saveName(); }} maxLength={80} placeholder={sr?"npr. naziv agencije":"e.g. agency name"} style={{...AU.input,flex:1}}/>
+            <button onClick={saveName} style={{...AU.ghost,width:"auto",color:nameSaved?"#6EE7B7":AU.ghost.color}}>{nameSaved?(sr?"Sačuvano ✓":"Saved ✓"):(sr?"Sačuvaj":"Save")}</button>
           </div>
         </div>}
         <div style={{fontWeight:700,fontSize:14,marginBottom:4}}>{sr?"Članovi":"Members"} ({data.members.length})</div>
@@ -4673,7 +4677,7 @@ function TeamModal({lang,onClose}){
 }
 
 export default function App(){
-  const [lang,setLangState]=useState(()=>localStorage.getItem("mat_lang")||"sr");
+  const [lang,setLangState]=useState(()=>localStorage.getItem("mat_lang")||"en");
   const setLang=(l)=>{ setLangState(l); try{ localStorage.setItem("mat_lang",l); }catch(e){} };
   const [stage,setStage]=useState(supabase?"loading":"ready"); // loading | login | setup | ready | error
   const [email,setEmail]=useState(null);
