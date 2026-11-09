@@ -4277,7 +4277,7 @@ function MainApp({account}){
       </div>
       <div style={{display:"flex",alignItems:"center",gap:6}}>
         {!showHome&&<button onClick={()=>goMod(null)} style={{background:"rgba(255,255,255,0.08)",border:"none",borderRadius:20,color:"#fff",fontSize:12,fontWeight:600,padding:"7px 14px",cursor:"pointer"}}>{t.back}</button>}
-        <button onClick={()=>setShowQR(true)} style={{background:"rgba(99,102,241,0.2)",border:"none",borderRadius:20,color:C.acl,fontSize:12,fontWeight:600,padding:"7px 12px",cursor:"pointer"}} title="Poveži telefon">📱</button>
+        {account&&account.onTeam&&<button onClick={account.onTeam} style={{background:"rgba(99,102,241,0.2)",border:"none",borderRadius:20,color:C.acl,fontSize:12,fontWeight:600,padding:"7px 12px",cursor:"pointer"}} title={lang==="sr"?"Tim":"Team"} aria-label={lang==="sr"?"Tim":"Team"}>👥</button>}
         <button onClick={()=>setShowNotif(true)} aria-label={lang==="sr"?"Obaveštenja":"Notifications"} style={{background:notifStatus==="granted"?"rgba(52,211,153,0.2)":"rgba(251,191,36,0.2)",border:"none",borderRadius:20,color:notifStatus==="granted"?C.grn:C.yel,fontSize:14,padding:"7px 10px",cursor:"pointer"}} title={lang==="sr"?"Obaveštenja":"Notifications"}>🔔</button>
         {["sr","en"].map(l=><button key={l} onClick={()=>setLang(l)} style={{padding:"6px 12px",borderRadius:20,fontSize:12,fontWeight:700,cursor:"pointer",border:"none",background:lang===l?"rgba(99,102,241,0.3)":"rgba(255,255,255,0.07)",color:lang===l?"#A5B4FC":"rgba(255,255,255,0.4)"}}>{l.toUpperCase()}</button>)}
         {account&&<button onClick={account.onLogout} title={(lang==="sr"?"Odjavi se":"Sign out")+(account.email?` (${account.email})`:"")} aria-label={lang==="sr"?"Odjavi se":"Sign out"} style={{background:"rgba(255,255,255,0.07)",border:"none",borderRadius:20,color:"rgba(255,255,255,0.55)",fontSize:13,padding:"6px 10px",cursor:"pointer"}}>⎋</button>}
@@ -4330,9 +4330,9 @@ function MainApp({account}){
           </div>
         </div>}
         <div style={{display:"flex",gap:6,alignItems:"center"}}>
-          <button onClick={()=>setShowQR(true)} style={{background:"rgba(99,102,241,0.15)",border:"1px solid rgba(99,102,241,0.3)",borderRadius:10,color:C.acl,fontSize:12,fontWeight:600,padding:"7px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:6}} title="Poveži telefon">
-            📱 {lang==="sr"?"Poveži telefon":"Connect Phone"}
-          </button>
+          {account&&account.onTeam&&<button onClick={account.onTeam} style={{background:"rgba(99,102,241,0.15)",border:"1px solid rgba(99,102,241,0.3)",borderRadius:10,color:C.acl,fontSize:12,fontWeight:600,padding:"7px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+            👥 {lang==="sr"?"Tim":"Team"}
+          </button>}
           <button onClick={()=>setShowNotif(true)} style={{background:notifStatus==="granted"?"rgba(52,211,153,0.12)":"rgba(251,191,36,0.15)",border:`1px solid ${notifStatus==="granted"?"rgba(52,211,153,0.35)":"rgba(251,191,36,0.3)"}`,borderRadius:10,color:notifStatus==="granted"?C.grn:C.yel,fontSize:12,fontWeight:600,padding:"7px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
             🔔 {lang==="sr"?"Obaveštenja":"Notifications"}
           </button>
@@ -4368,17 +4368,7 @@ function MainApp({account}){
           </div>)}
         </div>
         <div style={{paddingTop:20,borderTop:`1px solid ${C.brd}`,textAlign:"center"}}>
-          {/* Magic Link */}
-          <div style={{background:"rgba(99,102,241,0.08)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:10,padding:"12px",marginBottom:12,textAlign:"left"}}>
-            <div style={{color:C.acl,fontSize:11,fontWeight:700,marginBottom:6}}>🔐 {lang==="sr"?"Sačuvaj pristup":"Save Access"}</div>
-            <div style={{color:C.mut,fontSize:10,marginBottom:8,lineHeight:1.5}}>{lang==="sr"?"Sačuvaj link da ne izgubiš analize:":"Save link to keep your analyses:"}</div>
-            <div style={{display:"flex",gap:6}}>
-              <input readOnly value={`${window.location.origin}?token=${localStorage.getItem("mat_user_id")||""}`} style={{flex:1,background:"rgba(255,255,255,0.05)",border:`1px solid ${C.brd}`,borderRadius:6,color:C.txt,fontSize:9,padding:"5px 6px",cursor:"text"}} onClick={e=>e.target.select()}/>
-              <button onClick={()=>navigator.clipboard?.writeText(`${window.location.origin}?token=${localStorage.getItem("mat_user_id")||""}`)} style={{background:"rgba(99,102,241,0.3)",border:"none",borderRadius:6,color:C.acl,fontSize:10,fontWeight:700,padding:"5px 8px",cursor:"pointer",whiteSpace:"nowrap"}}>
-                {lang==="sr"?"Kopiraj":"Copy"}
-              </button>
-            </div>
-          </div>
+          {account&&account.email&&<div style={{color:C.mut,fontSize:11,marginBottom:10,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={account.email}>{account.email}</div>}
           <div style={{color:"rgba(255,255,255,0.2)",fontSize:11}}>PerfMind · v1.0</div>
           <div style={{color:"rgba(255,255,255,0.15)",fontSize:10,marginTop:3}}>by aleksandarpopup</div>
         </div>
@@ -4447,7 +4437,9 @@ const AUTH_T={
     claim:"Poveži moje postojeće podatke", claimHint:"Klijenti, budžeti i veze koje već koristite u ovom pregledaču.",
     or2:"ili", createTitle:"Napravi nov radni prostor", wsPh:"Naziv agencije (opciono)", create:"Napravi",
     working:"Radim...", logout:"Odjavi se", signedAs:"Prijavljeni ste kao",
-    err:"Nešto nije u redu. Pokušajte ponovo.", retry:"Pokušaj ponovo"
+    err:"Nešto nije u redu. Pokušajte ponovo.", retry:"Pokušaj ponovo",
+    invited:"Pozvani ste u tim. Prijavite se adresom na koju je stigla pozivnica.",
+    alreadyIn:"Vaš nalog je već u radnom prostoru, pa pozivnica nije iskorišćena. Za drugi tim prijavite se drugom mejl adresom."
   },
   en:{
     title:"Sign in", sub:"Ad and sales analytics in one place",
@@ -4459,7 +4451,9 @@ const AUTH_T={
     claim:"Connect my existing data", claimHint:"Clients, budgets and connections you already use in this browser.",
     or2:"or", createTitle:"Create a new workspace", wsPh:"Agency name (optional)", create:"Create",
     working:"Working...", logout:"Sign out", signedAs:"Signed in as",
-    err:"Something went wrong. Please try again.", retry:"Try again"
+    err:"Something went wrong. Please try again.", retry:"Try again",
+    invited:"You've been invited to a team. Sign in with the address the invitation was sent to.",
+    alreadyIn:"Your account is already in a workspace, so the invitation wasn't used. To join another team, sign in with a different email address."
   }
 };
 
@@ -4521,6 +4515,7 @@ function LoginScreen({lang,setLang,initialError}){
     </>:<>
       <div style={{fontWeight:800,fontSize:22,marginBottom:4}}>{a.title}</div>
       <div style={{...AU.muted,marginBottom:22}}>{a.sub}</div>
+      {(()=>{ try{ return localStorage.getItem("pm_invite"); }catch(e){ return null; } })()&&<div style={{background:"rgba(99,102,241,0.12)",border:"1px solid rgba(99,102,241,0.35)",color:"#C7D2FE",borderRadius:10,padding:"10px 12px",fontSize:13,marginBottom:16}}>{a.invited}</div>}
       <button style={AU.google} onClick={google}><GoogleIcon/>{a.google}</button>
       <div style={{display:"flex",alignItems:"center",gap:10,margin:"18px 0",color:"rgba(255,255,255,0.35)",fontSize:12}}>
         <div style={{flex:1,height:1,background:"rgba(255,255,255,0.1)"}}/>{a.or}<div style={{flex:1,height:1,background:"rgba(255,255,255,0.1)"}}/>
@@ -4534,12 +4529,12 @@ function LoginScreen({lang,setLang,initialError}){
   </div></div>;
 }
 
-function SetupScreen({lang,setLang,email,onDone,onLogout}){
+function SetupScreen({lang,setLang,email,onDone,onLogout,initialError}){
   const a=AUTH_T[lang];
   const legacy=(()=>{ const v=localStorage.getItem("mat_user_id")||""; return UUID_RX.test(v)?v:null; })();
   const [name,setName]=useState("");
   const [busy,setBusy]=useState(false);
-  const [err,setErr]=useState(null);
+  const [err,setErr]=useState(initialError||null);
   const run=async(body)=>{
     setBusy(true); setErr(null);
     try{
@@ -4571,12 +4566,120 @@ function SetupScreen({lang,setLang,email,onDone,onLogout}){
   </div></div>;
 }
 
+// ── TIM: članovi i pozivnice ─────────────────────────────────────────────────
+function TeamModal({lang,onClose}){
+  const sr=lang==="sr";
+  const [data,setData]=useState(null);
+  const [err,setErr]=useState(null);
+  const [email,setEmail]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [lastLink,setLastLink]=useState(null);
+  const [copied,setCopied]=useState(false);
+  const [wsName,setWsName]=useState("");
+  const load=async()=>{
+    try{
+      const r=await fetch("/api/team"); const d=await r.json();
+      if(!r.ok) throw new Error(d.error);
+      setData(d); setWsName(d.workspace&&d.workspace.name||"");
+    }catch(e){ setErr(e.message||(sr?"Greška":"Error")); }
+  };
+  useEffect(()=>{ load(); },[]);
+  const isOwner=data&&data.me&&data.me.role==="owner";
+  const invite=async(e)=>{
+    e.preventDefault(); setErr(null); setLastLink(null); setCopied(false);
+    const v=email.trim();
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)){ setErr(sr?"Upišite ispravnu mejl adresu.":"Enter a valid email address."); return; }
+    setBusy(true);
+    try{
+      const r=await fetch("/api/team",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"invite",email:v})});
+      const d=await r.json();
+      if(!r.ok) throw new Error(d.error);
+      setLastLink({link:d.link,email:d.invite.email,sent:d.emailSent}); setEmail(""); load();
+    }catch(e){ setErr(e.message); }
+    setBusy(false);
+  };
+  const del=async(q,confirmText)=>{
+    if(!window.confirm(confirmText)) return;
+    setErr(null);
+    try{
+      const r=await fetch(`/api/team?${q}`,{method:"DELETE"}); const d=await r.json();
+      if(!r.ok) throw new Error(d.error); load();
+    }catch(e){ setErr(e.message); }
+  };
+  const saveName=async()=>{
+    setErr(null);
+    try{
+      const r=await fetch("/api/team",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"rename",name:wsName})});
+      const d=await r.json(); if(!r.ok) throw new Error(d.error); load();
+    }catch(e){ setErr(e.message); }
+  };
+  const copy=async(t)=>{ try{ await navigator.clipboard.writeText(t); setCopied(true); }catch(e){ window.prompt(sr?"Kopirajte link:":"Copy the link:",t); } };
+  const fmtD=(s)=>{ try{ return new Date(s).toLocaleDateString(sr?"sr-RS":"en-GB"); }catch(e){ return ""; } };
+  const row={display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"10px 0",borderBottom:"1px solid rgba(255,255,255,0.06)"};
+  const small={fontSize:12,color:"rgba(255,255,255,0.45)"};
+  const xBtn={background:"none",border:"1px solid rgba(255,255,255,0.12)",borderRadius:8,color:"rgba(255,255,255,0.6)",fontSize:12,padding:"5px 10px",cursor:"pointer",flexShrink:0};
+  return <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+    <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:520,maxHeight:"88vh",overflowY:"auto",background:"#101018",border:"1px solid rgba(255,255,255,0.1)",borderRadius:18,padding:"24px 22px",color:"#fff"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
+        <div style={{fontWeight:800,fontSize:19}}>👥 {sr?"Tim":"Team"}</div>
+        <button onClick={onClose} style={{background:"rgba(255,255,255,0.07)",border:"none",borderRadius:20,color:"#fff",width:32,height:32,cursor:"pointer",fontSize:16}} aria-label={sr?"Zatvori":"Close"}>✕</button>
+      </div>
+      {!data&&!err&&<div style={small}>{sr?"Učitavam...":"Loading..."}</div>}
+      {data&&<>
+        {isOwner&&<div style={{marginBottom:20}}>
+          <div style={{...small,marginBottom:6}}>{sr?"Naziv radnog prostora":"Workspace name"}</div>
+          <div style={{display:"flex",gap:8}}>
+            <input value={wsName} onChange={e=>setWsName(e.target.value)} maxLength={80} placeholder={sr?"npr. naziv agencije":"e.g. agency name"} style={{...AU.input,flex:1}}/>
+            <button onClick={saveName} style={{...AU.ghost,width:"auto"}}>{sr?"Sačuvaj":"Save"}</button>
+          </div>
+        </div>}
+        <div style={{fontWeight:700,fontSize:14,marginBottom:4}}>{sr?"Članovi":"Members"} ({data.members.length})</div>
+        {data.members.map(m=><div key={m.id} style={row}>
+          <div style={{minWidth:0}}>
+            <div style={{fontSize:14,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis"}}>{m.email||"—"}{m.isMe&&<span style={{...small,marginLeft:6}}>({sr?"vi":"you"})</span>}</div>
+            <div style={small}>{m.role==="owner"?(sr?"Vlasnik":"Owner"):(sr?"Član":"Member")}</div>
+          </div>
+          {isOwner&&!m.isMe&&<button style={xBtn} onClick={()=>del(`member_id=${m.id}`,sr?`Ukloniti ${m.email} iz tima?`:`Remove ${m.email} from the team?`)}>{sr?"Ukloni":"Remove"}</button>}
+        </div>)}
+        {isOwner&&<>
+          <div style={{fontWeight:700,fontSize:14,margin:"22px 0 8px"}}>{sr?"Pozovi kolegu":"Invite a colleague"}</div>
+          <form onSubmit={invite} style={{display:"flex",gap:8}}>
+            <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder={sr?"kolega@agencija.com":"colleague@agency.com"} style={{...AU.input,flex:1}}/>
+            <button type="submit" disabled={busy} style={{...AU.primary,width:"auto",opacity:busy?0.6:1}}>{busy?(sr?"Šaljem...":"Sending..."):(sr?"Pozovi":"Invite")}</button>
+          </form>
+          {lastLink&&<div style={{background:"rgba(52,211,153,0.1)",border:"1px solid rgba(52,211,153,0.3)",borderRadius:10,padding:"10px 12px",fontSize:13,marginTop:10,color:"#A7F3D0"}}>
+            {lastLink.sent?(sr?`Pozivnica je poslata na ${lastLink.email}.`:`Invitation sent to ${lastLink.email}.`):(sr?`Mejl nije poslat – pošaljite link ručno osobi ${lastLink.email}:`:`Email wasn't sent – send this link to ${lastLink.email} yourself:`)}
+            <div style={{marginTop:8,display:"flex",gap:8,alignItems:"center"}}>
+              <code style={{flex:1,fontSize:11,color:"rgba(255,255,255,0.7)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lastLink.link}</code>
+              <button style={xBtn} onClick={()=>copy(lastLink.link)}>{copied?(sr?"Kopirano ✓":"Copied ✓"):(sr?"Kopiraj link":"Copy link")}</button>
+            </div>
+          </div>}
+          {data.invites.length>0&&<>
+            <div style={{fontWeight:700,fontSize:14,margin:"22px 0 4px"}}>{sr?"Poslate pozivnice":"Pending invitations"}</div>
+            {data.invites.map(iv=><div key={iv.id} style={row}>
+              <div style={{minWidth:0}}>
+                <div style={{fontSize:14,overflow:"hidden",textOverflow:"ellipsis"}}>{iv.email}</div>
+                <div style={small}>{sr?"važi do":"valid until"} {fmtD(iv.expires_at)}</div>
+              </div>
+              <button style={xBtn} onClick={()=>del(`invite_id=${iv.id}`,sr?`Otkazati pozivnicu za ${iv.email}?`:`Cancel the invitation for ${iv.email}?`)}>{sr?"Otkaži":"Cancel"}</button>
+            </div>)}
+          </>}
+        </>}
+        {!isOwner&&<div style={{...small,marginTop:16}}>{sr?"Kolege poziva vlasnik radnog prostora.":"Colleagues are invited by the workspace owner."}</div>}
+      </>}
+      {err&&<div style={AU.err}>{err}</div>}
+    </div>
+  </div>;
+}
+
 export default function App(){
   const [lang,setLangState]=useState(()=>localStorage.getItem("mat_lang")||"sr");
   const setLang=(l)=>{ setLangState(l); try{ localStorage.setItem("mat_lang",l); }catch(e){} };
   const [stage,setStage]=useState(supabase?"loading":"ready"); // loading | login | setup | ready | error
   const [email,setEmail]=useState(null);
   const [authErr,setAuthErr]=useState(null);
+  const [setupErr,setSetupErr]=useState(null);
+  const [showTeam,setShowTeam]=useState(false);
   const readyRef=useRef(false); // kad je aplikacija jednom otvorena, osvežavanje tokena je ne zatvara
 
   // Stari linkovi (?uuid= / ?token=) – zapamti ID radi povezivanja postojećih podataka i skloni ga iz adrese
@@ -4585,8 +4688,10 @@ export default function App(){
     const params=new URLSearchParams(window.location.search);
     const legacy=params.get("uuid")||params.get("token");
     if(legacy&&UUID_RX.test(legacy)) localStorage.setItem("mat_user_id",legacy);
-    if(params.has("uuid")||params.has("token")){
-      params.delete("uuid"); params.delete("token");
+    const inv=params.get("invite");
+    if(inv&&UUID_RX.test(inv)){ try{ localStorage.setItem("pm_invite",inv); }catch(e){} }
+    if(params.has("uuid")||params.has("token")||params.has("invite")){
+      params.delete("uuid"); params.delete("token"); params.delete("invite");
       const q=params.toString();
       window.history.replaceState({},"",window.location.pathname+(q?"?"+q:"")+window.location.hash);
     }
@@ -4602,8 +4707,20 @@ export default function App(){
       const d=await r.json();
       if(!r.ok) throw new Error(d.error);
       setEmail(d.email||null);
-      if(d.workspace){ localStorage.setItem("mat_user_id",d.workspace.id); readyRef.current=true; setStage("ready"); }
-      else setStage("setup");
+      let invite=null; try{ invite=localStorage.getItem("pm_invite"); }catch(e){}
+      if(d.workspace){
+        if(invite){ try{ localStorage.removeItem("pm_invite"); }catch(e){} window.alert(AUTH_T[lang].alreadyIn); }
+        localStorage.setItem("mat_user_id",d.workspace.id); readyRef.current=true; setStage("ready"); return;
+      }
+      if(invite){
+        // Pozivnica u tim: prihvata se automatski posle prijave
+        const ar=await fetch("/api/me",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"accept",token:invite})});
+        const ad=await ar.json().catch(()=>({}));
+        try{ localStorage.removeItem("pm_invite"); }catch(e){}
+        if(ar.ok&&ad.workspace){ localStorage.setItem("mat_user_id",ad.workspace.id); readyRef.current=true; setStage("ready"); return; }
+        setSetupErr(ad.error||AUTH_T[lang].err);
+      }
+      setStage("setup");
     }catch(e){ if(!readyRef.current) setStage("error"); }
   };
 
@@ -4631,9 +4748,12 @@ export default function App(){
     window.location.replace(window.location.origin);
   };
 
-  if(stage==="ready") return <MainApp account={supabase?{email,onLogout:logout}:null}/>;
+  if(stage==="ready") return <>
+    <MainApp account={supabase?{email,onLogout:logout,onTeam:()=>setShowTeam(true)}:null}/>
+    {showTeam&&<TeamModal lang={lang} onClose={()=>setShowTeam(false)}/>}
+  </>;
   if(stage==="login") return <LoginScreen lang={lang} setLang={setLang} initialError={authErr}/>;
-  if(stage==="setup") return <SetupScreen lang={lang} setLang={setLang} email={email} onLogout={logout} onDone={(ws)=>{ localStorage.setItem("mat_user_id",ws.id); readyRef.current=true; setStage("ready"); }}/>;
+  if(stage==="setup") return <SetupScreen lang={lang} setLang={setLang} email={email} onLogout={logout} initialError={setupErr} onDone={(ws)=>{ localStorage.setItem("mat_user_id",ws.id); readyRef.current=true; setStage("ready"); }}/>;
   if(stage==="error") return <div style={AU.page}><div style={{...AU.card,textAlign:"center"}}>
     <div style={{...AU.muted,marginBottom:16}}>{AUTH_T[lang].err}</div>
     <button style={AU.primary} onClick={()=>{ setStage("loading"); loadMe(); }}>{AUTH_T[lang].retry}</button>
