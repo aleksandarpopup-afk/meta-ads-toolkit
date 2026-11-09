@@ -2,12 +2,13 @@
 // Uzivo iz Google Ads (keyword_view) + GA4 prihod po kljucnoj reci. Nista se ne cuva u bazi.
 // Kljucne reci postoje samo u Search kampanjama, zato se vraca i udeo Search potrosnje u ukupnoj.
 
+import { guard, clientInWorkspace } from "./_lib/auth.js";
+
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const GADS_VERSION = "v25";
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 async function refreshAccessToken(refresh_token) {
@@ -49,15 +50,17 @@ function convert(amount, from, to, rates) {
 const MATCH = { EXACT: "exact", PHRASE: "phrase", BROAD: "broad" };
 
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
-  const { client_id, user_id, days, from, to } = req.query;
+  // Samo prijavljen korisnik, i samo za klijenta iz svog radnog prostora
+  const ctx = await guard(req, res);
+  if (!ctx) return;
+  if (!(await clientInWorkspace(req.query.client_id, ctx.membership.workspace_id))) return res.status(404).json({ error: "client_not_found" });
+
+  const { client_id, days, from, to } = req.query;
   const cid = Number(client_id);
   if (!Number.isInteger(cid) || cid <= 0) return res.status(400).json({ error: "Invalid client_id" });
-  if (!user_id || !UUID_RE.test(user_id)) return res.status(400).json({ error: "Invalid user_id" });
 
   // Period: isto kao /api/campaigns (days=N zakljucno sa jucerasnjim danom, ili from/to)
   let startStr, endStr;
@@ -71,9 +74,6 @@ export default async function handler(req, res) {
 
   const h = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
   try {
-    const cr = await fetch(`${SUPABASE_URL}/rest/v1/clients?id=eq.${cid}&user_id=eq.${user_id}&select=id`, { headers: h });
-    if (!(await cr.json())[0]) return res.status(404).json({ error: "client_not_found" });
-
     const gr = await fetch(`${SUPABASE_URL}/rest/v1/google_ads_connections?client_id=eq.${cid}&select=customer_id,manager_id,refresh_token,currency_code&order=updated_at.desc`, { headers: h });
     const gconn = (await gr.json())[0];
     if (!gconn) return res.status(404).json({ error: "no_gads" });
