@@ -90,3 +90,9 @@ export function verifyState(state, maxAgeMs = 60 * 60 * 1000) {
     return obj;
   } catch { return null; }
 }
+
+// Da li poziv dolazi od naseg automatskog posla (Vercel cron / cron-morning)?
+export function isCron(req) {
+  const secret = process.env.CRON_SECRET;
+  return !!secret && (req.headers.authorization || "") === `Bearer ${secret}`;
+}
