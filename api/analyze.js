@@ -1,10 +1,13 @@
 // api/analyze.js — posrednik ka Anthropic API-ju (koriste ga Health Check, AI zakljucci i uvoz u Report Studio-u)
+// Dostupno SAMO prijavljenim korisnicima koji su clanovi nekog radnog prostora.
+import { guard } from "./_lib/auth.js";
+
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).end();
+
+  const ctx = await guard(req, res);
+  if (!ctx) return;
 
   // Samo serverska varijabla (VITE_ varijable mogu zavrsiti u javnom kodu sajta)
   const API_KEY = process.env.ANTHROPIC_API_KEY;
