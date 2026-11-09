@@ -1,21 +1,21 @@
+import { guard } from "./_lib/auth.js";
+
 // api/analyses.js — istorija analiza klijenta (prikaz u Clients)
 // Citanje i brisanje samo za vlasnika (user_id). Filter perioda radi preko preklapanja.
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.status(200).end();
 
   const headers = { "Content-Type": "application/json", apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 
   try {
-    const userId = req.method === "POST" ? (req.body || {}).user_id : req.query.user_id;
-    if (!userId || !UUID_RE.test(userId)) return res.status(400).json({ error: "Missing or invalid user_id" });
+    // Radni prostor iz prijave (pregledac vise ne bira ciji su podaci)
+    const ctx = await guard(req, res);
+    if (!ctx) return;
+    const userId = ctx.membership.workspace_id;
 
     if (req.method === "DELETE") {
       const { id } = req.query;
@@ -33,6 +33,8 @@ export default async function handler(req, res) {
     if (req.method === "POST") {
       const { client_id, tool, period_from, period_to, analysis_text, metrics } = req.body || {};
       if (!client_id || !analysis_text) return res.status(400).json({ error: "Missing fields" });
+      // client_id ide u upit ka bazi - dozvoljen je samo broj
+      if (!Number.isInteger(Number(client_id)) || Number(client_id) <= 0) return res.status(400).json({ error: "Invalid client_id" });
       const own = await fetch(`${SUPABASE_URL}/rest/v1/clients?id=eq.${client_id}&user_id=eq.${userId}&select=id`, { headers });
       const ownD = await own.json();
       if (!Array.isArray(ownD) || !ownD.length) return res.status(403).json({ error: "Client not found" });
