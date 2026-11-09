@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, Fragment } from "react";
+import { createClient } from "@supabase/supabase-js";
 
 // ── IMAGE TYPE DETECTOR ───────────────────────────────────────────────────────
 function getImageMediaType(base64){
@@ -4067,7 +4068,7 @@ function NotifModal({lang,notifStatus,onEnable,onClose}){
   </div>;
 }
 
-export default function App(){
+function MainApp({account}){
   const [lang,setLang]=useState(()=>localStorage.getItem("mat_lang")||"sr");
   const [mod,setMod]=useState(()=>{
     const params=new URLSearchParams(window.location.search);
@@ -4279,6 +4280,7 @@ export default function App(){
         <button onClick={()=>setShowQR(true)} style={{background:"rgba(99,102,241,0.2)",border:"none",borderRadius:20,color:C.acl,fontSize:12,fontWeight:600,padding:"7px 12px",cursor:"pointer"}} title="Poveži telefon">📱</button>
         <button onClick={()=>setShowNotif(true)} aria-label={lang==="sr"?"Obaveštenja":"Notifications"} style={{background:notifStatus==="granted"?"rgba(52,211,153,0.2)":"rgba(251,191,36,0.2)",border:"none",borderRadius:20,color:notifStatus==="granted"?C.grn:C.yel,fontSize:14,padding:"7px 10px",cursor:"pointer"}} title={lang==="sr"?"Obaveštenja":"Notifications"}>🔔</button>
         {["sr","en"].map(l=><button key={l} onClick={()=>setLang(l)} style={{padding:"6px 12px",borderRadius:20,fontSize:12,fontWeight:700,cursor:"pointer",border:"none",background:lang===l?"rgba(99,102,241,0.3)":"rgba(255,255,255,0.07)",color:lang===l?"#A5B4FC":"rgba(255,255,255,0.4)"}}>{l.toUpperCase()}</button>)}
+        {account&&<button onClick={account.onLogout} title={(lang==="sr"?"Odjavi se":"Sign out")+(account.email?` (${account.email})`:"")} aria-label={lang==="sr"?"Odjavi se":"Sign out"} style={{background:"rgba(255,255,255,0.07)",border:"none",borderRadius:20,color:"rgba(255,255,255,0.55)",fontSize:13,padding:"6px 10px",cursor:"pointer"}}>⎋</button>}
       </div>
     </div>
     <div style={{maxWidth:580,margin:"0 auto",padding:"0 0 40px"}}>
@@ -4335,6 +4337,7 @@ export default function App(){
             🔔 {lang==="sr"?"Obaveštenja":"Notifications"}
           </button>
           {["sr","en"].map(l=><button key={l} onClick={()=>setLang(l)} style={{padding:"7px 16px",borderRadius:20,fontSize:13,fontWeight:700,cursor:"pointer",border:"none",background:lang===l?"rgba(99,102,241,0.3)":"rgba(255,255,255,0.07)",color:lang===l?"#A5B4FC":"rgba(255,255,255,0.4)"}}>{l.toUpperCase()}</button>)}
+          {account&&<button onClick={account.onLogout} title={account.email||""} style={{background:"rgba(255,255,255,0.06)",border:`1px solid ${C.brd}`,borderRadius:10,color:"rgba(255,255,255,0.6)",fontSize:12,fontWeight:600,padding:"7px 12px",cursor:"pointer"}}>{lang==="sr"?"Odjavi se":"Sign out"}</button>}
         </div>
       </div>
     </div>
@@ -4403,4 +4406,238 @@ export default function App(){
       </div>
     </div>
   </div>;
+}
+
+// ── PRIJAVA (Supabase Auth) ──────────────────────────────────────────────────
+// Ceo postojeći program je u MainApp i radi kao ranije: i dalje čita ID iz
+// localStorage "mat_user_id". Ovaj sloj samo pre toga traži prijavu i u
+// "mat_user_id" upisuje ID radnog prostora prijavljenog korisnika.
+const SB_URL=import.meta.env.VITE_SUPABASE_URL;
+const SB_KEY=import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabase=(SB_URL&&SB_KEY)?createClient(SB_URL,SB_KEY):null;
+const UUID_RX=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Svaki poziv ka našim /api/ adresama automatski nosi token prijavljenog korisnika
+let AUTH_TOKEN=null;
+if(typeof window!=="undefined"&&!window.__pmFetchPatched){
+  const origFetch=window.fetch.bind(window);
+  window.fetch=(input,init)=>{
+    try{
+      const url=typeof input==="string"?input:(input&&input.url)||"";
+      const ours=url.startsWith("/api/")||url.startsWith(window.location.origin+"/api/");
+      if(ours&&AUTH_TOKEN){
+        const h=new Headers((init&&init.headers)||(typeof input!=="string"&&input.headers)||undefined);
+        if(!h.has("Authorization")) h.set("Authorization","Bearer "+AUTH_TOKEN);
+        init={...(init||{}),headers:h};
+      }
+    }catch(e){}
+    return origFetch(input,init);
+  };
+  window.__pmFetchPatched=true;
+}
+
+const AUTH_T={
+  sr:{
+    title:"Prijavite se", sub:"Analitika oglasa i prodaje na jednom mestu",
+    google:"Nastavi sa Google-om", or:"ili mejlom", emailPh:"vas@mejl.com", sendLink:"Pošalji link za prijavu",
+    sending:"Šaljem...", sent:"Poslali smo link na", sentHint:"Otvorite mejl i kliknite na link. Proverite i Spam.",
+    other:"Druga adresa", badEmail:"Upišite ispravnu mejl adresu.",
+    loading:"Učitavam...", setupTitle:"Dobro došli u PerfMind",
+    setupSub:"Još jedan korak: povežite nalog sa radnim prostorom.",
+    claim:"Poveži moje postojeće podatke", claimHint:"Klijenti, budžeti i veze koje već koristite u ovom pregledaču.",
+    or2:"ili", createTitle:"Napravi nov radni prostor", wsPh:"Naziv agencije (opciono)", create:"Napravi",
+    working:"Radim...", logout:"Odjavi se", signedAs:"Prijavljeni ste kao",
+    err:"Nešto nije u redu. Pokušajte ponovo.", retry:"Pokušaj ponovo"
+  },
+  en:{
+    title:"Sign in", sub:"Ad and sales analytics in one place",
+    google:"Continue with Google", or:"or with email", emailPh:"you@email.com", sendLink:"Send sign-in link",
+    sending:"Sending...", sent:"We sent a link to", sentHint:"Open the email and click the link. Check Spam too.",
+    other:"Use another address", badEmail:"Enter a valid email address.",
+    loading:"Loading...", setupTitle:"Welcome to PerfMind",
+    setupSub:"One more step: connect your account to a workspace.",
+    claim:"Connect my existing data", claimHint:"Clients, budgets and connections you already use in this browser.",
+    or2:"or", createTitle:"Create a new workspace", wsPh:"Agency name (optional)", create:"Create",
+    working:"Working...", logout:"Sign out", signedAs:"Signed in as",
+    err:"Something went wrong. Please try again.", retry:"Try again"
+  }
+};
+
+const AU={
+  page:{minHeight:"100vh",background:"#08080f",color:"#fff",fontFamily:"'Plus Jakarta Sans',sans-serif",display:"flex",alignItems:"center",justifyContent:"center",padding:"24px 16px"},
+  card:{width:"100%",maxWidth:400,background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:20,padding:"32px 28px"},
+  input:{width:"100%",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:12,color:"#fff",fontSize:14,padding:"12px 14px",outline:"none"},
+  primary:{width:"100%",border:"none",borderRadius:12,padding:"12px 16px",fontSize:14,fontWeight:700,cursor:"pointer",color:"#fff",background:"linear-gradient(135deg,#00B4FF,#7C3AED)"},
+  google:{width:"100%",border:"none",borderRadius:12,padding:"12px 16px",fontSize:14,fontWeight:700,cursor:"pointer",color:"#1f1f1f",background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",gap:10},
+  ghost:{width:"100%",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:12,padding:"11px 16px",fontSize:13,fontWeight:600,cursor:"pointer",color:"rgba(255,255,255,0.8)"},
+  muted:{color:"rgba(255,255,255,0.5)",fontSize:13,lineHeight:1.5},
+  err:{background:"rgba(239,68,68,0.12)",border:"1px solid rgba(239,68,68,0.35)",color:"#FCA5A5",borderRadius:10,padding:"10px 12px",fontSize:13,marginTop:14}
+};
+
+function AuthHeader({lang,setLang}){
+  return <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:26}}>
+    <div style={{display:"flex",alignItems:"center",gap:10}}>
+      <img src="/logo-64.png" alt="PerfMind" width={36} height={36} style={{width:36,height:36,borderRadius:10,display:"block"}}/>
+      <div style={{fontWeight:800,fontSize:19}}><BrandName/></div>
+    </div>
+    <div style={{display:"flex",gap:4}}>
+      {["sr","en"].map(l=><button key={l} onClick={()=>setLang(l)} style={{padding:"5px 10px",borderRadius:16,fontSize:11,fontWeight:700,cursor:"pointer",border:"none",background:lang===l?"rgba(99,102,241,0.3)":"rgba(255,255,255,0.07)",color:lang===l?"#A5B4FC":"rgba(255,255,255,0.4)"}}>{l.toUpperCase()}</button>)}
+    </div>
+  </div>;
+}
+
+function GoogleIcon(){
+  return <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>;
+}
+
+function LoginScreen({lang,setLang,initialError}){
+  const a=AUTH_T[lang];
+  const [email,setEmail]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [sentTo,setSentTo]=useState(null);
+  const [err,setErr]=useState(initialError||null);
+  const google=async()=>{
+    setErr(null);
+    const {error}=await supabase.auth.signInWithOAuth({provider:"google",options:{redirectTo:window.location.origin}});
+    if(error) setErr(error.message);
+  };
+  const sendLink=async(e)=>{
+    e.preventDefault(); setErr(null);
+    const v=email.trim();
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)){ setErr(a.badEmail); return; }
+    setBusy(true);
+    const {error}=await supabase.auth.signInWithOtp({email:v,options:{emailRedirectTo:window.location.origin}});
+    setBusy(false);
+    if(error) setErr(error.message); else setSentTo(v);
+  };
+  return <div style={AU.page}><div style={AU.card}>
+    <AuthHeader lang={lang} setLang={setLang}/>
+    {sentTo?<>
+      <div style={{fontSize:30,marginBottom:10}}>✉️</div>
+      <div style={{fontWeight:800,fontSize:20,marginBottom:8}}>{a.sent}</div>
+      <div style={{fontWeight:700,color:"#7DD3FC",marginBottom:10,wordBreak:"break-all"}}>{sentTo}</div>
+      <div style={{...AU.muted,marginBottom:22}}>{a.sentHint}</div>
+      <button style={AU.ghost} onClick={()=>{setSentTo(null);setEmail("");}}>{a.other}</button>
+    </>:<>
+      <div style={{fontWeight:800,fontSize:22,marginBottom:4}}>{a.title}</div>
+      <div style={{...AU.muted,marginBottom:22}}>{a.sub}</div>
+      <button style={AU.google} onClick={google}><GoogleIcon/>{a.google}</button>
+      <div style={{display:"flex",alignItems:"center",gap:10,margin:"18px 0",color:"rgba(255,255,255,0.35)",fontSize:12}}>
+        <div style={{flex:1,height:1,background:"rgba(255,255,255,0.1)"}}/>{a.or}<div style={{flex:1,height:1,background:"rgba(255,255,255,0.1)"}}/>
+      </div>
+      <form onSubmit={sendLink}>
+        <input type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder={a.emailPh} style={{...AU.input,marginBottom:10}}/>
+        <button type="submit" disabled={busy} style={{...AU.primary,opacity:busy?0.6:1}}>{busy?a.sending:a.sendLink}</button>
+      </form>
+    </>}
+    {err&&<div style={AU.err}>{err}</div>}
+  </div></div>;
+}
+
+function SetupScreen({lang,setLang,email,onDone,onLogout}){
+  const a=AUTH_T[lang];
+  const legacy=(()=>{ const v=localStorage.getItem("mat_user_id")||""; return UUID_RX.test(v)?v:null; })();
+  const [name,setName]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [err,setErr]=useState(null);
+  const run=async(body)=>{
+    setBusy(true); setErr(null);
+    try{
+      const r=await fetch("/api/me",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      const d=await r.json();
+      if(!r.ok||!d.workspace) throw new Error(d.error||a.err);
+      onDone(d.workspace);
+    }catch(e){ setErr(e.message||a.err); setBusy(false); }
+  };
+  return <div style={AU.page}><div style={AU.card}>
+    <AuthHeader lang={lang} setLang={setLang}/>
+    <div style={{fontWeight:800,fontSize:21,marginBottom:4}}>{a.setupTitle}</div>
+    <div style={{...AU.muted,marginBottom:22}}>{a.setupSub}</div>
+    {legacy&&<>
+      <button disabled={busy} style={{...AU.primary,opacity:busy?0.6:1}} onClick={()=>run({action:"claim",legacy_id:legacy})}>{busy?a.working:a.claim}</button>
+      <div style={{...AU.muted,fontSize:12,marginTop:8}}>{a.claimHint}</div>
+      <div style={{display:"flex",alignItems:"center",gap:10,margin:"20px 0",color:"rgba(255,255,255,0.35)",fontSize:12}}>
+        <div style={{flex:1,height:1,background:"rgba(255,255,255,0.1)"}}/>{a.or2}<div style={{flex:1,height:1,background:"rgba(255,255,255,0.1)"}}/>
+      </div>
+    </>}
+    <div style={{fontWeight:700,fontSize:14,marginBottom:10}}>{a.createTitle}</div>
+    <input value={name} onChange={e=>setName(e.target.value)} placeholder={a.wsPh} maxLength={80} style={{...AU.input,marginBottom:10}}/>
+    <button disabled={busy} style={{...(legacy?AU.ghost:AU.primary),opacity:busy?0.6:1}} onClick={()=>run({action:"create",name})}>{busy?a.working:a.create}</button>
+    {err&&<div style={AU.err}>{err}</div>}
+    <div style={{...AU.muted,fontSize:12,marginTop:22,display:"flex",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+      <span>{a.signedAs} <b style={{color:"rgba(255,255,255,0.75)"}}>{email}</b></span>
+      <span style={{cursor:"pointer",textDecoration:"underline"}} onClick={onLogout}>{a.logout}</span>
+    </div>
+  </div></div>;
+}
+
+export default function App(){
+  const [lang,setLangState]=useState(()=>localStorage.getItem("mat_lang")||"sr");
+  const setLang=(l)=>{ setLangState(l); try{ localStorage.setItem("mat_lang",l); }catch(e){} };
+  const [stage,setStage]=useState(supabase?"loading":"ready"); // loading | login | setup | ready | error
+  const [email,setEmail]=useState(null);
+  const [authErr,setAuthErr]=useState(null);
+  const readyRef=useRef(false); // kad je aplikacija jednom otvorena, osvežavanje tokena je ne zatvara
+
+  // Stari linkovi (?uuid= / ?token=) – zapamti ID radi povezivanja postojećih podataka i skloni ga iz adrese
+  useEffect(()=>{
+    if(!supabase) return;
+    const params=new URLSearchParams(window.location.search);
+    const legacy=params.get("uuid")||params.get("token");
+    if(legacy&&UUID_RX.test(legacy)) localStorage.setItem("mat_user_id",legacy);
+    if(params.has("uuid")||params.has("token")){
+      params.delete("uuid"); params.delete("token");
+      const q=params.toString();
+      window.history.replaceState({},"",window.location.pathname+(q?"?"+q:"")+window.location.hash);
+    }
+    // Greška vraćena sa prijave (npr. istekao link)
+    const hp=new URLSearchParams(window.location.hash.replace(/^#/,""));
+    if(hp.get("error_description")) setAuthErr(hp.get("error_description").replace(/\+/g," "));
+  },[]);
+
+  const loadMe=async()=>{
+    try{
+      const r=await fetch("/api/me");
+      if(r.status===401){ setStage("login"); return; }
+      const d=await r.json();
+      if(!r.ok) throw new Error(d.error);
+      setEmail(d.email||null);
+      if(d.workspace){ localStorage.setItem("mat_user_id",d.workspace.id); readyRef.current=true; setStage("ready"); }
+      else setStage("setup");
+    }catch(e){ if(!readyRef.current) setStage("error"); }
+  };
+
+  useEffect(()=>{
+    if(!supabase) return;
+    let alive=true;
+    supabase.auth.getSession().then(({data})=>{
+      if(!alive) return;
+      const s=data&&data.session;
+      AUTH_TOKEN=s?s.access_token:null;
+      if(s) loadMe(); else setStage("login");
+    });
+    const {data:sub}=supabase.auth.onAuthStateChange((event,session)=>{
+      AUTH_TOKEN=session?session.access_token:null;
+      if(event==="SIGNED_IN"&&!readyRef.current) loadMe();
+      if(event==="SIGNED_OUT"){ readyRef.current=false; setStage("login"); }
+    });
+    return()=>{ alive=false; sub&&sub.subscription&&sub.subscription.unsubscribe(); };
+  },[]);
+
+  const logout=async()=>{
+    try{ await supabase.auth.signOut(); }catch(e){}
+    AUTH_TOKEN=null;
+    localStorage.removeItem("mat_user_id");
+    window.location.replace(window.location.origin);
+  };
+
+  if(stage==="ready") return <MainApp account={supabase?{email,onLogout:logout}:null}/>;
+  if(stage==="login") return <LoginScreen lang={lang} setLang={setLang} initialError={authErr}/>;
+  if(stage==="setup") return <SetupScreen lang={lang} setLang={setLang} email={email} onLogout={logout} onDone={(ws)=>{ localStorage.setItem("mat_user_id",ws.id); readyRef.current=true; setStage("ready"); }}/>;
+  if(stage==="error") return <div style={AU.page}><div style={{...AU.card,textAlign:"center"}}>
+    <div style={{...AU.muted,marginBottom:16}}>{AUTH_T[lang].err}</div>
+    <button style={AU.primary} onClick={()=>{ setStage("loading"); loadMe(); }}>{AUTH_T[lang].retry}</button>
+    <div style={{...AU.muted,fontSize:12,marginTop:14,textDecoration:"underline",cursor:"pointer"}} onClick={logout}>{AUTH_T[lang].logout}</div>
+  </div></div>;
+  return <div style={AU.page}><div style={AU.muted}>{AUTH_T[lang].loading}</div></div>;
 }
