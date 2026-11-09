@@ -1,3 +1,5 @@
+import { guard, clientInWorkspace } from "./_lib/auth.js";
+
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
@@ -46,11 +48,13 @@ async function bulkUpsertSpend(rows, headers) {
   const chunkSize = 500;
   for (let i = 0; i < rows.length; i += chunkSize) {
     const chunk = rows.slice(i, i + chunkSize);
-    await fetch(`${SUPABASE_URL}/rest/v1/google_ads_daily_spend?on_conflict=client_id,campaign_id,date`, {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/google_ads_daily_spend?on_conflict=client_id,campaign_id,date`, {
       method: "POST",
       headers: { ...headers, Prefer: "resolution=merge-duplicates" },
       body: JSON.stringify(chunk)
     });
+    // Greska pri upisu se vise ne prikriva (ranije je "Gotovo" stizalo i kad upis nije uspeo)
+    if (!r.ok) throw new Error(`google_ads_daily_spend: ${await r.text()}`);
   }
 }
 
@@ -59,15 +63,19 @@ function dateStr(d) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).end();
 
-  const { client_id, days } = req.body || {};
-  if (!client_id) return res.status(400).json({ error: "Missing client_id" });
-  const backfillDays = parseInt(days) || 90;
+  // Samo prijavljen korisnik, i samo za klijenta iz svog radnog prostora
+  const ctx = await guard(req, res);
+  if (!ctx) return;
+
+  const { days } = req.body || {};
+  const client_id = Number((req.body || {}).client_id);
+  if (!Number.isInteger(client_id) || client_id <= 0) return res.status(400).json({ error: "Missing client_id" });
+  if (!(await clientInWorkspace(client_id, ctx.membership.workspace_id))) return res.status(404).json({ error: "client_not_found" });
+  // Najvise ~2 godine unazad (zastita od preteskih zahteva)
+  const backfillDays = Math.min(Math.max(parseInt(days) || 90, 1), 730);
 
   const headers = {
     "Content-Type": "application/json",
