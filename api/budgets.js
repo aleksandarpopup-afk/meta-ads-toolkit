@@ -1,7 +1,9 @@
+import { guard, isCron } from "./_lib/auth.js";
+
 // api/budgets.js — Budget Pacing
 // Tabele: budgets (budzet po klijentu, platformi i periodu) i budget_spend_entries
 // (ukupno potroseno do datuma unosa, najvise jedan unos po budzetu po danu).
-// Svaka operacija je ogranicena na user_id, pa niko ne moze da menja tudje budzete.
+// Svaka operacija je ogranicena na radni prostor prijavljenog korisnika (user_id), pa niko ne moze da menja tudje budzete.
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -159,16 +161,19 @@ async function ownedClientIds(userId, ids) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.status(200).end();
 
   try {
-    const userId = req.method === "GET" || req.method === "DELETE" || req.method === "PATCH"
-      ? req.query.user_id
-      : (req.body || {}).user_id;
-    if (!userId || !UUID_RE.test(userId)) return res.status(400).json({ error: "Missing or invalid user_id" });
+    // Ko pita: jutarnji automatski posao (samo citanje, za zadatog korisnika) ili prijavljen korisnik
+    let userId;
+    if (isCron(req) && req.method === "GET") {
+      userId = req.query.user_id;
+      if (!userId || !UUID_RE.test(userId)) return res.status(400).json({ error: "Missing or invalid user_id" });
+    } else {
+      const ctx = await guard(req, res);
+      if (!ctx) return;
+      userId = ctx.membership.workspace_id;
+    }
 
     // ── GET: budzeti koji se preklapaju sa periodom from–to, sa klijentom i unosima
     if (req.method === "GET") {
