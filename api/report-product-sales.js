@@ -2,13 +2,14 @@
 // Uzivo iz GA4: svaki prodat proizvod × kampanja sesije (svi izvori: Meta, Google, organski, direktno...),
 // sa brojem kupljenih komada i prihodom. Isto kao GA4 "Free form" izvestaj koji kolege koriste za sastanke.
 
+import { guard } from "./_lib/auth.js";
+
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const supaHeaders = () => ({ apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` });
 
 async function refreshAccessToken(refresh_token) {
@@ -37,20 +38,21 @@ function sourceType(campaign, sourceMedium) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
-  const { client_id, user_id, from, to } = req.query;
+  // Samo prijavljen korisnik
+  const ctx = await guard(req, res);
+  if (!ctx) return;
+
+  const { client_id, from, to } = req.query;
   const cid = Number(client_id);
   if (!Number.isInteger(cid) || cid <= 0) return res.status(400).json({ error: "Invalid client_id" });
-  if (!user_id || !UUID_RE.test(user_id)) return res.status(400).json({ error: "Invalid user_id" });
   if (!DATE_RE.test(from || "") || !DATE_RE.test(to || "") || to < from) return res.status(400).json({ error: "Invalid period" });
 
   try {
     const h = supaHeaders();
-    const cr = await fetch(`${SUPABASE_URL}/rest/v1/clients?id=eq.${cid}&user_id=eq.${user_id}&select=id,name`, { headers: h });
+    const cr = await fetch(`${SUPABASE_URL}/rest/v1/clients?id=eq.${cid}&user_id=eq.${ctx.membership.workspace_id}&select=id,name`, { headers: h });
     const client = (await cr.json())[0];
     if (!client) return res.status(404).json({ error: "client_not_found" });
 
