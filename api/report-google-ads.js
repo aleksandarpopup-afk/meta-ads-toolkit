@@ -2,13 +2,14 @@
 // Brojevi po kampanjama se uzimaju direktno iz postojeceg /api/campaigns (ista logika kao Campaign Intelligence),
 // pa su izvestaj i Campaign Intelligence uvek uskladjeni. Ovde se dodaju: prethodni period i kretanje po danima.
 
+import { guard, clientInWorkspace } from "./_lib/auth.js";
+
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const supaHeaders = () => ({ apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` });
 
 const addDays = (s, n) => { const d = new Date(s + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
@@ -33,9 +34,9 @@ async function refreshAccessToken(refresh_token) {
   return data.access_token;
 }
 
-// Poziv postojeceg /api/campaigns za jedan period
-async function campaignsFor(baseUrl, clientId, from, to) {
-  const r = await fetch(`${baseUrl}/api/campaigns?client_id=${clientId}&from=${from}&to=${to}`);
+// Poziv postojeceg /api/campaigns za jedan period (prosledjuje se prijava korisnika, jer je i /api/campaigns zasticen)
+async function campaignsFor(baseUrl, clientId, from, to, auth) {
+  const r = await fetch(`${baseUrl}/api/campaigns?client_id=${clientId}&from=${from}&to=${to}`, { headers: auth ? { Authorization: auth } : {} });
   const data = await r.json().catch(() => ({}));
   return { ok: r.ok, status: r.status, data };
 }
@@ -100,21 +101,22 @@ async function dailySeries(clientId, from, to, gadsCurrency, ga4Currency) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
-  const { client_id, user_id, from, to, compare } = req.query;
+  // Samo prijavljen korisnik
+  const ctx = await guard(req, res);
+  if (!ctx) return;
+
+  const { client_id, from, to, compare } = req.query;
   const cid = Number(client_id);
   if (!Number.isInteger(cid) || cid <= 0) return res.status(400).json({ error: "Invalid client_id" });
-  if (!user_id || !UUID_RE.test(user_id)) return res.status(400).json({ error: "Invalid user_id" });
   if (!DATE_RE.test(from || "") || !DATE_RE.test(to || "") || to < from) return res.status(400).json({ error: "Invalid period" });
   if (dayDiff(from, to) > 400) return res.status(400).json({ error: "Period too long" });
 
   try {
-    // Klijent mora pripadati korisniku
-    const cr = await fetch(`${SUPABASE_URL}/rest/v1/clients?id=eq.${cid}&user_id=eq.${user_id}&select=id,name`, { headers: supaHeaders() });
+    // Klijent mora pripadati radnom prostoru prijavljenog korisnika
+    const cr = await fetch(`${SUPABASE_URL}/rest/v1/clients?id=eq.${cid}&user_id=eq.${ctx.membership.workspace_id}&select=id,name`, { headers: supaHeaders() });
     const client = (await cr.json())[0];
     if (!client) return res.status(404).json({ error: "client_not_found" });
 
@@ -126,8 +128,8 @@ export default async function handler(req, res) {
     const wantCompare = compare !== "0";
 
     const [cur, prev] = await Promise.all([
-      campaignsFor(baseUrl, cid, from, to),
-      wantCompare ? campaignsFor(baseUrl, cid, prevFrom, prevTo) : Promise.resolve(null),
+      campaignsFor(baseUrl, cid, from, to, req.headers.authorization),
+      wantCompare ? campaignsFor(baseUrl, cid, prevFrom, prevTo, req.headers.authorization) : Promise.resolve(null),
     ]);
     if (!cur.ok) {
       const code = cur.data && cur.data.error;
