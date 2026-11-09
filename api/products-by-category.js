@@ -1,3 +1,5 @@
+import { guard, clientInWorkspace } from "./_lib/auth.js";
+
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
@@ -57,12 +59,18 @@ function convert(amount, fromCur, toCur, rates) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   if (req.method === "OPTIONS") return res.status(200).end();
+
+  // Samo prijavljen korisnik, i samo za klijenta iz svog radnog prostora
+  const ctx = await guard(req, res);
+  if (!ctx) return;
+  if (!(await clientInWorkspace(req.query.client_id, ctx.membership.workspace_id))) return res.status(404).json({ error: "client_not_found" });
 
   const { client_id, category, days, from, to } = req.query;
   if (!client_id) return res.status(400).json({ error: "Missing client_id" });
+  // Datumi idu i u upit ka bazi - dozvoljeni su samo ispravni datumi
+  const DATE_OK = /^\d{4}-\d{2}-\d{2}$/;
+  if ((from || to) && !(DATE_OK.test(from || "") && DATE_OK.test(to || ""))) return res.status(400).json({ error: "Invalid period" });
 
   let startStr, endStr;
   if (from && to) {
