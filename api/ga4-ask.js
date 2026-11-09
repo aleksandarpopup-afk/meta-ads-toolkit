@@ -1,3 +1,5 @@
+import { guard, clientInWorkspace } from "./_lib/auth.js";
+
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
@@ -251,7 +253,7 @@ const tools = [
         previousEndDate: { type: "string", description: "Opciono - kraj perioda za poređenje." },
         nameContains: { type: "string", description: "Opciono - vraća samo proizvode čiji naziv sadrži ovaj tekst." },
         orderBy: { type: "string", enum: ["viewed", "addedToCart", "purchased", "revenue"], description: "Metrika po kojoj se sortira, opadajuće." },
-        limit: { type: "integer", description: "Maksimalan broj proizvoda, podrazumevano 10, maksimalno 50." }
+        limit: { type: "integer", description: "Maksimalan broj proizvoda, podrazumevano 25, maksimalno 250." }
       },
       required: ["startDate", "endDate"]
     }
@@ -350,7 +352,7 @@ Pravila:
 - Ako pitanje traži nešto što GA4 ne prati (profit, marža, plate, zalihe i slično), jasno reci da GA4 to ne prati, i predloži šta GA4 STVARNO zna da pokaže umesto toga.
 - Troškove oglašavanja GA4 ima SAMO kad je nalog povezan sa Google Ads: tada preko run_report postoje metrike advertiserAdCost (trošak), advertiserAdClicks, advertiserAdImpressions i returnOnAdSpend (ROAS), uz dimenziju sessionGoogleAdsCampaignName za raščlanjavanje po kampanji. Ako te metrike vrate 0 ili grešku, reci da podaci o trošku nisu dostupni u GA4 za ovaj nalog. Trošak Meta i drugih platformi obično NIJE u GA4 - to jasno reci, ne izmišljaj.
 - Ako za traženi period/proizvod/kampanju nema podataka, jasno to reci - nikad ne izmišljaj brojeve.
-- Imaš TRI alata: query_products (proizvod-nivo, bez filtera po izvoru), query_campaigns (kampanja/saobraćaj-nivo), i query_products_by_source (proizvod-nivo, ALI filtrirano po konkretnom izvoru/platformi). Ako pitanje pominje SAMO "kampanju" ili izvor/kanal (bez konkretnog proizvoda), koristi query_campaigns. Ako pitanje pominje SAMO "proizvod" (bez izvora/platforme), koristi query_products. Ako pitanje KOMBINUJE proizvod I izvor/platformu istovremeno (npr. "koji proizvod je najprodavaniji preko Meta oglasa"), koristi query_products_by_source.
+- Od specijalizovanih alata imaš tri: query_products (proizvod-nivo, bez filtera po izvoru), query_campaigns (kampanja/saobraćaj-nivo), i query_products_by_source (proizvod-nivo, ALI filtrirano po konkretnom izvoru/platformi). Ako pitanje pominje SAMO "kampanju" ili izvor/kanal (bez konkretnog proizvoda), koristi query_campaigns. Ako pitanje pominje SAMO "proizvod" (bez izvora/platforme), koristi query_products. Ako pitanje KOMBINUJE proizvod I izvor/platformu istovremeno (npr. "koji proizvod je najprodavaniji preko Meta oglasa"), koristi query_products_by_source.
 - Pored ta tri, imaš i run_report (opšti GA4 izveštaj sa bilo kojim dimenzijama i metrikama) i list_available_fields (spisak polja koja nalog ima). Za pitanja o proizvodima i kampanjama prvo koristi tri specijalizovana alata. Za SVE ostalo (kanali, izvor/medijum, uređaji, zemlje, gradovi, landing stranice, kretanje po danima, događaji, korisnici, angažovanost, Google Ads trošak i ROAS iz GA4, kategorije proizvoda) koristi run_report. Ako nisi siguran kako se polje tačno zove, ili pitanje traži nešto neuobičajeno (custom polja klijenta), prvo pozovi list_available_fields sa kratkim search pojmom.
 - Svaki alat vraća moreRowsExist i totalRowsInGA4. Ako je moreRowsExist=true a pitanje traži ukupno ili "sve", pozovi alat ponovo sa većim limitom (do 250) ili preciznijim filterom umesto da korisniku pričaš o ograničenjima. Tek ako ni 250 redova nije dovoljno, kratko napomeni da je prikazan deo.
 - Metrika "kupovine" (purchases/transactions) je broj stvarnih kupovina, ne svih konverzija/ciljeva.
@@ -373,7 +375,7 @@ Rules:
 - If the question asks for something GA4 doesn't track (profit, margin, payroll, inventory, etc.), clearly say GA4 doesn't track that, and suggest what GA4 actually can show instead.
 - GA4 has ad COSTS only when the property is linked to Google Ads: then run_report offers the metrics advertiserAdCost (cost), advertiserAdClicks, advertiserAdImpressions and returnOnAdSpend (ROAS), with the dimension sessionGoogleAdsCampaignName for a per-campaign breakdown. If those return 0 or an error, say cost data isn't available in GA4 for this property. Meta and other platforms' costs are usually NOT in GA4 - say so clearly, don't make anything up.
 - If there's no data for the requested period/product/campaign, clearly say so - never make up numbers.
-- You have THREE tools: query_products (product-level, no source filter), query_campaigns (campaign/traffic-level), and query_products_by_source (product-level, BUT filtered by a specific source/platform). If the question mentions ONLY a "campaign" or traffic source/channel (no specific product), use query_campaigns. If it mentions ONLY a "product" (no source/platform), use query_products. If the question COMBINES a product AND a source/platform (e.g. "which product sells best via Meta ads"), use query_products_by_source.
+- Of the specialized tools you have three: query_products (product-level, no source filter), query_campaigns (campaign/traffic-level), and query_products_by_source (product-level, BUT filtered by a specific source/platform). If the question mentions ONLY a "campaign" or traffic source/channel (no specific product), use query_campaigns. If it mentions ONLY a "product" (no source/platform), use query_products. If the question COMBINES a product AND a source/platform (e.g. "which product sells best via Meta ads"), use query_products_by_source.
 - Besides those three, you also have run_report (a general GA4 report with any dimensions and metrics) and list_available_fields (the list of fields the property has). For product and campaign questions use the three specialized tools first. For EVERYTHING else (channels, source/medium, devices, countries, cities, landing pages, daily trends, events, users, engagement, Google Ads cost and ROAS from GA4, product categories) use run_report. If you're not sure of a field's exact name, or the question asks for something unusual (client custom fields), call list_available_fields with a short search term first.
 - Every tool returns moreRowsExist and totalRowsInGA4. If moreRowsExist=true and the question asks for a total or "all", call the tool again with a larger limit (up to 250) or a narrower filter instead of telling the user about limits. Only if even 250 rows aren't enough, briefly note that a subset is shown.
 - The "purchases" metric (transactions) is the number of actual purchases, not all conversions/goals.
@@ -387,17 +389,19 @@ Rules:
 }
 
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).end();
+
+  // Samo prijavljen korisnik, i samo za klijenta iz svog radnog prostora
+  const ctx = await guard(req, res);
+  if (!ctx) return;
 
   if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: "API key not configured" });
 
   const { client_id, question, history, lang } = req.body || {};
   if (!client_id || !question) return res.status(400).json({ error: "Missing client_id or question" });
   const sr = lang !== "en";
+  if (!(await clientInWorkspace(client_id, ctx.membership.workspace_id))) return res.status(404).json({ error: "Klijent nije pronađen" });
 
   const supaHeaders = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 
