@@ -52,3 +52,19 @@ export async function requireWorkspace(req) {
 }
 
 export { SUPABASE_URL };
+
+// Da li klijent pripada radnom prostoru? (true/false)
+export async function clientInWorkspace(clientId, workspaceId) {
+  const id = Number(clientId);
+  if (!Number.isInteger(id) || id <= 0) return false;
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/clients?id=eq.${id}&user_id=eq.${workspaceId}&select=id`, { headers: dbHeaders });
+  const d = await r.json();
+  return r.ok && Array.isArray(d) && d.length > 0;
+}
+
+// Za sve API fajlove: vrati 401 ako niko nije prijavljen. Vraća { user, membership } ili null (odgovor je već poslat).
+export async function guard(req, res) {
+  const ctx = await requireWorkspace(req);
+  if (!ctx) { res.status(401).json({ error: "Niste prijavljeni" }); return null; }
+  return ctx;
+}
