@@ -1,3 +1,5 @@
+import { verifyState } from "./_lib/auth.js";
+
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const APP_URL = process.env.APP_URL;
@@ -37,14 +39,12 @@ export default async function handler(req, res) {
     return res.redirect(`${APP_URL}?gads_error=missing_code&mod=10`);
   }
 
-  let client_id, uid;
-  try {
-    const decoded = JSON.parse(Buffer.from(state, "base64").toString());
-    client_id = decoded.client_id;
-    uid = decoded.uid;
-  } catch (e) {
+  // Potpisan state (vidi api/google-ads-auth.js) – podmetnut ili star state se odbija
+  const decoded = verifyState(state);
+  if (!decoded || !decoded.client_id) {
     return res.redirect(`${APP_URL}?gads_error=bad_state&mod=10`);
   }
+  const client_id = decoded.client_id;
 
   try {
     // 1. Razmena koda za tokene
@@ -119,7 +119,7 @@ export default async function handler(req, res) {
 
     // 4. Parkiramo refresh_token + listu naloga privremeno (isti mehanizam kao GA4)
     const expires_at = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-    const tempPayload = { client_id, uid, refresh_token, properties };
+    const tempPayload = { client_id, refresh_token, properties };
 
     const headers = {
       "Content-Type": "application/json",
@@ -137,8 +137,9 @@ export default async function handler(req, res) {
     if (!tempRes.ok) throw new Error(JSON.stringify(tempResult));
 
     const tempId = tempResult[0].id;
-    return res.redirect(`${APP_URL}?gads_setup=${tempId}&mod=10&uid=${uid}`);
+    return res.redirect(`${APP_URL}?gads_setup=${tempId}&mod=10`);
   } catch (err) {
-    return res.redirect(`${APP_URL}?gads_error=${encodeURIComponent(err.message)}&mod=10`);
+    console.error("google-ads-callback:", err.message);
+    return res.redirect(`${APP_URL}?gads_error=${encodeURIComponent(String(err.message).slice(0, 300))}&mod=10`);
   }
 }
