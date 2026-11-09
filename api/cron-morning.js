@@ -61,7 +61,10 @@ async function budgetDigest(userId, today) {
   const d = new Date(today + "T00:00:00Z");
   const from = day(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)));
   const to = day(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)));
-  const r = await fetch(`${APP_URL}/api/budgets?user_id=${userId}&from=${from}&to=${to}`);
+  // budgets.js je zasticen: automatski posao se predstavlja tajnim kljucem (samo za citanje)
+  const r = await fetch(`${APP_URL}/api/budgets?user_id=${userId}&from=${from}&to=${to}`, {
+    headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` },
+  });
   const list = await r.json();
   if (!r.ok || !Array.isArray(list)) return null;
   const active = list.map((b) => bpStatus(b, today)).filter((s) => s.status !== "not_started" && s.status !== "finished");
