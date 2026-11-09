@@ -1,3 +1,5 @@
+import { guard } from "./_lib/auth.js";
+
 // api/imports.js — Report Studio: uvozi iz screenshota ili fajla
 // Cuvaju se u postojecoj tabeli "analyses" sa tool = "import".
 // metrics = { source } (Meta, Google Ads, GA4, Looker, Ostalo). Svaki uvoz ima obavezan period od–do.
@@ -6,7 +8,6 @@
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SOURCES = ["meta", "google_ads", "ga4", "looker", "other"];
 
 async function sb(path, opts = {}) {
@@ -22,14 +23,13 @@ async function sb(path, opts = {}) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.status(200).end();
 
   try {
-    const userId = req.method === "POST" ? (req.body || {}).user_id : req.query.user_id;
-    if (!userId || !UUID_RE.test(userId)) return res.status(400).json({ error: "Missing or invalid user_id" });
+    // Radni prostor iz prijave (pregledac vise ne bira ciji su podaci)
+    const ctx = await guard(req, res);
+    if (!ctx) return;
+    const userId = ctx.membership.workspace_id;
 
     // GET: uvozi klijenta ciji se period preklapa sa from–to
     if (req.method === "GET") {
