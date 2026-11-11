@@ -1,7 +1,8 @@
 // api/_lib/ga4.js — zajednički, "pristojan" pristup GA4 Data API-ju.
 // - Ograničen broj istovremenih upita po jednom otvaranju (limiter), da ne opteretimo GA4 nalog klijenta
 //   (GA4 dozvoljava 10 istovremenih po nalogu; mi trošimo najviše 4, ostatak ostaje za kolege).
-// - Ponovni pokušaj kad Google kaže "previše/zauzeto" (429, RESOURCE_EXHAUSTED, 500/503): posle 1, 2 i 4 s.
+// - Ponovni pokušaj kad Google kaže "previše/zauzeto" (429, RESOURCE_EXHAUSTED, 500/503): do 5 puta,
+//   sa sve dužim čekanjem (oko 1, 2, 4, 8, 10 s) i malo nasumičnim, da se zahtevi ne bi ponovo sudarili u istoj sekundi.
 // - Merenje: potrošena kvota i trajanje (samo beleži, ne menja rezultat).
 // - Paralelno vučenje u delovima daje ISTE redove istim redosledom kao vučenje deo po deo.
 
@@ -59,9 +60,9 @@ export async function ga4Fetch(propertyId, accessToken, body, { meter, limit } =
       if (r.ok) { meterQuota(meter, data); return data; }
       const msg = JSON.stringify(data);
       const retryable = r.status === 429 || r.status === 500 || r.status === 503 || RETRYABLE.test(msg);
-      if (!retryable || attempt >= 3) throw new Error(msg);
+      if (!retryable || attempt >= 5) throw new Error(msg);
       if (meter) meter.retries++;
-      await sleep(1000 * 2 ** attempt); // 1 s, 2 s, 4 s
+      await sleep(Math.min(10000, 1000 * 2 ** attempt) * (0.5 + Math.random())); // ~1, 2, 4, 8, 10 s ± 50%
     }
   };
   return limit ? limit(run) : run();
