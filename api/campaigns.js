@@ -21,18 +21,47 @@ async function refreshAccessToken(refresh_token) {
   return data.access_token;
 }
 
-async function ga4Fetch(propertyId, accessToken, body) {
+async function ga4Fetch(propertyId, accessToken, body, meter) {
   const r = await fetch(
     `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
-      body: JSON.stringify(body)
+      body: JSON.stringify(meter ? { ...body, returnPropertyQuota: true } : body)
     }
   );
   const data = await r.json();
   if (!r.ok) throw new Error(data.error?.message || JSON.stringify(data));
+  meterQuota(meter, data);
   return data;
+}
+
+// ── MERENJE (samo beleži, ne menja rezultat) ──
+// Za svaki upit ka GA4 tražimo i podatak o potrošenoj kvoti (returnPropertyQuota) i merimo trajanje.
+// Rezultat se upisuje u Vercel Logs (red koji počinje sa "[perf]") i u polje _perf odgovora.
+function newMeter(name) {
+  return { name, t0: Date.now(), steps: [], ga4Calls: 0, ga4Tokens: 0, quotaLeft: null };
+}
+function meterStep(meter, label, t) {
+  if (meter) meter.steps.push(`${label}:${Date.now() - t}ms`);
+}
+function meterQuota(meter, data) {
+  if (!meter) return;
+  meter.ga4Calls++;
+  const q = data && data.propertyQuota;
+  if (q) {
+    meter.ga4Tokens += (q.tokensPerHour && q.tokensPerHour.consumed) || 0;
+    meter.quotaLeft = {
+      projectHour: q.tokensPerProjectPerHour ? q.tokensPerProjectPerHour.remaining : null,
+      propertyHour: q.tokensPerHour ? q.tokensPerHour.remaining : null,
+      propertyDay: q.tokensPerDay ? q.tokensPerDay.remaining : null
+    };
+  }
+}
+function meterDone(meter, extra) {
+  const out = { ms: Date.now() - meter.t0, ga4Calls: meter.ga4Calls, ga4Tokens: meter.ga4Tokens, quotaLeft: meter.quotaLeft, steps: meter.steps, ...extra };
+  console.log(`[perf] ${meter.name} ${JSON.stringify(out)}`);
+  return out;
 }
 
 // Konverzija preko EUR kao "pivot" valute (kurseve čuvamo kao EUR -> sve ostalo)
@@ -76,6 +105,9 @@ export default async function handler(req, res) {
 
   const supaHeaders = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 
+  const meter = newMeter(`campaigns client=${client_id} period=${startStr}..${endStr}`);
+  let t = Date.now();
+
   try {
     // 1. Google Ads konekcija (potrebna da bi ovaj modul uopšte imao smisla)
     const gadsConnR = await fetch(
@@ -110,6 +142,7 @@ export default async function handler(req, res) {
     });
     const spendTotals = await spendRpcR.json();
     if (!spendRpcR.ok) throw new Error(JSON.stringify(spendTotals));
+    meterStep(meter, `db(${spendTotals.length} campaigns)`, t); t = Date.now();
 
     const byCampaign = {};
     for (const row of spendTotals) {
@@ -136,7 +169,9 @@ export default async function handler(req, res) {
         filter: { fieldName: "sessionDefaultChannelGroup", inListFilter: { values: ["Paid Search", "Cross-network", "Paid Shopping", "Paid Video"] } }
       },
       limit: 500
-    });
+    }, meter);
+    // rowCount > broja vracenih redova bi znacilo da limit 500 odseca kampanje (provera za velike naloge)
+    meterStep(meter, `ga4(${(ga4Report.rows || []).length}/${ga4Report.rowCount || 0} rows)`, t);
 
     // Sabiranje po ID-u kampanje (ista kampanja moze doci u vise redova zbog naziva)
     const revenueByCampaignId = {};
@@ -228,7 +263,8 @@ export default async function handler(req, res) {
       totalRevenue,
       totalRevenueEUR,
       totalRoas: totalSpendEUR > 0 ? totalRevenueEUR / totalSpendEUR : 0,
-      fxMissing
+      fxMissing,
+      _perf: meterDone(meter, { campaigns: campaigns.length })
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });
