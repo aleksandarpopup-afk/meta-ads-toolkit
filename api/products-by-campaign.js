@@ -1,4 +1,5 @@
 import { guard, clientInWorkspace } from "./_lib/auth.js";
+import { ga4FetchAll, createLimiter, newMeter, meterDone } from "./_lib/ga4.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -12,7 +13,8 @@ async function fetchAllSupabaseRows(url, headers) {
   while (true) {
     const r = await fetch(url, { headers: { ...headers, Range: `${offset}-${offset + pageSize - 1}` } });
     const rows = await r.json();
-    if (!Array.isArray(rows)) break;
+    // Greška baze se više ne prećutkuje (ranije bi kampanje pogrešno izgledale kao "bez potrošnje")
+    if (!r.ok || !Array.isArray(rows)) throw new Error("Baza: " + JSON.stringify(rows).slice(0, 200));
     allRows = allRows.concat(rows);
     if (rows.length < pageSize) break;
     offset += pageSize;
@@ -36,20 +38,6 @@ async function refreshAccessToken(refresh_token) {
   return data.access_token;
 }
 
-async function ga4Fetch(propertyId, accessToken, body) {
-  const r = await fetch(
-    `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
-      body: JSON.stringify(body)
-    }
-  );
-  const data = await r.json();
-  if (!r.ok) throw new Error(data.error?.message || JSON.stringify(data));
-  return data;
-}
-
 function convert(amount, fromCur, toCur, rates) {
   if (fromCur === toCur) return amount;
   const rFrom = fromCur === "EUR" ? 1 : rates[fromCur];
@@ -68,6 +56,7 @@ export default async function handler(req, res) {
 
   const { client_id, q, days, from, to } = req.query;
   if (!client_id || !q || !q.trim()) return res.status(400).json({ error: "Missing client_id or search term" });
+  if (q.length > 150) return res.status(400).json({ error: "Search term too long" });
   // Datumi idu i u upit ka bazi - dozvoljeni su samo ispravni datumi
   const DATE_OK = /^\d{4}-\d{2}-\d{2}$/;
   if ((from || to) && !(DATE_OK.test(from || "") && DATE_OK.test(to || ""))) return res.status(400).json({ error: "Invalid period" });
@@ -77,7 +66,7 @@ export default async function handler(req, res) {
     startStr = from;
     endStr = to;
   } else {
-    const periodDays = parseInt(days) || 30;
+    const periodDays = Math.min(Math.max(parseInt(days) || 30, 1), 730); // 1 dan – 2 godine
     const endDateTmp = new Date();
     endDateTmp.setDate(endDateTmp.getDate() - 1);
     const startDateTmp = new Date();
@@ -88,12 +77,15 @@ export default async function handler(req, res) {
 
   const supaHeaders = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 
+  const meter = newMeter("products-by-campaign");
+  const limit = createLimiter(process.env.GA4_PARALLEL === "0" ? 1 : 4); // najviše 4 istovremena upita ka GA4
   try {
     const ga4ConnR = await fetch(
       `${SUPABASE_URL}/rest/v1/ga4_connections?client_id=eq.${client_id}&select=property_id,refresh_token,currency_code`,
       { headers: supaHeaders }
     );
     const ga4ConnData = await ga4ConnR.json();
+    if (!ga4ConnR.ok || !Array.isArray(ga4ConnData)) throw new Error("Baza: " + JSON.stringify(ga4ConnData).slice(0, 200));
     if (!ga4ConnData.length) return res.status(404).json({ error: "no_ga4" });
     const { property_id, refresh_token, currency_code } = ga4ConnData[0];
     const currency = currency_code || "EUR";
@@ -116,7 +108,8 @@ export default async function handler(req, res) {
     }
 
     // 1. GA4 - prihod/kupovine OVOG proizvoda, raščlanjeno po Google Ads kampanji (campaign ID)
-    const report = await ga4Fetch(property_id, accessToken, {
+    // Svi redovi (ranije najviše 200 – kod velikih naloga deo kampanji i "bez kampanje" prihoda je mogao da fali)
+    const report = await ga4FetchAll(property_id, accessToken, {
       dateRanges: [{ startDate: startStr, endDate: endStr }],
       dimensions: [{ name: "sessionGoogleAdsCampaignId" }, { name: "sessionGoogleAdsCampaignName" }],
       metrics: [
@@ -128,9 +121,8 @@ export default async function handler(req, res) {
       dimensionFilter: {
         filter: { fieldName: "itemName", stringFilter: { matchType: "CONTAINS", value: q.trim(), caseSensitive: false } }
       },
-      orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }],
-      limit: 200
-    });
+      orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }]
+    }, { maxRows: 20000, meter, limit });
 
     const productByCampaignId = {};
     const ga4NameById = {};
@@ -159,13 +151,15 @@ export default async function handler(req, res) {
     }
 
     const matchedIds = Object.keys(productByCampaignId);
+    // U upit ka bazi idu samo brojčani ID-jevi (Google Ads ID je uvek broj) – zaštita adrese upita
+    const dbIds = matchedIds.filter((id) => /^\d{1,20}$/.test(id));
     if (!matchedIds.length) {
       return res.status(200).json({ currency, results: [], unattributed, noMatch: true });
     }
 
     // 2. Spend/naziv/ukupan ROAS SVAKE od ovih kampanja - iz naše baze (kontekst, NE ROAS ovog proizvoda)
-    const spendRows = await fetchAllSupabaseRows(
-      `${SUPABASE_URL}/rest/v1/google_ads_daily_spend?client_id=eq.${client_id}&date=gte.${startStr}&date=lte.${endStr}&campaign_id=in.(${matchedIds.join(",")})&select=campaign_id,campaign_name,spend`,
+    const spendRows = !dbIds.length ? [] : await fetchAllSupabaseRows(
+      `${SUPABASE_URL}/rest/v1/google_ads_daily_spend?client_id=eq.${client_id}&date=gte.${startStr}&date=lte.${endStr}&campaign_id=in.(${dbIds.join(",")})&select=campaign_id,campaign_name,spend`,
       supaHeaders
     );
     const campaignInfo = {};
@@ -175,15 +169,14 @@ export default async function handler(req, res) {
     }
 
     // 3. Ukupan GA4 revenue SVAKE kampanje (za "ukupan ROAS kampanje" kontekst) - odvojen poziv, cela kampanja, ne samo ovaj proizvod
-    const campaignTotalsReport = await ga4Fetch(property_id, accessToken, {
+    const campaignTotalsReport = await ga4FetchAll(property_id, accessToken, {
       dateRanges: [{ startDate: startStr, endDate: endStr }],
       dimensions: [{ name: "sessionGoogleAdsCampaignId" }],
       metrics: [{ name: "totalRevenue" }],
       dimensionFilter: {
         filter: { fieldName: "sessionGoogleAdsCampaignId", inListFilter: { values: matchedIds } }
-      },
-      limit: 200
-    });
+      }
+    }, { maxRows: 20000, meter, limit });
     const campaignTotalRevenue = {};
     for (const row of campaignTotalsReport.rows || []) {
       campaignTotalRevenue[row.dimensionValues[0].value] = parseFloat(row.metricValues[0].value) || 0;
@@ -224,6 +217,7 @@ export default async function handler(req, res) {
       };
     }).sort((a, b) => b.productRevenue - a.productRevenue);
 
+    meterDone(meter, { client: Number(client_id), rows: report.rows.length, campaigns: results.length });
     return res.status(200).json({ currency, gadsCurrency, showSpendNative, showRevenueNative, results, unattributed, noMatch: false, fxMissing });
   } catch (err) {
     return res.status(500).json({ error: err.message });
