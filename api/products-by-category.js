@@ -1,4 +1,5 @@
 import { guard, clientInWorkspace } from "./_lib/auth.js";
+import { ga4FetchAll, createLimiter, newMeter, meterDone } from "./_lib/ga4.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -12,7 +13,8 @@ async function fetchAllSupabaseRows(url, headers) {
   while (true) {
     const r = await fetch(url, { headers: { ...headers, Range: `${offset}-${offset + pageSize - 1}` } });
     const rows = await r.json();
-    if (!Array.isArray(rows)) break;
+    // Greška baze se više ne prećutkuje (ranije bi kampanje pogrešno izgledale kao "bez potrošnje")
+    if (!r.ok || !Array.isArray(rows)) throw new Error("Baza: " + JSON.stringify(rows).slice(0, 200));
     allRows = allRows.concat(rows);
     if (rows.length < pageSize) break;
     offset += pageSize;
@@ -36,20 +38,6 @@ async function refreshAccessToken(refresh_token) {
   return data.access_token;
 }
 
-async function ga4Fetch(propertyId, accessToken, body) {
-  const r = await fetch(
-    `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
-      body: JSON.stringify(body)
-    }
-  );
-  const data = await r.json();
-  if (!r.ok) throw new Error(data.error?.message || JSON.stringify(data));
-  return data;
-}
-
 function convert(amount, fromCur, toCur, rates) {
   if (fromCur === toCur) return amount;
   const rFrom = fromCur === "EUR" ? 1 : rates[fromCur];
@@ -68,6 +56,7 @@ export default async function handler(req, res) {
 
   const { client_id, category, days, from, to } = req.query;
   if (!client_id) return res.status(400).json({ error: "Missing client_id" });
+  if (category && category.length > 300) return res.status(400).json({ error: "Category too long" });
   // Datumi idu i u upit ka bazi - dozvoljeni su samo ispravni datumi
   const DATE_OK = /^\d{4}-\d{2}-\d{2}$/;
   if ((from || to) && !(DATE_OK.test(from || "") && DATE_OK.test(to || ""))) return res.status(400).json({ error: "Invalid period" });
@@ -77,7 +66,7 @@ export default async function handler(req, res) {
     startStr = from;
     endStr = to;
   } else {
-    const periodDays = parseInt(days) || 30;
+    const periodDays = Math.min(Math.max(parseInt(days) || 30, 1), 730); // 1 dan – 2 godine
     const endDateTmp = new Date();
     endDateTmp.setDate(endDateTmp.getDate() - 1);
     const startDateTmp = new Date();
@@ -88,12 +77,15 @@ export default async function handler(req, res) {
 
   const supaHeaders = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 
+  const meter = newMeter("products-by-category");
+  const limit = createLimiter(process.env.GA4_PARALLEL === "0" ? 1 : 4); // najviše 4 istovremena upita ka GA4
   try {
     const ga4ConnR = await fetch(
       `${SUPABASE_URL}/rest/v1/ga4_connections?client_id=eq.${client_id}&select=property_id,refresh_token,currency_code`,
       { headers: supaHeaders }
     );
     const ga4ConnData = await ga4ConnR.json();
+    if (!ga4ConnR.ok || !Array.isArray(ga4ConnData)) throw new Error("Baza: " + JSON.stringify(ga4ConnData).slice(0, 200));
     if (!ga4ConnData.length) return res.status(404).json({ error: "no_ga4" });
     const { property_id, refresh_token, currency_code } = ga4ConnData[0];
     const currency = currency_code || "EUR";
@@ -125,13 +117,12 @@ export default async function handler(req, res) {
 
     // BEZ ?category= - vraćamo listu SVIH kategorija (za picker)
     if (!category) {
-      const catReport = await ga4Fetch(property_id, accessToken, {
+      const catReport = await ga4FetchAll(property_id, accessToken, {
         dateRanges: [{ startDate: startStr, endDate: endStr }],
         dimensions: [{ name: "itemCategory" }],
         metrics: [{ name: "itemRevenue" }, { name: "itemsPurchased" }],
-        orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }],
-        limit: 250 // ranije 50 - klijenti sa puno kategorija nisu videli sve u listi
-      });
+        orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }]
+      }, { maxRows: 20000, meter, limit }); // ranije najviše 250 – sada sve kategorije
       const categories = (catReport.rows || []).map((row) => {
         const revenue = parseFloat(row.metricValues[0].value) || 0;
         return {
@@ -143,11 +134,12 @@ export default async function handler(req, res) {
       });
       const realCategories = categories.filter((c) => c.name && c.name !== "(not set)");
       const hasCategories = realCategories.length > 0;
+      meterDone(meter, { client: Number(client_id), mode: "list", categories: realCategories.length });
       return res.status(200).json({ currency, gadsCurrency, showSpendNative, showRevenueNative, categories: hasCategories ? realCategories : [], hasCategories, fxMissing });
     }
 
     // SA ?category= - raščlanjenje TE kategorije po kampanjama (isti obrazac kao products-by-campaign.js)
-    const report = await ga4Fetch(property_id, accessToken, {
+    const report = await ga4FetchAll(property_id, accessToken, {
       dateRanges: [{ startDate: startStr, endDate: endStr }],
       dimensions: [{ name: "sessionGoogleAdsCampaignId" }, { name: "sessionGoogleAdsCampaignName" }],
       metrics: [
@@ -159,9 +151,8 @@ export default async function handler(req, res) {
       dimensionFilter: {
         filter: { fieldName: "itemCategory", stringFilter: { matchType: "EXACT", value: category } }
       },
-      orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }],
-      limit: 200
-    });
+      orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }]
+    }, { maxRows: 20000, meter, limit }); // ranije najviše 200
 
     const catByCampaignId = {};
     const ga4NameById = {};
@@ -190,12 +181,14 @@ export default async function handler(req, res) {
     }
 
     const matchedIds = Object.keys(catByCampaignId);
+    // U upit ka bazi idu samo brojčani ID-jevi (Google Ads ID je uvek broj) – zaštita adrese upita
+    const dbIds = matchedIds.filter((id) => /^\d{1,20}$/.test(id));
     if (!matchedIds.length) {
       return res.status(200).json({ currency, results: [], unattributed, noMatch: true });
     }
 
-    const spendRows = await fetchAllSupabaseRows(
-      `${SUPABASE_URL}/rest/v1/google_ads_daily_spend?client_id=eq.${client_id}&date=gte.${startStr}&date=lte.${endStr}&campaign_id=in.(${matchedIds.join(",")})&select=campaign_id,campaign_name,spend`,
+    const spendRows = !dbIds.length ? [] : await fetchAllSupabaseRows(
+      `${SUPABASE_URL}/rest/v1/google_ads_daily_spend?client_id=eq.${client_id}&date=gte.${startStr}&date=lte.${endStr}&campaign_id=in.(${dbIds.join(",")})&select=campaign_id,campaign_name,spend`,
       supaHeaders
     );
     const campaignInfo = {};
@@ -204,15 +197,14 @@ export default async function handler(req, res) {
       campaignInfo[row.campaign_id].totalSpend += parseFloat(row.spend) || 0;
     }
 
-    const campaignTotalsReport = await ga4Fetch(property_id, accessToken, {
+    const campaignTotalsReport = await ga4FetchAll(property_id, accessToken, {
       dateRanges: [{ startDate: startStr, endDate: endStr }],
       dimensions: [{ name: "sessionGoogleAdsCampaignId" }],
       metrics: [{ name: "totalRevenue" }],
       dimensionFilter: {
         filter: { fieldName: "sessionGoogleAdsCampaignId", inListFilter: { values: matchedIds } }
-      },
-      limit: 200
-    });
+      }
+    }, { maxRows: 20000, meter, limit });
     const campaignTotalRevenue = {};
     for (const row of campaignTotalsReport.rows || []) {
       campaignTotalRevenue[row.dimensionValues[0].value] = parseFloat(row.metricValues[0].value) || 0;
@@ -244,6 +236,7 @@ export default async function handler(req, res) {
       };
     }).sort((a, b) => b.categoryRevenue - a.categoryRevenue);
 
+    meterDone(meter, { client: Number(client_id), mode: "category", rows: report.rows.length, campaigns: results.length });
     return res.status(200).json({ currency, gadsCurrency, showSpendNative, showRevenueNative, results, unattributed, noMatch: false, fxMissing });
   } catch (err) {
     return res.status(500).json({ error: err.message });
