@@ -63,3 +63,53 @@ export function singleFlight(key, fn) {
   inFlight.set(key, p);
   return p;
 }
+
+// ── Brava između servera ──
+// singleFlight radi samo unutar jednog servera. Kad 30 ljudi u istoj sekundi otvori isti izveštaj,
+// Vercel ih rasporedi na više servera, pa bi svaki krenuo ka Google-u (GA4 dozvoljava samo 10 istovremenih upita).
+// Zato prvi uzme "bravu" u bazi i vuče podatke, a ostali čekaju da se rezultat pojavi u kešu.
+// Svaka greška brave => radi se kao ranije (bez brave), da brava nikad ne zaustavi aplikaciju.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+export async function acquireLock(key, ttlSec = 120) {
+  if (!cacheEnabled()) return true;
+  try {
+    const now = new Date().toISOString();
+    // Istekla brava (server je pao usred posla) se briše
+    await fetch(`${SUPABASE_URL}/rest/v1/api_locks?key=eq.${key}&expires_at=lt.${now}`, { method: "DELETE", headers: dbHeaders });
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/api_locks?on_conflict=key`, {
+      method: "POST",
+      headers: { ...dbHeaders, Prefer: "resolution=ignore-duplicates,return=representation" },
+      body: JSON.stringify({ key, expires_at: new Date(Date.now() + ttlSec * 1000).toISOString() })
+    });
+    if (!r.ok) { console.error("acquireLock:", r.status, (await r.text()).slice(0, 200)); return true; }
+    const rows = await r.json();
+    return Array.isArray(rows) && rows.length > 0; // prazno = neko drugi već drži bravu
+  } catch (e) {
+    console.error("acquireLock:", e.message);
+    return true;
+  }
+}
+
+export async function releaseLock(key) {
+  if (!cacheEnabled()) return;
+  try { await fetch(`${SUPABASE_URL}/rest/v1/api_locks?key=eq.${key}`, { method: "DELETE", headers: dbHeaders }); }
+  catch (e) { console.error("releaseLock:", e.message); }
+}
+
+// Čeka da onaj ko drži bravu upiše rezultat u keš. Vraća { data, ageSec } ili null
+// (null = brava je nestala bez rezultata ili je isteklo vreme, pa pozivalac radi sam).
+export async function waitForCache(key, maxMs = 90000) {
+  const end = Date.now() + maxMs;
+  while (Date.now() < end) {
+    await sleep(1000);
+    const hit = await cacheGet(key);
+    if (hit) return hit;
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/api_locks?key=eq.${key}&expires_at=gt.${new Date().toISOString()}&select=key`, { headers: dbHeaders });
+      const rows = await r.json();
+      if (r.ok && Array.isArray(rows) && !rows.length) return await cacheGet(key); // brava puštena – poslednja provera keša
+    } catch (e) { /* nastavi da čekaš */ }
+  }
+  return null;
+}
