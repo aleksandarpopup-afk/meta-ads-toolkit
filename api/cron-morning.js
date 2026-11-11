@@ -3,6 +3,7 @@
 //    "Svi na tempu" se javlja SAMO ako su svi budzeti sveze uneti; budzet bez svezeg unosa se posebno broji.
 // 2) Upozorenja za Google Ads kampanje - SAMO kad postoji problem (kampanja stala ili naglo skocila).
 // Korisnik bira sta zeli u app-u (tabela notification_prefs; podrazumevano oba ukljucena).
+// Stabilnost: korisnici se obrađuju po 5 istovremeno, svaki poziv ima rok od 30 s, a rezultat ide u log ([cron] red).
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -14,6 +15,10 @@ const SPIKE_X = 3;         // "skok": juce bar 3x vise od proseka...
 const SPIKE_MIN_DIFF = 50; // ...i bar 50 € vise od proseka
 const BP_UNDER = -0.2;
 
+const CONCURRENCY = 5;
+const TIME_BUDGET_MS = 240000; // posle 4 min ne započinji nove korisnike (server dozvoljava 5 min)
+const tfetch = (url, opts = {}) => fetch(url, { ...opts, signal: AbortSignal.timeout(30000) });
+
 const h = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 const day = (d) => d.toISOString().slice(0, 10);
 const addDays = (s, n) => { const d = new Date(s + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return day(d); };
@@ -23,9 +28,10 @@ const fmt = (v) => new Intl.NumberFormat("sr-RS", { maximumFractionDigits: 0 }).
 async function sbAll(path) {
   let all = [], offset = 0;
   while (true) {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: { ...h, Range: `${offset}-${offset + 999}` } });
+    const r = await tfetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: { ...h, Range: `${offset}-${offset + 999}` } });
     const rows = await r.json();
-    if (!Array.isArray(rows)) break;
+    // Greška baze se ne prećutkuje (ranije bi izgledalo kao "nema podataka" i upozorenje bi tiho izostalo)
+    if (!r.ok || !Array.isArray(rows)) throw new Error("Baza: " + JSON.stringify(rows).slice(0, 200));
     all = all.concat(rows);
     if (rows.length < 1000) break;
     offset += 1000;
@@ -62,7 +68,7 @@ async function budgetDigest(userId, today) {
   const from = day(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)));
   const to = day(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)));
   // budgets.js je zasticen: automatski posao se predstavlja tajnim kljucem (samo za citanje)
-  const r = await fetch(`${APP_URL}/api/budgets?user_id=${userId}&from=${from}&to=${to}`, {
+  const r = await tfetch(`${APP_URL}/api/budgets?user_id=${userId}&from=${from}&to=${to}`, {
     headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` },
   });
   const list = await r.json();
@@ -93,8 +99,9 @@ async function gadsAlerts(userId, today, isMonday, rates) {
   const conns = await sbAll(`google_ads_connections?client_id=in.(${clients.map((c) => c.id).join(",")})&select=client_id,currency_code,last_synced_at`);
   if (!conns.length) return null;
   const nameOf = Object.fromEntries(clients.map((c) => [c.id, c.name]));
-  // Ponedeljkom se proverava i vikend (subota i nedelja), inace samo jucerasnji dan
-  const checkDays = isMonday ? [addDays(today, -2), addDays(today, -1)] : [addDays(today, -1)];
+  // Ponedeljkom se proverava petak, subota i nedelja (subotom se poruke ne šalju, pa petak ranije niko nije proveravao),
+  // ostalim danima samo jučerašnji dan
+  const checkDays = isMonday ? [addDays(today, -3), addDays(today, -2), addDays(today, -1)] : [addDays(today, -1)];
   const lines = [];
   for (const conn of conns) {
     // Ako danasnja sinhronizacija nije uspela (npr. istekla veza), podaci su zastareli - ne salje se lazna uzbuna
@@ -136,7 +143,7 @@ async function gadsAlerts(userId, today, isMonday, rates) {
 }
 
 async function send(userId, msg) {
-  const r = await fetch(`${APP_URL}/api/push-send`, {
+  const r = await tfetch(`${APP_URL}/api/push-send`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.CRON_SECRET}` },
     body: JSON.stringify({ user_id: userId, ...msg }),
@@ -148,6 +155,7 @@ export default async function handler(req, res) {
   if (req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) {
     return res.status(401).json({ error: "Unauthorized" });
   }
+  const t0 = Date.now();
   const now = new Date();
   const dow = now.getUTCDay();
   if (dow === 0 || dow === 6) return res.status(200).json({ success: true, sent: 0, reason: "Weekend - skipped" });
@@ -163,8 +171,9 @@ export default async function handler(req, res) {
     try { const fx = await sbAll("exchange_rates?id=eq.1&select=rates"); rates = fx[0] ? fx[0].rates : null; } catch (e) {}
 
     let sent = 0;
+    let skipped = 0;
     const errors = [];
-    for (const userId of userIds) {
+    const doUser = async (userId) => {
       const p = prefs[userId] || { budget_digest: true, gads_alerts: true };
       try {
         if (p.budget_digest) {
@@ -176,11 +185,24 @@ export default async function handler(req, res) {
           if (m && await send(userId, m)) sent++;
         }
       } catch (e) {
-        errors.push({ user_id: userId, error: e.message });
+        errors.push({ user_id: userId, error: String(e.message || e).slice(0, 300) });
       }
-    }
-    return res.status(200).json({ success: true, sent, users: userIds.length, errors });
+    };
+    // Red čekanja: 5 "radnika" uzimaju sledećeg korisnika dok ih ima (i dok ima vremena)
+    const queue = [...userIds];
+    const worker = async () => {
+      while (queue.length) {
+        if (Date.now() - t0 > TIME_BUDGET_MS) { skipped = queue.length; queue.length = 0; break; }
+        await doUser(queue.shift());
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, userIds.length) }, worker));
+
+    const out = { success: true, sent, users: userIds.length, skipped, ms: Date.now() - t0, errors };
+    console.log(`[cron] morning ${JSON.stringify(out)}`);
+    return res.status(200).json(out);
   } catch (err) {
+    console.error(`[cron] morning FAILED ${err.message}`);
     return res.status(500).json({ error: err.message });
   }
 }
