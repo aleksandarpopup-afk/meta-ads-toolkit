@@ -1,4 +1,12 @@
 import { guard, clientInWorkspace } from "./_lib/auth.js";
+import { createLimiter, ga4Fetch as ga4FetchLib, ga4FetchAll as ga4FetchAllLib, newMeter, meterStep, meterDone } from "./_lib/ga4.js";
+import { cacheEnabled, cacheKey, cacheGet, cacheSet, singleFlight } from "./_lib/cache.js";
+
+// Verzija računice: kad se promeni bilo šta u obradi ispod, poveća se, pa se stari keš više ne koristi
+const CALC_VERSION = "pi-1";
+const CACHE_TTL_SEC = 30 * 60; // 30 minuta
+// GA4_PARALLEL=0 u Vercelu vraća stari način (upit po upit). Podrazumevano: najviše 4 istovremena upita.
+const MAX_PARALLEL = process.env.GA4_PARALLEL === "0" ? 1 : 4;
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -21,49 +29,6 @@ async function refreshAccessToken(refresh_token) {
   return data.access_token;
 }
 
-async function ga4Fetch(propertyId, accessToken, body, meter) {
-  const r = await fetch(
-    `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
-      body: JSON.stringify(meter ? { ...body, returnPropertyQuota: true } : body)
-    }
-  );
-  const data = await r.json();
-  if (!r.ok) throw new Error(JSON.stringify(data));
-  meterQuota(meter, data);
-  return data;
-}
-
-// ── MERENJE (samo beleži, ne menja rezultat) ──
-// Za svaki upit ka GA4 tražimo i podatak o potrošenoj kvoti (returnPropertyQuota) i merimo trajanje.
-// Rezultat se upisuje u Vercel Logs (red koji počinje sa "[perf]") i u polje _perf odgovora.
-function newMeter(name) {
-  return { name, t0: Date.now(), steps: [], ga4Calls: 0, ga4Tokens: 0, quotaLeft: null };
-}
-function meterStep(meter, label, t) {
-  if (meter) meter.steps.push(`${label}:${Date.now() - t}ms`);
-}
-function meterQuota(meter, data) {
-  if (!meter) return;
-  meter.ga4Calls++;
-  const q = data && data.propertyQuota;
-  if (q) {
-    meter.ga4Tokens += (q.tokensPerHour && q.tokensPerHour.consumed) || 0;
-    meter.quotaLeft = {
-      projectHour: q.tokensPerProjectPerHour ? q.tokensPerProjectPerHour.remaining : null,
-      propertyHour: q.tokensPerHour ? q.tokensPerHour.remaining : null,
-      propertyDay: q.tokensPerDay ? q.tokensPerDay.remaining : null
-    };
-  }
-}
-function meterDone(meter, extra) {
-  const out = { ms: Date.now() - meter.t0, ga4Calls: meter.ga4Calls, ga4Tokens: meter.ga4Tokens, quotaLeft: meter.quotaLeft, steps: meter.steps, ...extra };
-  console.log(`[perf] ${meter.name} ${JSON.stringify(out)}`);
-  return out;
-}
-
 // Platforma (meta/google/tiktok/direct/other) na osnovu izvora
 function detectPlatform(source) {
   const s = (source || "").toLowerCase();
@@ -79,21 +44,6 @@ function detectPlatform(source) {
 function isPaid(channelGroup) {
   const cg = (channelGroup || "").toLowerCase();
   return cg.startsWith("paid") || cg === "cross-network" || cg === "display" || cg === "audio";
-}
-
-// GA4 izvestaj sa stranicenjem: ranije je bio jedan poziv sa limitom, pa su kod velikih prodavnica
-// proizvodi nedostajali (i ukupni prihod je ispadao manji). Najvise maxRows redova.
-async function ga4FetchAll(propertyId, accessToken, body, maxRows = 100000, meter) {
-  const PAGE = 10000;
-  let rows = [], offset = 0, total = 0;
-  while (offset < maxRows) {
-    const data = await ga4Fetch(propertyId, accessToken, { ...body, limit: PAGE, offset }, meter);
-    total = data.rowCount || 0;
-    rows = rows.concat(data.rows || []);
-    offset += PAGE;
-    if (!data.rows || data.rows.length < PAGE || offset >= total) break;
-  }
-  return { rows, rowCount: total };
 }
 
 function dateStr(d) {
@@ -134,8 +84,8 @@ export default async function handler(req, res) {
   }
 
   const supaHeaders = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
-
-  const meter = newMeter(`product-intelligence client=${client_id} period=${from && to ? from + ".." + to : (parseInt(days) || 7) + "d"}`);
+  const periodTxt = from && to ? `${from}..${to}` : `${parseInt(days) || 7}d`;
+  const meter = newMeter(`product-intelligence client=${client_id} period=${periodTxt}`);
   let t = Date.now();
 
   try {
@@ -149,11 +99,33 @@ export default async function handler(req, res) {
     }
     const { property_id, refresh_token, currency_code } = connData[0];
     const currency = currency_code || "EUR";
-    const accessToken = await refreshAccessToken(refresh_token);
-    meterStep(meter, "setup", t); t = Date.now();
 
+    // ── KEŠ: ključ sadrži klijenta, GA4 nalog, TAČNE datume (relativni period + današnji datum), valutu i verziju ──
+    const todayUtc = new Date().toISOString().slice(0, 10);
+    const key = cacheKey({ kind: "product-intelligence", v: CALC_VERSION, client: Number(client_id), property: String(property_id), currency, current: currentRange, previous: previousRange, today: from && to ? null : todayUtc });
+    const forceRefresh = req.query.refresh === "1";
+    if (!forceRefresh) {
+      const hit = await cacheGet(key);
+      if (hit) {
+        meterStep(meter, "cache-hit", t);
+        hit.data._cache = { hit: true, ageSec: hit.ageSec };
+        hit.data._perf = meterDone(meter, { cache: "hit", ageSec: hit.ageSec, products: hit.data.totalProducts });
+        return res.status(200).json(hit.data);
+      }
+    }
+
+    // Isti zahtev u isto vreme na istom serveru -> jedan odlazak ka GA4
+    const result = await singleFlight(key, async () => {
+      const limit = createLimiter(MAX_PARALLEL);
+      const accessToken = await refreshAccessToken(refresh_token);
+      meterStep(meter, "setup", t);
+      const ga4Fetch = (pid, tok, body) => ga4FetchLib(pid, tok, body, { meter, limit });
+      const ga4FetchAll = (pid, tok, body, maxRows = 100000) => ga4FetchAllLib(pid, tok, body, { maxRows, meter, limit });
+      const tAll = Date.now();
+
+    // Četiri izveštaja kreću ZAJEDNO (limiter pazi da ukupno ne bude više od 4 upita istovremeno)
     // 1. Glavni izveštaj - ceo katalog, grupisano po itemId (ne po nazivu - varijante se ne mešaju!)
-    const report = await ga4FetchAll(property_id, accessToken, {
+    const reportP = ga4FetchAll(property_id, accessToken, {
       dateRanges: [currentRange, previousRange],
       dimensions: [{ name: "itemId" }, { name: "itemName" }],
       metrics: [
@@ -163,8 +135,48 @@ export default async function handler(req, res) {
         { name: "itemRevenue" }
       ],
       orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }]
-    }, 100000, meter);
-    meterStep(meter, `catalog(${(report.rows || []).length} rows)`, t); t = Date.now();
+    });
+    // 2. Izvori - PRAVI ukupni prihod po kanalu (totalRevenue, isti nivo merenja kao GA4-ov sopstveni izveštaj).
+    // Ovo je NAMERNO odvojeno od proizvod-nivo podataka - itemRevenue zna da bude manji od totalRevenue
+    // kad transakcija nema potpune podatke o proizvodu (GA4-ovo poznato ograničenje, ne naša greška).
+    const totalsReportP = ga4FetchAll(property_id, accessToken, {
+      dateRanges: [currentRange],
+      dimensions: [{ name: "sessionSource" }, { name: "sessionDefaultChannelGroup" }],
+      metrics: [{ name: "totalRevenue" }]
+    }, 20000);
+    // 3. Izvori - proizvod-nivo raščlanjavanje PO kanalu (za tabelu kad klikneš na kanal)
+    const sourceReportP = ga4FetchAll(property_id, accessToken, {
+      dateRanges: [currentRange],
+      dimensions: [
+        { name: "sessionSource" },
+        { name: "sessionDefaultChannelGroup" },
+        { name: "itemId" },
+        { name: "itemName" }
+      ],
+      metrics: [
+        { name: "itemsViewed" },
+        { name: "itemsAddedToCart" },
+        { name: "itemsPurchased" },
+        { name: "itemRevenue" }
+      ],
+      orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }]
+    });
+    // 4. Kategorije - proizvod-nivo grupisano po itemCategory (glavni nivo, ne pod-kategorije)
+    const categoryReportP = ga4Fetch(property_id, accessToken, {
+      dateRanges: [currentRange],
+      dimensions: [{ name: "itemCategory" }],
+      metrics: [
+        { name: "itemsViewed" },
+        { name: "itemsAddedToCart" },
+        { name: "itemsPurchased" },
+        { name: "itemRevenue" }
+      ],
+      orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }],
+      limit: 250 // ranije 100
+    });
+    const [report, totalsReport, sourceReport, categoryReport] = await Promise.all([reportP, totalsReportP, sourceReportP, categoryReportP]);
+    meterStep(meter, `ga4(catalog ${(report.rows || []).length}, sources ${(sourceReport.rows || []).length} rows)`, tAll);
+    const tCalc = Date.now();
 
     const byItem = {};
     for (const row of report.rows || []) {
@@ -215,16 +227,6 @@ export default async function handler(req, res) {
       catalogOut = [...catalog].sort((a, b) => score(b) - score(a)).slice(0, MAX_CATALOG);
     }
 
-    // 2. Izvori - PRAVI ukupni prihod po kanalu (totalRevenue, isti nivo merenja kao GA4-ov sopstveni izveštaj).
-    // Ovo je NAMERNO odvojeno od proizvod-nivo podataka ispod - itemRevenue zna da bude manji od totalRevenue
-    // kad transakcija nema potpune podatke o proizvodu (GA4-ovo poznato ograničenje, ne naša greška).
-    const totalsReport = await ga4FetchAll(property_id, accessToken, {
-      dateRanges: [currentRange],
-      dimensions: [{ name: "sessionSource" }, { name: "sessionDefaultChannelGroup" }],
-      metrics: [{ name: "totalRevenue" }]
-    }, 20000, meter);
-    meterStep(meter, `sourceTotals(${(totalsReport.rows || []).length} rows)`, t); t = Date.now();
-
     const sourceTotals = {
       paid: { meta: 0, google: 0, tiktok: 0, other: 0 },
       organic: { meta: 0, google: 0, tiktok: 0, direct: 0, other: 0 }
@@ -238,25 +240,6 @@ export default async function handler(req, res) {
       const revenue = parseFloat(row.metricValues[0].value) || 0;
       sourceTotals[bucket][platform] += revenue;
     }
-
-    // 3. Izvori - proizvod-nivo raščlanjavanje PO kanalu (za tabelu kad klikneš na kanal)
-    const sourceReport = await ga4FetchAll(property_id, accessToken, {
-      dateRanges: [currentRange],
-      dimensions: [
-        { name: "sessionSource" },
-        { name: "sessionDefaultChannelGroup" },
-        { name: "itemId" },
-        { name: "itemName" }
-      ],
-      metrics: [
-        { name: "itemsViewed" },
-        { name: "itemsAddedToCart" },
-        { name: "itemsPurchased" },
-        { name: "itemRevenue" }
-      ],
-      orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }]
-    }, 100000, meter);
-    meterStep(meter, `sourceCatalog(${(sourceReport.rows || []).length} rows)`, t); t = Date.now();
 
     const sourceCatalogMap = {
       paid: { meta: {}, google: {}, tiktok: {}, other: {} },
@@ -304,21 +287,6 @@ export default async function handler(req, res) {
       }
     }
 
-    // 4. Kategorije - proizvod-nivo grupisano po itemCategory (glavni nivo, ne pod-kategorije)
-    const categoryReport = await ga4Fetch(property_id, accessToken, {
-      dateRanges: [currentRange],
-      dimensions: [{ name: "itemCategory" }],
-      metrics: [
-        { name: "itemsViewed" },
-        { name: "itemsAddedToCart" },
-        { name: "itemsPurchased" },
-        { name: "itemRevenue" }
-      ],
-      orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }],
-      limit: 250 // ranije 100
-    }, meter);
-    meterStep(meter, "categories", t);
-
     const categoriesRaw = (categoryReport.rows || []).map((row) => {
       const viewed = parseInt(row.metricValues[0].value) || 0;
       const addedToCart = parseInt(row.metricValues[1].value) || 0;
@@ -338,7 +306,8 @@ export default async function handler(req, res) {
     const categories = categoriesRaw.filter((c) => c.name && c.name !== "(not set)");
     const hasCategories = categories.length > 0;
 
-    return res.status(200).json({
+    meterStep(meter, "calc", tCalc);
+    const payload = {
       periodDays: periodLabel,
       totalProducts,
       totalRevenue,
@@ -348,9 +317,16 @@ export default async function handler(req, res) {
       sourceTotals,
       sourceCatalog,
       categories,
-      hasCategories,
-      _perf: meterDone(meter, { products: totalProducts })
-    });
+      hasCategories
+    };
+    const json = JSON.stringify(payload);
+    await cacheSet(key, { clientId: client_id, kind: "product-intelligence", json, ttlSec: CACHE_TTL_SEC });
+    return { payload, bytes: json.length };
+    }); // kraj singleFlight
+
+    result.payload._cache = { hit: false, enabled: cacheEnabled() };
+    result.payload._perf = meterDone(meter, { cache: forceRefresh ? "refresh" : "miss", bytes: result.bytes, products: result.payload.totalProducts, parallel: MAX_PARALLEL });
+    return res.status(200).json(result.payload);
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
