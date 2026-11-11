@@ -3,7 +3,8 @@ import { createLimiter, ga4Fetch as ga4FetchLib, ga4FetchAll as ga4FetchAllLib, 
 import { cacheEnabled, cacheKey, cacheGet, cacheSet, singleFlight } from "./_lib/cache.js";
 
 // Verzija računice: kad se promeni bilo šta u obradi ispod, poveća se, pa se stari keš više ne koristi
-const CALC_VERSION = "pi-1";
+const CALC_VERSION = "pi-2"; // pi-2: granica 300.000 redova (ranije 100.000) – stari keš se ne koristi
+const MAX_ROWS = 300000;      // najviše redova po izveštaju (katalog i izvori)
 const CACHE_TTL_SEC = 30 * 60; // 30 minuta
 // GA4_PARALLEL=0 u Vercelu vraća stari način (upit po upit). Podrazumevano: najviše 4 istovremena upita.
 const MAX_PARALLEL = process.env.GA4_PARALLEL === "0" ? 1 : 4;
@@ -135,7 +136,7 @@ export default async function handler(req, res) {
         { name: "itemRevenue" }
       ],
       orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }]
-    });
+    }, MAX_ROWS);
     // 2. Izvori - PRAVI ukupni prihod po kanalu (totalRevenue, isti nivo merenja kao GA4-ov sopstveni izveštaj).
     // Ovo je NAMERNO odvojeno od proizvod-nivo podataka - itemRevenue zna da bude manji od totalRevenue
     // kad transakcija nema potpune podatke o proizvodu (GA4-ovo poznato ograničenje, ne naša greška).
@@ -160,9 +161,9 @@ export default async function handler(req, res) {
         { name: "itemRevenue" }
       ],
       orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }]
-    });
+    }, MAX_ROWS);
     // 4. Kategorije - proizvod-nivo grupisano po itemCategory (glavni nivo, ne pod-kategorije)
-    const categoryReportP = ga4Fetch(property_id, accessToken, {
+    const categoryReportP = ga4FetchAll(property_id, accessToken, {
       dateRanges: [currentRange],
       dimensions: [{ name: "itemCategory" }],
       metrics: [
@@ -171,11 +172,12 @@ export default async function handler(req, res) {
         { name: "itemsPurchased" },
         { name: "itemRevenue" }
       ],
-      orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }],
-      limit: 250 // ranije 100
-    });
+      orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }]
+    }, 20000); // ranije najviše 250 kategorija – sada sve
     const [report, totalsReport, sourceReport, categoryReport] = await Promise.all([reportP, totalsReportP, sourceReportP, categoryReportP]);
-    meterStep(meter, `ga4(catalog ${(report.rows || []).length}, sources ${(sourceReport.rows || []).length} rows)`, tAll);
+    meterStep(meter, `ga4(catalog ${(report.rows || []).length}/${report.rowCount || 0}, sources ${(sourceReport.rows || []).length}/${sourceReport.rowCount || 0} rows)`, tAll);
+    // Ako je i pored povećane granice nešto odsečeno, to se vidi u logu (zapis "TRUNCATED")
+    if ((report.rowCount || 0) > MAX_ROWS || (sourceReport.rowCount || 0) > MAX_ROWS) console.warn(`[perf] product-intelligence TRUNCATED client=${client_id} catalog=${report.rowCount} sources=${sourceReport.rowCount}`);
     const tCalc = Date.now();
 
     const byItem = {};
