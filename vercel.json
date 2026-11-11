@@ -1,4 +1,8 @@
 {
+  "functions": {
+    "api/google-ads-sync.js": { "maxDuration": 300 },
+    "api/cron-morning.js": { "maxDuration": 300 }
+  },
   "crons": [
     {
       "path": "/api/cron-morning",
