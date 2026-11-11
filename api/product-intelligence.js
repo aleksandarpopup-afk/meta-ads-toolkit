@@ -21,18 +21,47 @@ async function refreshAccessToken(refresh_token) {
   return data.access_token;
 }
 
-async function ga4Fetch(propertyId, accessToken, body) {
+async function ga4Fetch(propertyId, accessToken, body, meter) {
   const r = await fetch(
     `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
-      body: JSON.stringify(body)
+      body: JSON.stringify(meter ? { ...body, returnPropertyQuota: true } : body)
     }
   );
   const data = await r.json();
   if (!r.ok) throw new Error(JSON.stringify(data));
+  meterQuota(meter, data);
   return data;
+}
+
+// ── MERENJE (samo beleži, ne menja rezultat) ──
+// Za svaki upit ka GA4 tražimo i podatak o potrošenoj kvoti (returnPropertyQuota) i merimo trajanje.
+// Rezultat se upisuje u Vercel Logs (red koji počinje sa "[perf]") i u polje _perf odgovora.
+function newMeter(name) {
+  return { name, t0: Date.now(), steps: [], ga4Calls: 0, ga4Tokens: 0, quotaLeft: null };
+}
+function meterStep(meter, label, t) {
+  if (meter) meter.steps.push(`${label}:${Date.now() - t}ms`);
+}
+function meterQuota(meter, data) {
+  if (!meter) return;
+  meter.ga4Calls++;
+  const q = data && data.propertyQuota;
+  if (q) {
+    meter.ga4Tokens += (q.tokensPerHour && q.tokensPerHour.consumed) || 0;
+    meter.quotaLeft = {
+      projectHour: q.tokensPerProjectPerHour ? q.tokensPerProjectPerHour.remaining : null,
+      propertyHour: q.tokensPerHour ? q.tokensPerHour.remaining : null,
+      propertyDay: q.tokensPerDay ? q.tokensPerDay.remaining : null
+    };
+  }
+}
+function meterDone(meter, extra) {
+  const out = { ms: Date.now() - meter.t0, ga4Calls: meter.ga4Calls, ga4Tokens: meter.ga4Tokens, quotaLeft: meter.quotaLeft, steps: meter.steps, ...extra };
+  console.log(`[perf] ${meter.name} ${JSON.stringify(out)}`);
+  return out;
 }
 
 // Platforma (meta/google/tiktok/direct/other) na osnovu izvora
@@ -54,11 +83,11 @@ function isPaid(channelGroup) {
 
 // GA4 izvestaj sa stranicenjem: ranije je bio jedan poziv sa limitom, pa su kod velikih prodavnica
 // proizvodi nedostajali (i ukupni prihod je ispadao manji). Najvise maxRows redova.
-async function ga4FetchAll(propertyId, accessToken, body, maxRows = 100000) {
+async function ga4FetchAll(propertyId, accessToken, body, maxRows = 100000, meter) {
   const PAGE = 10000;
   let rows = [], offset = 0, total = 0;
   while (offset < maxRows) {
-    const data = await ga4Fetch(propertyId, accessToken, { ...body, limit: PAGE, offset });
+    const data = await ga4Fetch(propertyId, accessToken, { ...body, limit: PAGE, offset }, meter);
     total = data.rowCount || 0;
     rows = rows.concat(data.rows || []);
     offset += PAGE;
@@ -106,6 +135,9 @@ export default async function handler(req, res) {
 
   const supaHeaders = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 
+  const meter = newMeter(`product-intelligence client=${client_id} period=${from && to ? from + ".." + to : (parseInt(days) || 7) + "d"}`);
+  let t = Date.now();
+
   try {
     const connR = await fetch(
       `${SUPABASE_URL}/rest/v1/ga4_connections?client_id=eq.${client_id}&select=property_id,refresh_token,currency_code`,
@@ -118,6 +150,7 @@ export default async function handler(req, res) {
     const { property_id, refresh_token, currency_code } = connData[0];
     const currency = currency_code || "EUR";
     const accessToken = await refreshAccessToken(refresh_token);
+    meterStep(meter, "setup", t); t = Date.now();
 
     // 1. Glavni izveštaj - ceo katalog, grupisano po itemId (ne po nazivu - varijante se ne mešaju!)
     const report = await ga4FetchAll(property_id, accessToken, {
@@ -130,7 +163,8 @@ export default async function handler(req, res) {
         { name: "itemRevenue" }
       ],
       orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }]
-    });
+    }, 100000, meter);
+    meterStep(meter, `catalog(${(report.rows || []).length} rows)`, t); t = Date.now();
 
     const byItem = {};
     for (const row of report.rows || []) {
@@ -188,7 +222,8 @@ export default async function handler(req, res) {
       dateRanges: [currentRange],
       dimensions: [{ name: "sessionSource" }, { name: "sessionDefaultChannelGroup" }],
       metrics: [{ name: "totalRevenue" }]
-    }, 20000);
+    }, 20000, meter);
+    meterStep(meter, `sourceTotals(${(totalsReport.rows || []).length} rows)`, t); t = Date.now();
 
     const sourceTotals = {
       paid: { meta: 0, google: 0, tiktok: 0, other: 0 },
@@ -220,7 +255,8 @@ export default async function handler(req, res) {
         { name: "itemRevenue" }
       ],
       orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }]
-    });
+    }, 100000, meter);
+    meterStep(meter, `sourceCatalog(${(sourceReport.rows || []).length} rows)`, t); t = Date.now();
 
     const sourceCatalogMap = {
       paid: { meta: {}, google: {}, tiktok: {}, other: {} },
@@ -280,7 +316,8 @@ export default async function handler(req, res) {
       ],
       orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }],
       limit: 250 // ranije 100
-    });
+    }, meter);
+    meterStep(meter, "categories", t);
 
     const categoriesRaw = (categoryReport.rows || []).map((row) => {
       const viewed = parseInt(row.metricValues[0].value) || 0;
@@ -311,7 +348,8 @@ export default async function handler(req, res) {
       sourceTotals,
       sourceCatalog,
       categories,
-      hasCategories
+      hasCategories,
+      _perf: meterDone(meter, { products: totalProducts })
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });
