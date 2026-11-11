@@ -1,6 +1,6 @@
 import { guard, clientInWorkspace } from "./_lib/auth.js";
 import { createLimiter, ga4Fetch as ga4FetchLib, ga4FetchAll as ga4FetchAllLib, newMeter, meterStep, meterDone } from "./_lib/ga4.js";
-import { cacheEnabled, cacheKey, cacheGet, cacheSet, singleFlight } from "./_lib/cache.js";
+import { cacheEnabled, cacheKey, cacheGet, cacheSet, singleFlight, acquireLock, releaseLock, waitForCache } from "./_lib/cache.js";
 
 // Verzija računice: kad se promeni bilo šta u obradi ispod, poveća se, pa se stari keš više ne koristi
 const CALC_VERSION = "pi-2"; // pi-2: granica 300.000 redova (ranije 100.000) – stari keš se ne koristi
@@ -115,8 +115,23 @@ export default async function handler(req, res) {
       }
     }
 
+    // Isti zahtev u isto vreme na VIŠE servera -> samo onaj ko uzme bravu ide u GA4, ostali čekaju njegov rezultat
+    const haveLock = await acquireLock(key, 120);
+    if (!haveLock) {
+      const waited = await waitForCache(key, 90000);
+      if (waited) {
+        meterStep(meter, "cache-wait", t);
+        waited.data._cache = { hit: true, ageSec: waited.ageSec, waited: true };
+        waited.data._perf = meterDone(meter, { cache: "wait", products: waited.data.totalProducts });
+        return res.status(200).json(waited.data);
+      }
+      // Onaj sa bravom nije uspeo ili predugo traje – ovaj zahtev radi sam (kao ranije)
+    }
+
     // Isti zahtev u isto vreme na istom serveru -> jedan odlazak ka GA4
-    const result = await singleFlight(key, async () => {
+    let result;
+    try {
+    result = await singleFlight(key, async () => {
       const limit = createLimiter(MAX_PARALLEL);
       const accessToken = await refreshAccessToken(refresh_token);
       meterStep(meter, "setup", t);
@@ -325,9 +340,12 @@ export default async function handler(req, res) {
     await cacheSet(key, { clientId: client_id, kind: "product-intelligence", json, ttlSec: CACHE_TTL_SEC });
     return { payload, bytes: json.length };
     }); // kraj singleFlight
+    } finally {
+      if (haveLock) await releaseLock(key);
+    }
 
     result.payload._cache = { hit: false, enabled: cacheEnabled() };
-    result.payload._perf = meterDone(meter, { cache: forceRefresh ? "refresh" : "miss", bytes: result.bytes, products: result.payload.totalProducts, parallel: MAX_PARALLEL });
+    result.payload._perf = meterDone(meter, { cache: forceRefresh ? "refresh" : "miss", lock: haveLock, bytes: result.bytes, products: result.payload.totalProducts, parallel: MAX_PARALLEL });
     return res.status(200).json(result.payload);
   } catch (err) {
     return res.status(500).json({ error: err.message });
