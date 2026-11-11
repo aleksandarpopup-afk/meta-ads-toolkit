@@ -1,4 +1,5 @@
 import { guard, clientInWorkspace } from "./_lib/auth.js";
+import { ga4FetchAll, createLimiter, newMeter, meterDone } from "./_lib/ga4.js";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -21,20 +22,6 @@ async function refreshAccessToken(refresh_token) {
   return data.access_token;
 }
 
-async function ga4Fetch(propertyId, accessToken, body) {
-  const r = await fetch(
-    `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
-      body: JSON.stringify(body)
-    }
-  );
-  const data = await r.json();
-  if (!r.ok) throw new Error(data.error?.message || JSON.stringify(data));
-  return data;
-}
-
 export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
 
@@ -54,7 +41,7 @@ export default async function handler(req, res) {
     startStr = from;
     endStr = to;
   } else {
-    const periodDays = parseInt(days) || 30;
+    const periodDays = Math.min(Math.max(parseInt(days) || 30, 1), 730); // 1 dan – 2 godine
     const endDateTmp = new Date();
     endDateTmp.setDate(endDateTmp.getDate() - 1);
     const startDateTmp = new Date();
@@ -65,19 +52,23 @@ export default async function handler(req, res) {
 
   const supaHeaders = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 
+  const meter = newMeter("campaign-products");
+  const limit = createLimiter(process.env.GA4_PARALLEL === "0" ? 1 : 4); // najviše 4 istovremena upita ka GA4
   try {
     const ga4ConnR = await fetch(
       `${SUPABASE_URL}/rest/v1/ga4_connections?client_id=eq.${client_id}&select=property_id,refresh_token,currency_code`,
       { headers: supaHeaders }
     );
     const ga4ConnData = await ga4ConnR.json();
+    if (!ga4ConnR.ok || !Array.isArray(ga4ConnData)) throw new Error("Baza: " + JSON.stringify(ga4ConnData).slice(0, 200));
     if (!ga4ConnData.length) return res.status(404).json({ error: "no_ga4" });
     const { property_id, refresh_token, currency_code } = ga4ConnData[0];
     const currency = currency_code || "EUR";
 
     const accessToken = await refreshAccessToken(refresh_token);
 
-    const report = await ga4Fetch(property_id, accessToken, {
+    // Svi proizvodi kampanje (ranije najviše 500 – pretraga i sortiranje u aplikaciji nisu videli ostatak)
+    const report = await ga4FetchAll(property_id, accessToken, {
       dateRanges: [{ startDate: startStr, endDate: endStr }],
       dimensions: [{ name: "itemId" }, { name: "itemName" }],
       metrics: [
@@ -89,9 +80,8 @@ export default async function handler(req, res) {
       dimensionFilter: {
         filter: { fieldName: "sessionGoogleAdsCampaignId", stringFilter: { matchType: "EXACT", value: String(campaign_id) } }
       },
-      orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }],
-      limit: 500
-    });
+      orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }]
+    }, { maxRows: 100000, meter, limit });
 
     const products = (report.rows || []).map((row) => {
       const viewed = parseInt(row.metricValues[0].value) || 0;
@@ -111,6 +101,7 @@ export default async function handler(req, res) {
       };
     });
 
+    meterDone(meter, { client: Number(client_id), rows: products.length, rowCount: report.rowCount });
     return res.status(200).json({ currency, products });
   } catch (err) {
     return res.status(500).json({ error: err.message });
