@@ -67,6 +67,7 @@ const T={
     m10t:"Clients", m10s:"Svi klijenti i povezani GA4 i Google Ads nalozi",
     m12t:"Product Intelligence", m12s:"Svaki proizvod, od pregleda do prodaje",
     m13t:"Ask Your Data", m13s:"Pitaj bilo šta o podacima klijenta, odgovor za par sekundi",
+    m16t:"Investigate", m16s:"Nešto se promenilo? Saznaj šta i zašto.",
     m14t:"Campaign Intelligence", m14s:"Šta svaka kampanja stvarno donosi",
     grpAn:"Analitika", grpDw:"Svakodnevni rad", open:"Otvori",
     m15t:"Report Studio", m15s:"Izveštaj za klijenta u par klikova, sa PDF-om",
@@ -109,6 +110,7 @@ const T={
     m10t:"Clients", m10s:"All clients and connected GA4 and Google Ads accounts",
     m12t:"Product Intelligence", m12s:"Every product, from view to sale",
     m13t:"Ask Your Data", m13s:"Ask anything about your client's data, answers in seconds",
+    m16t:"Investigate", m16s:"Something changed? Find out what and why.",
     m14t:"Campaign Intelligence", m14s:"What every campaign really delivers",
     grpAn:"Analytics", grpDw:"Daily work", open:"Open",
     m15t:"Report Studio", m15s:"Client reports in a few clicks, with PDF",
@@ -3968,10 +3970,312 @@ function CampaignsMod({t,lang}){
   </div>;
 }
 
+
+// ── INVESTIGATE (mod 16) ─────────────────────────────────────────────────────
+// Istraga radi i kad korisnik pređe u drugi modul: stanje i veza sa serverom žive VAN komponente (INV),
+// a komponenta se samo "pretplati" na promene. Ništa se ne čuva u bazi – rezultat čeka dok je app otvoren.
+const INV={state:null,listeners:new Set(),ctrl:null};
+function invSet(patch){ INV.state=patch===null?null:{...(INV.state||{}),...patch}; INV.listeners.forEach(f=>f(INV.state)); }
+function useInv(){
+  const [s,setS]=useState(INV.state);
+  useEffect(()=>{ INV.listeners.add(setS); setS(INV.state); return()=>{INV.listeners.delete(setS);}; },[]);
+  return s;
+}
+const INV_QTYPES=[
+  {k:"revenue_drop",sr:"Prihod je pao",en:"Revenue dropped",qsr:"Zašto je prihod pao?",qen:"Why did revenue drop?"},
+  {k:"roas_drop",sr:"ROAS je pao",en:"ROAS dropped",qsr:"Zašto je ROAS pao?",qen:"Why did ROAS drop?"},
+  {k:"spend_up",sr:"Potrošnja raste, a prihod ne",en:"Spend up, revenue not",qsr:"Potrošnja raste, a prihod ne – zašto?",qen:"Spend is up but revenue isn't – why?"},
+  {k:"other",sr:"Nešto ne štima",en:"Something's off",qsr:"Šta se promenilo i zašto?",qen:"What changed and why?"},
+];
+function invDateRange(a,b,sr){
+  const p=s=>{const [y,m,d]=s.split("-");return {y:+y,m:+m,d:+d};};
+  const x=p(a),y=p(b);
+  if(sr) return x.m===y.m?`${x.d}.–${y.d}. ${y.m}.`:`${x.d}. ${x.m}.–${y.d}. ${y.m}.`;
+  return `${x.d}/${x.m}–${y.d}/${y.m}`;
+}
+async function invStart({client,days,from,to,qtype,question,lang}){
+  if(INV.ctrl) try{INV.ctrl.abort();}catch(e){}
+  const ctrl=new AbortController(); INV.ctrl=ctrl;
+  const sr=lang==="sr";
+  invSet(null);
+  invSet({status:"running",client,qtype,question,lang,startedAt:Date.now(),checks:[],period:null,result:null,error:""});
+  const qs=new URLSearchParams({client_id:String(client.id),qtype,lang});
+  if(from&&to){ qs.set("from",from); qs.set("to",to); } else qs.set("days",String(days));
+  if(question) qs.set("q",question);
+  try{
+    const r=await fetch(`/api/investigate?${qs.toString()}`,{signal:ctrl.signal});
+    if(!r.ok){
+      const d=await r.json().catch(()=>({}));
+      const msg=d.error==="no_ga4"?(sr?"GA4 nije povezan za ovog klijenta. Poveži ga u modulu Klijenti.":"GA4 is not connected for this client. Connect it in Clients."):(d.error||(sr?"Greška pri pokretanju istrage":"Could not start the investigation"));
+      if(INV.ctrl===ctrl) invSet({status:"error",error:msg});
+      return;
+    }
+    const reader=r.body.getReader(); const dec=new TextDecoder(); let buf=""; let gotResult=false;
+    for(;;){
+      const {done,value}=await reader.read(); if(done) break;
+      buf+=dec.decode(value,{stream:true});
+      let i;
+      while((i=buf.indexOf("\n"))>=0){
+        const line=buf.slice(0,i); buf=buf.slice(i+1);
+        if(!line.trim()||INV.ctrl!==ctrl) continue;
+        let e; try{ e=JSON.parse(line); }catch(err){ continue; }
+        if(e.type==="start") invSet({checks:e.checks.map(c=>({...c,status:"pending",summary:""})),period:e.period,currency:e.currency});
+        else if(e.type==="check") invSet({checks:(INV.state.checks||[]).map(c=>c.id===e.id?{...c,status:e.status,summary:e.summary}:c)});
+        else if(e.type==="result"){ gotResult=true; invSet({status:"done",result:e,finishedAt:Date.now()}); }
+        else if(e.type==="error") invSet({status:"error",error:e.error});
+      }
+    }
+    if(INV.ctrl===ctrl&&!gotResult&&INV.state&&INV.state.status==="running") invSet({status:"error",error:sr?"Veza sa serverom je prekinuta pre kraja istrage. Pokušaj ponovo.":"Connection closed before the investigation finished. Please try again."});
+  }catch(e){
+    if(e.name==="AbortError") return;
+    if(INV.ctrl===ctrl) invSet({status:"error",error:sr?"Nema veze sa serverom. Proveri internet i pokušaj ponovo.":"No connection to the server. Check your internet and try again."});
+  }
+}
+function invCancel(){ if(INV.ctrl) try{INV.ctrl.abort();}catch(e){} INV.ctrl=null; invSet(null); }
+
+// **podebljano** iz AI teksta -> <b>
+const InvRich=({text})=><>{String(text||"").split(/\*\*(.+?)\*\*/g).map((p,i)=>i%2?<b key={i} style={{color:"#fff"}}>{p}</b>:<Fragment key={i}>{p}</Fragment>)}</>;
+
+function useNarrow(px){ const [n,setN]=useState(window.innerWidth<px); useEffect(()=>{ const h=()=>setN(window.innerWidth<px); window.addEventListener("resize",h); return()=>window.removeEventListener("resize",h); },[px]); return n; }
+
+const INV_CSS=`@keyframes invspin{to{transform:rotate(360deg)}}
+@keyframes invscan{0%{left:-2px}100%{left:100%}}
+.inv-scan{position:absolute;top:0;bottom:0;width:2px;background:linear-gradient(180deg,transparent,#A5B4FC,transparent);animation:invscan 2.2s ease-in-out infinite;opacity:.8}`;
+
+function InvestigateMod({t,lang}){
+  const sr=lang==="sr";
+  const inv=useInv();
+  const narrow=useNarrow(860);
+  const [clients,setClients]=useState([]);
+  const [clientsLoading,setClientsLoading]=useState(true);
+  const [clientId,setClientId]=useState("");
+  const [period,setPeriod]=useState("7");
+  const [customFrom,setCustomFrom]=useState("");
+  const [customTo,setCustomTo]=useState("");
+  const [qtype,setQtype]=useState("revenue_drop");
+  const [question,setQuestion]=useState("");
+  const [now,setNow]=useState(Date.now());
+  const [showAll,setShowAll]=useState(false);
+
+  useEffect(()=>{
+    const uid=localStorage.getItem("mat_user_id");
+    if(!uid){ setClientsLoading(false); return; }
+    fetch(`/api/clients?user_id=${uid}`).then(r=>r.json()).then(d=>setClients(Array.isArray(d)?d:[])).catch(()=>{}).finally(()=>setClientsLoading(false));
+  },[]);
+  // Sat za "proteklo" dok istraga traje
+  useEffect(()=>{
+    if(!inv||inv.status!=="running") return;
+    const id=setInterval(()=>setNow(Date.now()),1000);
+    return()=>clearInterval(id);
+  },[inv&&inv.status]);
+
+  const card={background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:14,padding:"16px 18px"};
+  const secT=(c,col)=><div style={{color:col||C.acl,fontSize:11,fontWeight:800,letterSpacing:"1px",textTransform:"uppercase",marginBottom:10}}>{c}</div>;
+  const btn=(primary,disabled)=>({padding:primary?"12px 20px":"9px 16px",borderRadius:10,border:primary?"none":`1px solid ${C.brd}`,background:primary?(disabled?"rgba(99,102,241,0.3)":"linear-gradient(135deg,#6366F1,#4f46e5)"):"rgba(255,255,255,0.04)",color:"#fff",fontSize:13,fontWeight:700,cursor:disabled?"default":"pointer",whiteSpace:"nowrap"});
+  const pctCol=v=>v==null?C.mut:v>0?C.grn:v<0?C.red:C.mut;
+  const pctTxt=v=>{ if(v==null) return sr?"novo":"new"; const a=Math.abs(v); const s=a<10&&a>0?(Math.round(a*10)/10).toLocaleString(sr?"sr-RS":"en-GB"):Math.round(a).toLocaleString(sr?"sr-RS":"en-GB"); return (v>0?"+":v<0?"−":"")+s+"%"; };
+  const header=<>
+    <style>{INV_CSS}</style>
+    <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>🔎 Investigate</h2>
+    <p style={{color:C.mut,fontSize:13,margin:"0 0 20px"}}>{t.m16s}</p>
+  </>;
+
+  // ── 1) POČETAK: izbor klijenta, perioda i pitanja ──
+  if(!inv){
+    const sel=clients.find(c=>String(c.id)===String(clientId));
+    const customOk=period!=="custom"||(customFrom&&customTo&&customFrom<=customTo);
+    const canStart=!!sel&&customOk;
+    const qt=INV_QTYPES.find(x=>x.k===qtype);
+    const start=()=>{ if(!canStart) return;
+      invStart({client:{id:sel.id,name:sel.name},days:period==="custom"?null:parseInt(period),from:period==="custom"?customFrom:null,to:period==="custom"?customTo:null,qtype,question:question.trim()||(sr?qt.qsr:qt.qen),lang}); };
+    const chip=(on)=>({padding:"8px 14px",borderRadius:20,border:`1px solid ${on?"rgba(99,102,241,0.6)":C.brd}`,background:on?"rgba(99,102,241,0.18)":"transparent",color:on?"#fff":C.mut,fontSize:12.5,fontWeight:600,cursor:"pointer"});
+    return <div>
+      {header}
+      <div style={{...card,padding:"20px 22px",maxWidth:760}}>
+        <Lbl c={sr?"Klijent":"Client"}/>
+        {clientsLoading?<div style={{color:C.mut,fontSize:13,marginBottom:18}}>{sr?"Učitavam klijente...":"Loading clients..."}</div>
+        :!clients.length?<div style={{color:C.mut,fontSize:13,marginBottom:18}}>{sr?"Još nemaš klijente. Dodaj ih u modulu Klijenti i poveži GA4.":"No clients yet. Add them in Clients and connect GA4."}</div>
+        :<select value={clientId} onChange={e=>setClientId(e.target.value)} style={{width:"100%",padding:"12px 14px",background:"rgba(255,255,255,0.06)",border:`1px solid ${C.brd}`,borderRadius:10,color:C.txt,fontSize:14,marginBottom:18,outline:"none"}}>
+          <option value="" style={{background:"#13131f"}}>{sr?"— izaberi klijenta —":"— choose a client —"}</option>
+          {clients.map(c=><option key={c.id} value={c.id} style={{background:"#13131f"}}>{c.name}</option>)}
+        </select>}
+
+        <Lbl c={sr?"Period":"Period"}/>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:period==="custom"?10:6}}>
+          {[["7",sr?"Poslednjih 7 dana":"Last 7 days"],["14",sr?"14 dana":"14 days"],["30",sr?"30 dana":"30 days"],["custom",sr?"Prilagođeno":"Custom"]].map(([v,l])=><button key={v} onClick={()=>setPeriod(v)} style={chip(period===v)}>{l}</button>)}
+        </div>
+        {period==="custom"&&<div style={{display:"flex",gap:10,marginBottom:6,flexWrap:"wrap"}}>
+          <div style={{flex:1,minWidth:140}}><DIn v={customFrom} ch={setCustomFrom}/></div>
+          <div style={{flex:1,minWidth:140}}><DIn v={customTo} ch={setCustomTo}/></div>
+        </div>}
+        <div style={{color:C.dim,fontSize:12,marginBottom:18}}>{sr?"Poredi se sa prethodnim periodom iste dužine (i sa istim periodom prošle godine). Najduže 92 dana.":"Compared with the previous period of the same length (and the same period last year). Up to 92 days."}</div>
+
+        <Lbl c={sr?"Šta te zanima?":"What do you want to know?"}/>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+          {INV_QTYPES.map(x=><button key={x.k} onClick={()=>setQtype(x.k)} style={chip(qtype===x.k)}>{sr?x.sr:x.en}</button>)}
+        </div>
+        <input value={question} onChange={e=>setQuestion(e.target.value.slice(0,300))} onKeyDown={e=>e.key==="Enter"&&start()} placeholder={sr?`Ili napiši svojim rečima (npr. „${qt.qsr}“)`:`Or write it in your own words (e.g. “${qt.qen}”)`} style={{width:"100%",padding:"12px 14px",background:"rgba(255,255,255,0.06)",border:`1px solid ${C.brd}`,borderRadius:10,color:C.txt,fontSize:14,outline:"none",boxSizing:"border-box",marginBottom:18}}/>
+
+        <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+          <button onClick={start} disabled={!canStart} style={btn(true,!canStart)}>🔎 {sr?"Istraži":"Investigate"}</button>
+          <span style={{color:C.dim,fontSize:12}}>{sr?"Traje oko 30–60 sekundi. Možeš u međuvremenu da pređeš u drugi modul.":"Takes about 30–60 seconds. You can switch to another module meanwhile."}</span>
+        </div>
+      </div>
+    </div>;
+  }
+
+  const periodTxt=inv.period?`${invDateRange(inv.period.curS,inv.period.curE,sr)} ${sr?"u odnosu na":"vs"} ${invDateRange(inv.period.prevS,inv.period.prevE,sr)}`:"";
+
+  // ── 2) GREŠKA ──
+  if(inv.status==="error") return <div>
+    {header}
+    <div style={{...card,maxWidth:760,borderColor:"rgba(248,113,113,0.35)",background:"rgba(248,113,113,0.06)"}}>
+      <div style={{color:C.red,fontWeight:700,fontSize:14,marginBottom:6}}>⚠️ {sr?"Istraga nije uspela":"The investigation failed"}</div>
+      <div style={{color:C.txt,fontSize:13,lineHeight:1.6,marginBottom:14}}>{inv.error}</div>
+      <button onClick={invCancel} style={btn(false)}>{sr?"Nazad":"Back"}</button>
+    </div>
+  </div>;
+
+  // ── 3) U TOKU: dosije provera ──
+  if(inv.status==="running"){
+    const checks=inv.checks||[];
+    const total=checks.length||13;
+    const done=checks.filter(c=>c.status!=="pending").length;
+    const elapsed=Math.max(0,Math.round((now-inv.startedAt)/1000));
+    const mm=`${Math.floor(elapsed/60)}:${String(elapsed%60).padStart(2,"0")}`;
+    const remaining=Math.max(5,40-elapsed);
+    const activeId=(checks.find(c=>c.status==="pending")||{}).id;
+    const icon=(st,active)=>{
+      const base={width:22,height:22,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:12,fontWeight:800,boxSizing:"border-box"};
+      if(st==="done") return <div style={{...base,background:"rgba(52,211,153,0.15)",border:"1px solid rgba(52,211,153,0.5)",color:C.grn}}>✓</div>;
+      if(st==="failed") return <div style={{...base,background:"rgba(248,113,113,0.12)",border:"1px solid rgba(248,113,113,0.45)",color:C.red}}>✗</div>;
+      if(st==="skipped") return <div style={{...base,border:`1px solid ${C.brd}`,color:C.mut}}>–</div>;
+      if(active) return <div style={{...base,border:"2px solid rgba(165,180,252,0.25)",borderTopColor:C.acl,animation:"invspin 0.9s linear infinite"}}/>;
+      return <div style={{...base,border:"1px dashed rgba(255,255,255,0.18)"}}/>;
+    };
+    return <div>
+      {header}
+      <div style={{...card,padding:narrow?"16px":"22px 24px",maxWidth:1000}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:14}}>
+          <div style={{minWidth:0}}>
+            <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:4}}>{sr?"Istražujem":"Investigating"}: „{inv.question}“</div>
+            <div style={{color:C.mut,fontSize:12.5}}>{inv.client.name}{periodTxt?` · ${periodTxt}`:""}</div>
+          </div>
+          <button onClick={invCancel} style={btn(false)}>{sr?"Otkaži":"Cancel"}</button>
+        </div>
+        <div style={{height:6,borderRadius:4,background:"rgba(255,255,255,0.06)",overflow:"hidden",marginBottom:8}}>
+          <div style={{height:"100%",width:`${Math.round(done/total*100)}%`,background:"linear-gradient(90deg,#6366F1,#A5B4FC)",transition:"width .4s ease"}}/>
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",color:C.mut,fontSize:12,marginBottom:16,gap:10,flexWrap:"wrap"}}>
+          <span>{done} {sr?"od":"of"} {total} {sr?"provera završeno":"checks done"}</span>
+          <span>{sr?"Proteklo":"Elapsed"} {mm}{elapsed<120?` · ${sr?"još oko":"about"} ${remaining} ${sr?"sekundi":"seconds left"}`:""}</span>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {(checks.length?checks:[]).map(c=>{
+            const active=c.id===activeId;
+            return <div key={c.id} style={{position:"relative",overflow:"hidden",display:"flex",alignItems:narrow?"flex-start":"center",gap:12,padding:"12px 14px",borderRadius:10,border:`1px solid ${active?"rgba(99,102,241,0.55)":C.brd}`,background:active?"rgba(99,102,241,0.08)":"rgba(255,255,255,0.02)",flexWrap:narrow?"wrap":"nowrap"}}>
+              {icon(c.status,active)}
+              <div style={{width:narrow?"auto":260,flexShrink:0,fontWeight:700,fontSize:13,color:c.status==="pending"&&!active?C.dim:"#fff"}}>{c.label}</div>
+              <div style={{flex:1,minWidth:narrow?"100%":0,fontSize:12.5,color:c.status==="failed"?C.red:active?C.acl:C.mut,lineHeight:1.5,paddingLeft:narrow?34:0}}>{c.summary||(active?(sr?"Proveravam...":"Checking..."):"")}</div>
+              {active&&<div className="inv-scan"/>}
+            </div>;
+          })}
+        </div>
+        <div style={{color:C.dim,fontSize:12,marginTop:14}}>{sr?"Možeš da pređeš u drugi modul – istraga nastavlja da radi i rezultat te čeka ovde.":"You can switch to another module – the investigation keeps running and the result waits here."}</div>
+      </div>
+    </div>;
+  }
+
+  // ── 4) REZULTAT ──
+  const R=inv.result||{};
+  const T=R.totals;
+  const cur=R.currency||"EUR";
+  const fm=v=>fmtMoney(v,cur);
+  const dur=R.durationMs?Math.round(R.durationMs/1000):null;
+  const stats=T?[
+    {l:sr?"Prihod":"Revenue",v:fm(T.cur.revenue),p:T.pct.revenue},
+    {l:sr?"Porudžbine":"Orders",v:Math.round(T.cur.orders).toLocaleString(sr?"sr-RS":"en-GB"),p:T.pct.orders},
+    {l:sr?"Posete":"Sessions",v:Math.round(T.cur.sessions).toLocaleString(sr?"sr-RS":"en-GB"),p:T.pct.sessions},
+    {l:sr?"Konverzija":"Conversion",v:(T.cur.cr*100).toLocaleString(sr?"sr-RS":"en-GB",{minimumFractionDigits:2,maximumFractionDigits:2})+"%",p:T.pct.cr},
+    ...(R.gads?[
+      {l:sr?"Potrošnja (Google Ads)":"Spend (Google Ads)",v:fm(R.gads.spendCur),p:R.gads.spendPrev>0?(R.gads.spendCur-R.gads.spendPrev)/R.gads.spendPrev*100:null,inv:true},
+      {l:"ROAS (Google Ads)",v:R.gads.roasCur.toLocaleString(sr?"sr-RS":"en-GB",{minimumFractionDigits:2,maximumFractionDigits:2}),p:R.gads.roasPrev>0?(R.gads.roasCur-R.gads.roasPrev)/R.gads.roasPrev*100:null},
+    ]:[])
+  ]:[];
+  const ai=R.ai;
+  const byId=Object.fromEntries((R.findings||[]).map(f=>[f.id,f]));
+  const evidence=ai?(ai.evidence||[]).map(id=>byId[id]).filter(Boolean):[];
+  const confMap={high:[sr?"Visoka sigurnost":"High confidence",C.grn,"rgba(52,211,153,0.12)","rgba(52,211,153,0.4)"],medium:[sr?"Srednja sigurnost":"Medium confidence",C.yel,"rgba(251,191,36,0.1)","rgba(251,191,36,0.4)"],low:[sr?"Niska sigurnost":"Low confidence",C.red,"rgba(248,113,113,0.1)","rgba(248,113,113,0.4)"]};
+  const conf=ai&&confMap[ai.confidence]?confMap[ai.confidence]:null;
+  const failedChecks=(inv.checks||[]).filter(c=>c.status==="failed");
+  const gadsSkipped=(inv.checks||[]).some(c=>c.id==="gads"&&c.status==="skipped");
+  const Nchip=({id})=><span style={{display:"inline-block",minWidth:26,textAlign:"center",padding:"2px 6px",borderRadius:6,border:"1px solid rgba(99,102,241,0.45)",background:"rgba(99,102,241,0.12)",color:C.acl,fontSize:11,fontWeight:800,flexShrink:0}}>{id}</span>;
+  const findingRow=f=><div key={f.id} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"9px 0",borderTop:`1px solid ${C.brd}`}}><Nchip id={f.id}/><div style={{fontSize:12.5,color:C.txt,lineHeight:1.55}}>{f.text}</div></div>;
+  const bullets=(arr)=><div>{(arr||[]).map((x,i)=><div key={i} style={{display:"flex",gap:8,fontSize:13,lineHeight:1.6,color:C.txt,marginBottom:8}}><span style={{color:C.mut}}>›</span><div><InvRich text={x}/></div></div>)}</div>;
+
+  return <div>
+    <style>{INV_CSS}</style>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap",marginBottom:18}}>
+      <div style={{minWidth:0}}>
+        <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>🔎 {inv.question}</h2>
+        <div style={{color:C.mut,fontSize:12.5}}>{inv.client.name}{periodTxt?` · ${periodTxt}`:""}{dur?` · ${sr?"istraga trajala":"took"} ${dur} s`:""}</div>
+      </div>
+      <button onClick={invCancel} style={btn(false)}>{sr?"Nova istraga":"New investigation"}</button>
+    </div>
+
+    {stats.length>0&&<div style={{display:"grid",gridTemplateColumns:`repeat(auto-fit,minmax(${narrow?140:170}px,1fr))`,gap:10,marginBottom:16}}>
+      {stats.map(s=><div key={s.l} style={{...card,padding:"12px 14px"}}>
+        <div style={{color:C.mut,fontSize:10.5,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:6}}>{s.l}</div>
+        <div style={{display:"flex",flexWrap:"wrap",alignItems:"baseline",columnGap:6,minWidth:0}}><span style={{fontSize:narrow?15:18,fontWeight:800,color:"#fff",overflowWrap:"break-word"}}>{s.v}</span><span style={{fontSize:12.5,fontWeight:700,color:s.inv?(s.p>0?C.yel:s.p<0?C.grn:C.mut):pctCol(s.p)}}>{pctTxt(s.p)}</span></div>
+      </div>)}
+    </div>}
+
+    {R.unavailable&&<div style={{...card,borderColor:"rgba(251,191,36,0.35)",background:"rgba(251,191,36,0.06)",marginBottom:16}}>
+      <div style={{color:C.yel,fontWeight:700,fontSize:14,marginBottom:6}}>⏳ {sr?"Podaci trenutno nisu dostupni":"Data is not available right now"}</div>
+      <div style={{color:C.txt,fontSize:13,lineHeight:1.6}}>{R.unavailable}</div>
+    </div>}
+
+    {!R.unavailable&&<div style={{display:"grid",gridTemplateColumns:narrow?"1fr":"1.15fr 1fr",gap:14,alignItems:"start"}}>
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        {ai&&<div style={card}>{secT(sr?"Šta se desilo":"What happened")}<div style={{fontSize:13.5,lineHeight:1.7,color:C.txt}}><InvRich text={ai.what}/></div></div>}
+        {ai&&<div style={card}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:10,flexWrap:"wrap"}}>
+            <div style={{color:C.acl,fontSize:11,fontWeight:800,letterSpacing:"1px",textTransform:"uppercase"}}>{sr?"Zašto se verovatno dešava":"Why it is likely happening"}</div>
+            {conf&&<span style={{padding:"3px 10px",borderRadius:20,fontSize:10.5,fontWeight:800,letterSpacing:"0.6px",textTransform:"uppercase",color:conf[1],background:conf[2],border:`1px solid ${conf[3]}`}}>{conf[0]}</span>}
+          </div>
+          <div style={{fontSize:13.5,lineHeight:1.7,color:C.txt}}><InvRich text={ai.why}/></div>
+        </div>}
+        {!ai&&<div style={{...card,borderColor:"rgba(251,191,36,0.35)"}}><div style={{color:C.yel,fontSize:13,lineHeight:1.6}}>{sr?"Objašnjenje nije napisano (AI trenutno nije dostupan). Ispod su nalazi koje je server izračunao.":"The explanation could not be written (AI unavailable). Below are the findings computed by the server."}</div></div>}
+        <div style={card}>
+          {secT(ai?(sr?"Dokazi":"Evidence"):(sr?"Nalazi":"Findings"))}
+          {(ai&&evidence.length?evidence:(R.findings||[]).slice(0,6)).map(findingRow)}
+          {(R.findings||[]).length>(ai&&evidence.length?evidence.length:6)&&<button onClick={()=>setShowAll(v=>!v)} style={{marginTop:10,background:"none",border:"none",color:C.acl,fontSize:12,fontWeight:700,cursor:"pointer",padding:0}}>{showAll?(sr?"Sakrij ostale nalaze":"Hide other findings"):(sr?`Prikaži sve nalaze (${R.findings.length})`:`Show all findings (${R.findings.length})`)}</button>}
+          {showAll&&<div style={{marginTop:8}}>{(R.findings||[]).filter(f=>!(ai&&evidence.length?evidence:(R.findings||[]).slice(0,6)).includes(f)).map(findingRow)}</div>}
+        </div>
+      </div>
+
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        {ai&&(ai.cannot_confirm||[]).length>0&&<div style={{...card,borderColor:"rgba(251,191,36,0.35)",background:"rgba(251,191,36,0.05)"}}>{secT(sr?"Šta ne možemo da potvrdimo":"What we can't confirm",C.yel)}{bullets(ai.cannot_confirm)}</div>}
+        {ai&&(ai.next_steps||[]).length>0&&<div style={card}>{secT(sr?"Šta proveriti sledeće":"What to check next")}{bullets(ai.next_steps)}</div>}
+        <div style={card}>
+          {secT(sr?"Kako sam došao do ovoga":"How I got here")}
+          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+            {(R.checksDone||[]).filter(c=>c.id!=="ai").map(c=><span key={c.id} style={{padding:"4px 10px",borderRadius:20,border:`1px solid ${C.brd}`,color:C.mut,fontSize:11.5}}>✓ {c.label}{c.count!=null&&c.count>0?` (${c.count.toLocaleString(sr?"sr-RS":"en-GB")})`:""}</span>)}
+          </div>
+          {failedChecks.length>0&&<div style={{color:C.yel,fontSize:12,marginTop:10,lineHeight:1.5}}>⚠️ {sr?"Nisu uspele":"Did not complete"}: {failedChecks.map(c=>c.label).join(", ")}. {sr?"Google nije odgovorio na vreme – zaključak je zato manje siguran.":"Google did not respond in time – the conclusion is less certain."}</div>}
+          {gadsSkipped&&<div style={{color:C.mut,fontSize:12,marginTop:10,lineHeight:1.5}}>💡 {sr?"Poveži Google Ads za ovog klijenta da bi istraga uključila i potrošnju i ROAS kampanja.":"Connect Google Ads for this client so the investigation includes spend and campaign ROAS."}</div>}
+          <div style={{color:C.dim,fontSize:11.5,marginTop:10,lineHeight:1.5}}>{sr?"Sve brojeve je izračunao server iz GA4 i Google Ads podataka; AI ih samo povezuje. Povezanost nije dokaz uzroka.":"All numbers are computed by the server from GA4 and Google Ads data; AI only connects them. Correlation is not proof of cause."}</div>
+        </div>
+      </div>
+    </div>}
+  </div>;
+}
+
 const MODS=[
   {id:14,icon:"📢",col:"#84CC16",tk:"m14t",sk:"m14s",grp:"an"},
   {id:12,icon:"🛍️",col:"#F43F5E",tk:"m12t",sk:"m12s",grp:"an"},
   {id:13,icon:"💬",col:"#22D3EE",tk:"m13t",sk:"m13s",grp:"an"},
+  {id:16,icon:"🔎",col:"#818CF8",tk:"m16t",sk:"m16s",grp:"an"},
   {id:2,icon:"💰",col:"#10B981",tk:"m2t",sk:"m2s",grp:"dw"},
   {id:15,icon:"📑",col:"#F59E0B",tk:"m15t",sk:"m15s",grp:"dw"},
   {id:10,icon:"👥",col:"#A855F7",tk:"m10t",sk:"m10s",grp:"dw"},
@@ -3985,6 +4289,7 @@ const MOD_TAGS={
   14:{sr:["Google Ads","GA4","ROAS"],en:["Google Ads","GA4","ROAS"]},
   12:{sr:["Proizvodi","Korpe","Trendovi"],en:["Products","Carts","Trends"]},
   13:{sr:["„Koji proizvod raste?“"],en:["“Which product is growing?”"]},
+  16:{sr:["Prihod","ROAS","Uzroci"],en:["Revenue","ROAS","Causes"]},
   2:{sr:["Meta","Google Ads"],en:["Meta","Google Ads"]},
   15:{sr:["Google Ads","Prodaja po kampanjama","PDF"],en:["Google Ads","Sales by campaign","PDF"]},
   10:{sr:["GA4","Google Ads"],en:["GA4","Google Ads"]},
@@ -3992,7 +4297,7 @@ const MOD_TAGS={
 };
 // Maksimalna sirina sadrzaja po modulu na racunaru: tabele i izvestaji koriste siroki ekran,
 // chat i forme ostaju uze da bi se lako citali
-const MOD_WIDTH={14:1320,12:1320,15:1320,2:1320,10:1320,9:1320,13:1040,1:920};
+const MOD_WIDTH={14:1320,12:1320,15:1320,2:1320,10:1320,9:1320,13:1040,16:1100,1:920};
 const MOD_GROUPS=[{k:"an",tk:"grpAn"},{k:"dw",tk:"grpDw"}];
 const gridCols=n=>n<=4?n:3;
 const CARD_CSS=`.mc{transition:transform .18s ease,border-color .18s ease}
@@ -4186,7 +4491,7 @@ function MainApp({account}){
   // Save lang preference
   useEffect(()=>{ localStorage.setItem("mat_lang",lang); },[lang]);
 
-  const Comp=mod===1?HealthMod:mod===10?MyClientsMod:mod===12?ProductIntelligenceMod:mod===13?AskDataMod:mod===14?CampaignsMod:mod===2?BudgetPacingMod:(mod===15||mod===9)?ReportStudioMod:null;
+  const Comp=mod===1?HealthMod:mod===10?MyClientsMod:mod===12?ProductIntelligenceMod:mod===13?AskDataMod:mod===16?InvestigateMod:mod===14?CampaignsMod:mod===2?BudgetPacingMod:(mod===15||mod===9)?ReportStudioMod:null;
   // Nepostojeci ili obrisani modul (npr. stari link ?mod=3) vodi na pocetni ekran
   const showHome=!mod||!Comp;
 
@@ -4241,7 +4546,8 @@ function MainApp({account}){
 
   const ModCard=({m,i,large})=>{
     const tags=(MOD_TAGS[m.id]||{})[lang]||[];
-    const live=m.id===2&&home?.bp?home.bp:null;
+    const invS=m.id===16?INV.state:null;
+    const live=m.id===2&&home?.bp?home.bp:invS&&invS.status==="running"?{text:lang==="sr"?`Istraga u toku: ${invS.client.name}…`:`Investigating ${invS.client.name}…`,bad:false}:invS&&invS.status==="done"?{text:lang==="sr"?`Rezultat čeka: ${invS.client.name}`:`Result ready: ${invS.client.name}`,bad:false}:null;
     const extra=m.id===10&&home?.clients!=null?`${home.clients} ${lang==="sr"?(home.clients===1?"klijent":"klijenata"):(home.clients===1?"client":"clients")}`:null;
     return <button className="mc" onClick={()=>goMod(m.id)} style={{
       "--c":m.col,
