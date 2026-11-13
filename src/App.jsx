@@ -4031,6 +4031,13 @@ async function invStart({client,days,from,to,qtype,question,lang,campaignId}){
         if(!line.trim()||INV.ctrl!==ctrl) continue;
         let e; try{ e=JSON.parse(line); }catch(err){ continue; }
         if(e.type==="start") invSet({checks:e.checks.map(c=>({...c,status:"pending",summary:""})),period:e.period,currency:e.currency,eurFactor:e.eurFactor});
+        else if(e.type==="check_add"){
+          // Drugi krug: server dodaje nove (dublje) provere, ubacuju se pre poslednjeg koraka (AI)
+          const cs=[...(INV.state.checks||[])]; const at=cs.findIndex(c=>c.id===e.before);
+          const nc={...e.check,status:"pending",summary:""};
+          if(at>=0) cs.splice(at,0,nc); else cs.push(nc);
+          invSet({checks:cs});
+        }
         else if(e.type==="check") invSet({checks:(INV.state.checks||[]).map(c=>c.id===e.id?{...c,status:e.status,summary:e.summary}:c)});
         else if(e.type==="result"){ gotResult=true; invSet({status:"done",result:e,finishedAt:Date.now()}); }
         else if(e.type==="error") invSet({status:"error",error:e.error});
