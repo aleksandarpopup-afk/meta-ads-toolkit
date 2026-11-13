@@ -56,10 +56,16 @@ export async function ga4Fetch(propertyId, accessToken, body, { meter, limit } =
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
         body: JSON.stringify(meter ? { ...body, returnPropertyQuota: true } : body)
       });
-      const data = await r.json().catch(() => ({}));
-      if (r.ok) { meterQuota(meter, data); return data; }
-      const msg = JSON.stringify(data);
-      const retryable = r.status === 429 || r.status === 500 || r.status === 503 || RETRYABLE.test(msg);
+      const raw = await r.text().catch(() => "");
+      let data = {};
+      try { data = raw ? JSON.parse(raw) : {}; } catch (e) { data = null; }
+      if (r.ok && data) { meterQuota(meter, data); return data; }
+      // Poruka greške sada uvek sadrži HTTP status i početak odgovora (ranije je znalo da ostane samo "{}")
+      const msg = `GA4 HTTP ${r.status}: ${(data ? JSON.stringify(data) : raw).slice(0, 300)}`;
+      // Potrošena kvota (tokeni po satu/danu) – ponovni pokušaj ne pomaže, prekida se odmah
+      if (/tokens per (hour|day)|Exhausted property tokens|Exhausted.*tokens/i.test(msg) && !/concurrent/i.test(msg)) throw new Error(msg);
+      const retryable = r.status === 429 || r.status === 500 || r.status === 502 || r.status === 503 || r.status === 504 || RETRYABLE.test(msg);
+      console.warn(`[ga4] property=${propertyId} pokušaj ${attempt + 1}: ${msg.slice(0, 200)}`);
       if (!retryable || attempt >= 5) throw new Error(msg);
       if (meter) meter.retries++;
       await sleep(Math.min(10000, 1000 * 2 ** attempt) * (0.5 + Math.random())); // ~1, 2, 4, 8, 10 s ± 50%
