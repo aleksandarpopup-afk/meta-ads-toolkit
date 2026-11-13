@@ -253,7 +253,8 @@ export default async function handler(req, res) {
       else if (uniform) summary = L("Promena je slična u svim većim stavkama – nije problem jedne stavke", "Change is similar across all major items – not a single-item issue");
       else if (topShare >= 0.5) summary = `${L("Najveći deo promene", "Most of the change")}: ${rows[0].name} (${F.moneyDelta(rows[0].dRev)}, ${F.pct(rows[0].revPct)})`;
       else summary = top.map((r) => `${r.name} ${F.pct(r.revPct)}`).join(" · ");
-      if (uniform) addFinding({ check, impact: dR * 0.5, force: true, label: L(`ravnomeran pad/rast (${check})`, `uniform change (${check})`), text: summary });
+      const dimLabel = (CHECKS.find((x) => x.id === check) || {}).label || check;
+      if (uniform) addFinding({ check, impact: dR * 0.5, force: true, label: `${dimLabel}: ${L("ravnomerna promena", "uniform change")}`, text: `${dimLabel}: ${summary}` });
       return { rows, summary, uniform };
     };
 
@@ -312,6 +313,27 @@ export default async function handler(req, res) {
       }
     } catch (e) { markFail("funnel", e); }
 
+    // ── 9. Landing stranice (pre provere merenja, jer i ona koristi ove podatke) ──
+    let finishFlag = null;
+    try {
+      const m = await P.landing;
+      const a = dimAnalysis(m, "landing", (o) => o.dims[0] || "(not set)");
+      // Sesije koje POČINJU na stranici završetka kupovine/plaćanja = kupac se vratio sa stranice banke/kredita,
+      // GA4 je započeo novu sesiju i prodaja se pripisuje pogrešnom izvoru.
+      const FINISH = /(finish|thank|hvala|uspesn|success|confirm|potvrd|order-received|narudzbina-primljena|payment|placanje)/i;
+      const fin = Object.values(m).filter((o) => FINISH.test(o.dims[0] || ""));
+      if (fin.length && T) {
+        const fc = fin.reduce((x, o) => x + o.cur.totalRevenue, 0), fp = fin.reduce((x, o) => x + o.prev.totalRevenue, 0);
+        const sc = rate(fc, R1) * 100, sp = rate(fp, R0) * 100;
+        if (sc >= 3) {
+          const ex = [...fin].sort((x, y) => y.cur.totalRevenue - x.cur.totalRevenue).slice(0, 2).map((o) => o.dims[0]).join(", ");
+          finishFlag = L(`${Math.round(sc)}% prihoda (ranije ${Math.round(sp)}%) dolazi iz sesija koje počinju na stranici završetka kupovine/plaćanja (${ex}) – kupac se vraća sa stranice banke ili kredita, GA4 započinje novu sesiju i ta prodaja se pripisuje pogrešnom izvoru`,
+                         `${Math.round(sc)}% of revenue (before ${Math.round(sp)}%) comes from sessions that start on an order-finish/payment page (${ex}) – buyers return from a bank/credit page, GA4 starts a new session and the sale is attributed to the wrong source`);
+        }
+      }
+      markDone("landing", a.summary, a.rows.length);
+    } catch (e) { markFail("landing", e); }
+
     // ── 8. Kretanje po danima + 3. provera merenja ──
     let daily = null;
     try {
@@ -342,7 +364,7 @@ export default async function handler(req, res) {
       if (best && best.mL > 0 && Math.abs(best.mR - best.mL) / best.mL >= 0.15) {
         const startDay = series[best.k].d;
         const ch = pct(best.mR, best.mL);
-        changeTxt = `${L("Promena počinje oko", "Change starts around")} ${F.date(startDay)} (${L("dnevni prihod", "daily revenue")} ${F.pct(ch)})`;
+        changeTxt = `${L("Promena počinje oko", "Change starts around")} ${F.date(startDay)} (${L("dnevni prihod", "daily revenue")} ${F.pct(ch)} ${L("u odnosu na dane pre toga", "vs. the days before")})`;
         addFinding({ check: "daily", impact: dR * 0.3, force: true, label: `${L("od", "from")} ${F.date(startDay)}`, text: changeTxt, facts: { change_start: F.date(startDay) } });
       }
       // Normalno kolebanje: zbir istih perioda unazad (do 8)
@@ -385,18 +407,13 @@ export default async function handler(req, res) {
           if (sc - sp >= 5) flags.push(`${L("udeo neprepoznatog saobraćaja (Unassigned)", "share of Unassigned traffic")}: ${Math.round(sp)}% → ${Math.round(sc)}%`);
         }
       }
+      if (finishFlag) flags.push(finishFlag);
       if (flags.length) {
         flags.forEach((t) => addFinding({ check: "tracking", impact: dR * 0.5, force: true, label: L("moguć problem u merenju", "possible tracking issue"), text: t }));
         markDone("tracking", flags[0] + (flags.length > 1 ? ` (+${flags.length - 1})` : ""), flags.length);
       } else markDone("tracking", L("Nema znakova problema sa merenjem", "No signs of tracking problems"), 0);
     } catch (e) { markFail("daily", e); markFail("tracking", e); }
 
-    // ── 9. Landing stranice ──
-    try {
-      const m = await P.landing;
-      const a = dimAnalysis(m, "landing", (o) => o.dims[0] || "(not set)");
-      markDone("landing", a.summary, a.rows.length);
-    } catch (e) { markFail("landing", e); }
 
     // ── 10. Kategorije i proizvodi ──
     try {
@@ -404,8 +421,11 @@ export default async function handler(req, res) {
       const cats = Object.values(await P.categories).map((o) => ({ name: o.dims[0] || "(not set)", c: o.cur, p: o.prev, d: o.cur.itemRevenue - o.prev.itemRevenue }))
         .sort((a, b) => Math.abs(b.d) - Math.abs(a.d));
       for (const c of cats.slice(0, 3)) {
+        // Prosečna cena po prodatom komadu – otkriva promenu "miksa" (prodaje se skuplje/jeftinije unutar kategorije)
+        const upc = pct(rate(c.c.itemRevenue, c.c.itemsPurchased), rate(c.p.itemRevenue, c.p.itemsPurchased));
+        const mix = upc != null && Math.abs(upc) >= 25 ? (upc > 0 ? L(" – prodaju se skuplji proizvodi nego ranije", " – more expensive items are selling than before") : L(" – prodaju se jeftiniji proizvodi nego ranije", " – cheaper items are selling than before")) : "";
         addFinding({ check: "products", impact: c.d, label: `${L("kategorija", "category")} ${c.name} ${F.pct(pct(c.c.itemRevenue, c.p.itemRevenue))}`,
-          text: `${L("Kategorija", "Category")} ${c.name}: ${L("prihod", "revenue")} ${F.moneyDelta(c.d)} (${F.pct(pct(c.c.itemRevenue, c.p.itemRevenue))}) · ${L("pregledi", "views")} ${F.pct(pct(c.c.itemsViewed, c.p.itemsViewed))} · ${L("korpa", "cart")} ${F.pct(pct(c.c.itemsAddedToCart, c.p.itemsAddedToCart))} · ${L("kupljeno", "purchased")} ${F.pct(pct(c.c.itemsPurchased, c.p.itemsPurchased))}` });
+          text: `${L("Kategorija", "Category")} ${c.name}: ${L("prihod", "revenue")} ${F.moneyDelta(c.d)} (${F.pct(pct(c.c.itemRevenue, c.p.itemRevenue))}) · ${L("pregledi", "views")} ${F.pct(pct(c.c.itemsViewed, c.p.itemsViewed))} · ${L("korpa", "cart")} ${F.pct(pct(c.c.itemsAddedToCart, c.p.itemsAddedToCart))} · ${L("kupljeno", "purchased")} ${F.pct(pct(c.c.itemsPurchased, c.p.itemsPurchased))} · ${L("prosečna cena po komadu", "avg. price per unit")} ${F.pct(upc)}${mix}` });
       }
       const prodMap = await P.products;
       // Isti itemId sa više naziva → saberi
@@ -507,7 +527,13 @@ export default async function handler(req, res) {
       });
     }
     if (gadsTotals) Object.assign(facts, { gads_spend_pct: F.pct(pct(gadsTotals.spendCur, gadsTotals.spendPrev)), gads_roas_cur: F.dec(gadsTotals.roasCur), gads_roas_prev: F.dec(gadsTotals.roasPrev) });
-    for (const f of top) { facts[f.id] = f.label; if (f.facts) for (const [k, v] of Object.entries(f.facts)) facts[k] = v; }
+    for (const f of top) {
+      facts[f.id] = f.label;
+      if (f.share != null && Math.abs(f.share) <= 1.5) facts[f.id + "_share"] = "≈" + Math.round(Math.abs(f.share) * 100) + "%";
+      if (f.facts) for (const [k, v] of Object.entries(f.facts)) facts[k] = v;
+    }
+    facts.period_cur = `${F.date(curS)}–${F.date(curE)}`;
+    facts.period_prev = `${F.date(prevS)}–${F.date(prevE)}`;
 
     // ── AI: jedan poziv, povezuje nalaze ──
     let ai = null;
@@ -547,14 +573,16 @@ async function explain({ lang, question, qtype, period, totals, decomp, gadsTota
 
   const factList = Object.entries(facts).map(([k, v]) => `{{${k}}} = ${v}`).join("\n");
   // Udeo se navodi samo kad ima smisla (ne kad se promene međusobno poništavaju pa udeo prelazi 150%)
-  const findingList = findings.map((f) => `${f.id} [${f.check}] ${f.text}${f.share != null && Math.abs(f.share) <= 1.5 ? ` (≈${Math.round(f.share * 100)}% ${sr ? "ukupne promene" : "of total change"})` : ""}`).join("\n");
+  const findingList = findings.map((f) => `${f.id} [${f.check}] ${f.text}${facts[f.id + "_share"] ? ` (${sr ? "udeo u ukupnoj promeni" : "share of total change"}: {{${f.id}_share}})` : ""}`).join("\n");
   const failed = warnings.map((w) => w.check).join(", ");
 
   const system = sr
     ? `Ti si iskusan analitičar e-commerce performansi. Dobijaš NALAZE koje je server izračunao iz GA4 i Google Ads podataka. Tvoj posao je da ih povežeš u jasno objašnjenje za marketing tim.
 PRAVILA:
 - NE PIŠI NIJEDAN BROJ, procenat, iznos ni datum svojim rečima. Svaki broj ubaci ISKLJUČIVO preko oznake iz liste ČINJENICE, tačno u obliku {{kljuc}} (npr. {{revenue_pct}}, {{N4}}). Server će oznaku zameniti pravom vrednošću.
-- Oznaka {{Nx}} se zamenjuje kratkim opisom nalaza (npr. "mobile: prihod −34%"), pa je koristi u rečenici prirodno.
+- Ovo važi za SVE brojeve: i broj proizvoda, dana, nedelja, procenat udela. Ako za nešto nema oznake, opiši bez broja ("više proizvoda", "nekoliko dana").
+- Oznaka {{Nx}} se zamenjuje kratkim opisom nalaza (npr. "mobilni: prihod −34%"), pa je koristi u rečenici prirodno. Ne ponavljaj isti broj dvaput u istoj rečenici.
+- {{period_cur}} je tekući period, {{period_prev}} prethodni. {{change_start}} je samo DAN OD KOG počinje promena, nije period.
 - Korelacija NIJE dokaz uzroka. Koristi "verovatno", "ukazuje na". Ako nalazi ne objašnjavaju promenu dobro, to jasno reci i daj nisku sigurnost.
 - Ako je tekući period u granicama uobičajenog ili je sezonski obrazac, to je važan zaključak.
 - Ako postoji moguć problem u merenju, stavi ga na prvo mesto u proveri.
@@ -566,7 +594,9 @@ evidence = 2-5 najvažnijih oznaka nalaza koje podržavaju objašnjenje. cannot_
     : `You are an experienced e-commerce performance analyst. You receive FINDINGS computed by the server from GA4 and Google Ads data. Connect them into a clear explanation for a marketing team.
 RULES:
 - DO NOT WRITE ANY number, percentage, amount or date yourself. Insert every number ONLY via a placeholder from the FACTS list, exactly as {{key}} (e.g. {{revenue_pct}}, {{N4}}). The server replaces placeholders with real values.
-- {{Nx}} is replaced by a short finding label (e.g. "mobile: revenue −34%"); use it naturally in a sentence.
+- This applies to ALL numbers: product counts, days, weeks, share percentages. If there is no placeholder, describe without a number ("several products", "a few days").
+- {{Nx}} is replaced by a short finding label (e.g. "mobile: revenue −34%"); use it naturally in a sentence. Do not repeat the same number twice in a sentence.
+- {{period_cur}} is the current period, {{period_prev}} the previous one. {{change_start}} is only the DAY the change starts, not a period.
 - Correlation is NOT proof of cause. Use "likely", "suggests". If findings explain the change poorly, say so and give low confidence.
 - If the current period is within normal range or matches a seasonal pattern, that is an important conclusion.
 - If a possible tracking issue exists, put it first in next steps.
