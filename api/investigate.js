@@ -936,7 +936,13 @@ ${focus ? `\n${sr ? "FOKUS: pitanje je o kampanji" : "FOCUS: the question is abo
     if (Array.isArray(v)) return v.map(String);
     if (typeof v === "string") {
       const t = v.trim();
-      if (t.startsWith("[")) { try { const j = JSON.parse(t); if (Array.isArray(j)) return j.map(String); } catch (e) {} }
+      if (t.startsWith("[")) {
+        try { const j = JSON.parse(t); if (Array.isArray(j)) return j.map(String); } catch (e) {}
+        // Neispravan JSON (npr. navodnik unutar stavke) – stavke se razdvajaju po granici ", "
+        const inner = t.replace(/^\[\s*"?/, "").replace(/"?\s*\]$/, "");
+        const parts = inner.split(/"\s*,\s*\n?\s*"/).map((x) => x.trim()).filter(Boolean);
+        if (parts.length) return parts;
+      }
       return t.split(/\n+/).map((x) => x.replace(/^[-•*\d.)\s]+/, "").trim()).filter(Boolean);
     }
     return [];
