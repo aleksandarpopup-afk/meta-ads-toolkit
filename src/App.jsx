@@ -4384,7 +4384,9 @@ function invPdfDoc({inv,R,stats,ai,evidence,findings,failedChecks,sr,pctTxt,peri
   const fRow=f=>[{text:f.id,bold:true,color:"#4338ca",fontSize:8.5},{text:f.text,fontSize:8.5}];
   const created=new Date().toLocaleDateString(sr?"sr-RS":"en-GB");
   const done=(R.checksDone||[]).filter(c=>c.id!=="ai").map(c=>c.label+(c.count?` (${c.count.toLocaleString(sr?"sr-RS":"en-GB")})`:"")).join(" · ");
-  const fl=evidence.length?evidence:findings.slice(0,6);
+  // Verzija "za klijenta": bez tehničkih dokaza i spiska provera (to je za tim); sve ostalo isto
+  const forClient=R.style==="simple"&&!!ai;
+  const fl=forClient?[]:(evidence.length?evidence:findings.slice(0,6));
   return {
     pageSize:"A4", pageMargins:[36,36,36,46],
     info:{title:`${inv.client.name} – ${sr?"Istraga":"Investigation"}`},
@@ -4412,9 +4414,9 @@ function invPdfDoc({inv,R,stats,ai,evidence,findings,failedChecks,sr,pctTxt,peri
           layout:{hLineWidth:(i,n)=>i===0||i===n.table.body.length?0:0.5,vLineWidth:()=>0,hLineColor:()=>"#e5e7eb",paddingTop:()=>4,paddingBottom:()=>4}}]:[]),
       ...(ai&&(ai.cannot_confirm||[]).length?[h2(sr?"Šta ne možemo da potvrdimo":"What we can't confirm"),box(bullets(ai.cannot_confirm),"#d97706","#fffbeb")]:[]),
       ...(ai&&(ai.next_steps||[]).length?[h2(sr?"Šta proveriti sledeće":"What to check next"),box(bullets(ai.next_steps),"#059669","#f0fdf4")]:[]),
-      h2(sr?"Kako sam došao do ovoga":"How I got here"),
-      {text:done||"–",fontSize:8.5,color:"#4b5563"},
-      ...(failedChecks.length?[{text:`${sr?"Nisu uspele":"Did not complete"}: ${failedChecks.map(c=>c.label).join(", ")}.`,fontSize:8.5,color:"#b45309",margin:[0,4,0,0]}]:[]),
+      ...(forClient?[]:[h2(sr?"Kako sam došao do ovoga":"How I got here"),
+      {text:done||"–",fontSize:8.5,color:"#4b5563"}]),
+      ...(!forClient&&failedChecks.length?[{text:`${sr?"Nisu uspele":"Did not complete"}: ${failedChecks.map(c=>c.label).join(", ")}.`,fontSize:8.5,color:"#b45309",margin:[0,4,0,0]}]:[]),
     ],
   };
 }
