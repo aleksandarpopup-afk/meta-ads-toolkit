@@ -197,8 +197,15 @@ export default async function handler(req, res) {
       gadsSpendPrev: gadsConn ? db("rpc/get_campaign_spend_totals", { method: "POST", body: JSON.stringify({ p_client_id: Number(client_id), p_start: prevS, p_end: prevE }) }) : Promise.resolve(null),
       rates: db("exchange_rates?id=eq.1&select=rates").then((d) => (d && d[0] ? d[0].rates : null)).catch(() => null)
     };
-    // Odbijeno obećanje ne sme da sruši ostale provere
-    for (const k of Object.keys(P)) P[k].catch(() => {});
+    // Rok za celu istragu: provera koja nije gotova za ~100 s od početka označava se kao neuspela,
+    // a istraga se završava sa onim što ima (korisnik nikad ne čeka minutima na prazan ekran)
+    const DEADLINE = t0 + 100000;
+    for (const k of Object.keys(P)) {
+      const orig = P[k];
+      P[k] = Promise.race([orig, new Promise((_, rej) => { const tm = setTimeout(() => rej(new Error(sr ? "Google nije odgovorio na vreme" : "Google did not respond in time")), Math.max(0, DEADLINE - Date.now())); if (tm.unref) tm.unref(); })]);
+      // Odbijeno obećanje ne sme da sruši ostale provere
+      P[k].catch(() => {}); orig.catch(() => {});
+    }
 
     // ── 1. Ukupni brojevi + 2. razlaganje ──
     let T = null, dR = 0, R0 = 0, R1 = 0;
