@@ -4058,6 +4058,7 @@ function InvestigateMod({t,lang}){
   const [question,setQuestion]=useState("");
   const [now,setNow]=useState(Date.now());
   const [showAll,setShowAll]=useState(false);
+  const [pdfBusy,setPdfBusy]=useState(false);
 
   useEffect(()=>{
     const uid=localStorage.getItem("mat_user_id");
@@ -4227,6 +4228,17 @@ function InvestigateMod({t,lang}){
   const failedChecks=(inv.checks||[]).filter(c=>c.status==="failed");
   const gadsSkipped=(inv.checks||[]).some(c=>c.id==="gads"&&c.status==="skipped");
   const Nchip=({id})=><span style={{display:"inline-block",minWidth:26,textAlign:"center",padding:"2px 6px",borderRadius:6,border:"1px solid rgba(99,102,241,0.45)",background:"rgba(99,102,241,0.12)",color:C.acl,fontSize:11,fontWeight:800,flexShrink:0}}>{id}</span>;
+  const downloadPdf=async()=>{
+    if(pdfBusy) return;
+    setPdfBusy(true);
+    const safe=x=>String(x||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/đ/g,"dj").replace(/Đ/g,"Dj").replace(/[^A-Za-z0-9_-]+/g,"_").replace(/^_+|_+$/g,"");
+    try{
+      const pm=await rsLoadPdfMake();
+      const doc=invPdfDoc({inv,R,stats,ai,evidence,findings:R.findings||[],failedChecks,sr,pctTxt,periodTxt});
+      pm.createPdf(doc).download(`${safe(inv.client.name)||"klijent"}_istraga_${inv.period?inv.period.curS+"_"+inv.period.curE:"rezultat"}.pdf`);
+    }catch(e){ alert(sr?"PDF nije napravljen. Proveri internet vezu i pokušaj ponovo.":"The PDF could not be created. Check your connection and try again."); }
+    setPdfBusy(false);
+  };
   const findingRow=f=><div key={f.id} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"9px 0",borderTop:`1px solid ${C.brd}`}}><Nchip id={f.id}/><div style={{fontSize:12.5,color:C.txt,lineHeight:1.55}}>{f.text}</div></div>;
   const bullets=(arr)=><div>{(arr||[]).map((x,i)=><div key={i} style={{display:"flex",gap:8,fontSize:13,lineHeight:1.6,color:C.txt,marginBottom:8}}><span style={{color:C.mut}}>›</span><div><InvRich text={x}/></div></div>)}</div>;
 
@@ -4239,7 +4251,10 @@ function InvestigateMod({t,lang}){
         <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>🔎 {inv.question}</h2>
         <div style={{color:C.mut,fontSize:12.5}}>{inv.client.name}{periodTxt?` · ${periodTxt}`:""}{dur?` · ${sr?"istraga trajala":"took"} ${dur} s`:""}</div>
       </div>
-      <button onClick={invCancel} style={btn(false)}>{sr?"Nova istraga":"New investigation"}</button>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <button onClick={downloadPdf} disabled={pdfBusy} style={{...btn(false),opacity:pdfBusy?0.6:1}}>📄 {pdfBusy?(sr?"Pravim PDF...":"Creating PDF..."):(sr?"Preuzmi PDF":"Download PDF")}</button>
+        <button onClick={invCancel} style={btn(false)}>{sr?"Nova istraga":"New investigation"}</button>
+      </div>
     </div>
 
     {stats.length>0&&<div style={{display:"grid",gridTemplateColumns:`repeat(auto-fit,minmax(${narrow?140:170}px,1fr))`,gap:10,marginBottom:16}}>
@@ -4289,6 +4304,57 @@ function InvestigateMod({t,lang}){
       </div>
     </div>}
   </div>;
+}
+
+// PDF istrage – isti alat (pdfmake) i stil kao Report Studio
+function invPdfDoc({inv,R,stats,ai,evidence,findings,failedChecks,sr,pctTxt,periodTxt}){
+  const h2=t=>({text:t.toUpperCase(),style:"h2"});
+  const confTxt={high:sr?"visoka sigurnost":"high confidence",medium:sr?"srednja sigurnost":"medium confidence",low:sr?"niska sigurnost":"low confidence"};
+  const kCell=x=>({stack:[
+    {text:x.l.toUpperCase(),fontSize:7.5,bold:true,color:"#6b7280",characterSpacing:0.4},
+    {text:x.v,fontSize:14,bold:true,color:"#111827",margin:[0,3,0,1]},
+    {text:`${pctTxt(x.p)}${x.sub?`  ·  ${x.sub}`:""}`,fontSize:8,bold:true,color:x.p==null||x.p===0?"#6b7280":((x.p>0)!==!!x.inv?"#059669":"#dc2626")},
+  ],fillColor:"#f8fafc",margin:[8,7,8,7]});
+  const kRows=[]; for(let i=0;i<stats.length;i+=3){ const r=stats.slice(i,i+3).map(kCell); while(r.length<3) r.push({text:""}); kRows.push(r); }
+  const box=(stack,bar,fill)=>({table:{widths:["*"],body:[[{stack,fillColor:fill||"#f5f7ff",margin:[10,8,10,6]}]]},
+    layout:{hLineWidth:()=>0,vLineWidth:i=>i===0?3:0,vLineColor:()=>bar||"#6366f1",paddingLeft:()=>0,paddingRight:()=>0,paddingTop:()=>0,paddingBottom:()=>0}});
+  const bullets=arr=>(arr||[]).map(x=>({text:["•  ",...rsRich(x)],margin:[2,0,0,3]}));
+  const fRow=f=>[{text:f.id,bold:true,color:"#4338ca",fontSize:8.5},{text:f.text,fontSize:8.5}];
+  const created=new Date().toLocaleDateString(sr?"sr-RS":"en-GB");
+  const done=(R.checksDone||[]).filter(c=>c.id!=="ai").map(c=>c.label+(c.count?` (${c.count.toLocaleString(sr?"sr-RS":"en-GB")})`:"")).join(" · ");
+  const fl=evidence.length?evidence:findings.slice(0,6);
+  return {
+    pageSize:"A4", pageMargins:[36,36,36,46],
+    info:{title:`${inv.client.name} – ${sr?"Istraga":"Investigation"}`},
+    defaultStyle:{font:"Roboto",fontSize:9.5,color:"#1f2937",lineHeight:1.25},
+    styles:{h2:{fontSize:9.5,bold:true,color:"#4338ca",characterSpacing:0.8,margin:[0,16,0,7]}},
+    footer:(cur,total)=>({columns:[
+      {text:`${sr?"Izvor: GA4 i Google Ads; brojeve računa server, AI ih samo povezuje. Povezanost nije dokaz uzroka.":"Source: GA4 and Google Ads; numbers computed by the server, AI only connects them. Correlation is not proof of cause."} · ${sr?"Napravljeno":"Created"} ${created}`,fontSize:7,color:"#9ca3af"},
+      {text:`${cur} / ${total}`,alignment:"right",fontSize:7.5,color:"#9ca3af",width:40},
+    ],margin:[36,14,36,0]}),
+    content:[
+      {table:{widths:["*"],body:[[{stack:[
+        {text:`${sr?"ISTRAGA":"INVESTIGATION"} · ${String(inv.client.name).toUpperCase()}`,fontSize:8,bold:true,color:"#c7d2fe",characterSpacing:1.2},
+        {text:inv.question,fontSize:17,bold:true,color:"#ffffff",margin:[0,3,0,4]},
+        {text:`${periodTxt}${R.currency&&R.currency!=="EUR"&&R.eurFactor>0?`  ·  ${sr?"iznosi u EUR":"amounts in EUR"}`:""}`,fontSize:9,color:"#e0e7ff"},
+      ],fillColor:"#1e1b4b",margin:[14,12,14,12]}]]},layout:"noBorders"},
+      ...(stats.length?[h2(sr?"Glavni brojevi":"Key numbers"),{table:{widths:["*","*","*"],body:kRows,dontBreakRows:true},
+        layout:{hLineWidth:()=>5,vLineWidth:()=>5,hLineColor:()=>"#ffffff",vLineColor:()=>"#ffffff",paddingLeft:()=>0,paddingRight:()=>0,paddingTop:()=>0,paddingBottom:()=>0}}]:[]),
+      ...(R.unavailable?[h2(sr?"Podaci nisu dostupni":"Data not available"),box([{text:R.unavailable}],"#d97706","#fffbeb")]:[]),
+      ...(ai?[
+        h2(sr?"Šta se desilo":"What happened"),box([{text:rsRich(ai.what)}]),
+        h2(`${sr?"Zašto se verovatno dešava":"Why it is likely happening"}${confTxt[ai.confidence]?` – ${confTxt[ai.confidence]}`:""}`),box([{text:rsRich(ai.why)}]),
+      ]:[]),
+      ...(fl.length?[h2(ai?(sr?"Dokazi":"Evidence"):(sr?"Nalazi":"Findings")),
+        {table:{widths:[24,"*"],body:fl.map(fRow),dontBreakRows:true},
+          layout:{hLineWidth:(i,n)=>i===0||i===n.table.body.length?0:0.5,vLineWidth:()=>0,hLineColor:()=>"#e5e7eb",paddingTop:()=>4,paddingBottom:()=>4}}]:[]),
+      ...(ai&&(ai.cannot_confirm||[]).length?[h2(sr?"Šta ne možemo da potvrdimo":"What we can't confirm"),box(bullets(ai.cannot_confirm),"#d97706","#fffbeb")]:[]),
+      ...(ai&&(ai.next_steps||[]).length?[h2(sr?"Šta proveriti sledeće":"What to check next"),box(bullets(ai.next_steps),"#059669","#f0fdf4")]:[]),
+      h2(sr?"Kako sam došao do ovoga":"How I got here"),
+      {text:done||"–",fontSize:8.5,color:"#4b5563"},
+      ...(failedChecks.length?[{text:`${sr?"Nisu uspele":"Did not complete"}: ${failedChecks.map(c=>c.label).join(", ")}.`,fontSize:8.5,color:"#b45309",margin:[0,4,0,0]}]:[]),
+    ],
+  };
 }
 
 const MODS=[
