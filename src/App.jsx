@@ -4234,7 +4234,8 @@ function InvestigateMod({t,lang}){
   const evidence=ai?(ai.evidence||[]).map(id=>byId[id]).filter(Boolean):[];
   const confMap={high:[sr?"Visoka sigurnost":"High confidence",C.grn,"rgba(52,211,153,0.12)","rgba(52,211,153,0.4)"],medium:[sr?"Srednja sigurnost":"Medium confidence",C.yel,"rgba(251,191,36,0.1)","rgba(251,191,36,0.4)"],low:[sr?"Niska sigurnost":"Low confidence",C.red,"rgba(248,113,113,0.1)","rgba(248,113,113,0.4)"]};
   const conf=ai&&confMap[ai.confidence]?confMap[ai.confidence]:null;
-  const failedChecks=(inv.checks||[]).filter(c=>c.status==="failed");
+  // AI se ne broji ovde – za njega postoji posebna poruka ("Objašnjenje nije napisano")
+  const failedChecks=(inv.checks||[]).filter(c=>c.status==="failed"&&c.id!=="ai");
   const gadsSkipped=(inv.checks||[]).some(c=>c.id==="gads"&&c.status==="skipped");
   const Nchip=({id})=><span style={{display:"inline-block",minWidth:26,textAlign:"center",padding:"2px 6px",borderRadius:6,border:"1px solid rgba(99,102,241,0.45)",background:"rgba(99,102,241,0.12)",color:C.acl,fontSize:11,fontWeight:800,flexShrink:0}}>{id}</span>;
   const downloadPdf=async()=>{
