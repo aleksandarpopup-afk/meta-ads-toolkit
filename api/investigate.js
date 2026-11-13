@@ -754,7 +754,7 @@ export default async function handler(req, res) {
       try {
         ai = await explain({ lang, question, qtype, period: { curS, curE, prevS, prevE }, totals: T, decomp, gadsTotals, findings: top, facts, warnings, F, focus: focusCampaignId ? facts.focus_campaign || focusCampaignId : null });
         markDone("ai", L("Objašnjenje napisano", "Explanation written"));
-      } catch (e) { markFail("ai", e); }
+      } catch (e) { console.error("[investigate] AI greška:", e && e.message); markFail("ai", e); }
     }
 
     const checksDone = CHECKS.filter((c) => doneInfo[c.id]).map((c) => ({ id: c.id, label: c.label, count: doneInfo[c.id].count }));
@@ -874,16 +874,29 @@ ${focus ? `\n${sr ? "FOKUS: pitanje je o kampanji" : "FOCUS: the question is abo
   // Zamena oznaka pravim vrednostima; nepoznate oznake se uklanjaju
   const fill = (s) => String(s || "").replace(/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g, (_, k) => (facts[k] != null ? `**${facts[k]}**` : ""));
   const strayDigits = (s) => /\d/.test(String(s || "").replace(/\{\{[^}]*\}\}/g, ""));
-  const all = [out.what, out.why, ...(out.cannot_confirm || []), ...(out.next_steps || [])];
+  // AI ponekad vrati spisak kao tekst (npr. '["a","b"]' ili stavke u redovima) umesto kao niz – pretvori u niz
+  const arr = (v) => {
+    if (Array.isArray(v)) return v.map(String);
+    if (typeof v === "string") {
+      const t = v.trim();
+      if (t.startsWith("[")) { try { const j = JSON.parse(t); if (Array.isArray(j)) return j.map(String); } catch (e) {} }
+      return t.split(/\n+/).map((x) => x.replace(/^[-•*\d.)\s]+/, "").trim()).filter(Boolean);
+    }
+    return [];
+  };
+  out.evidence = arr(out.evidence).map((x) => (x.match(/N\d+/) || [x])[0]);
+  out.cannot_confirm = arr(out.cannot_confirm);
+  out.next_steps = arr(out.next_steps);
+  const all = [out.what, out.why, ...out.cannot_confirm, ...out.next_steps];
   if (all.some(strayDigits)) console.warn("[investigate] AI je napisao broj mimo oznaka");
   const ids = new Set(findings.map((f) => f.id));
   return {
     what: fill(out.what),
     why: fill(out.why),
     confidence: ["high", "medium", "low"].includes(out.confidence) ? out.confidence : "medium",
-    evidence: (out.evidence || []).filter((x) => ids.has(x)).slice(0, 5),
-    cannot_confirm: (out.cannot_confirm || []).map(fill).slice(0, 4),
-    next_steps: (out.next_steps || []).map(fill).slice(0, 4),
+    evidence: out.evidence.filter((x) => ids.has(x)).slice(0, 5),
+    cannot_confirm: out.cannot_confirm.map(fill).slice(0, 4),
+    next_steps: out.next_steps.map(fill).slice(0, 4),
     usage: d.usage || null
   };
 }
