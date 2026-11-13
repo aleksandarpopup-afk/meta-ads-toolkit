@@ -5,6 +5,9 @@
     },
     "api/cron-morning.js": {
       "maxDuration": 300
+    },
+    "api/investigate.js": {
+      "maxDuration": 300
     }
   },
   "crons": [
