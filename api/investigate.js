@@ -49,9 +49,14 @@ function convert(amount, fromCur, toCur, rates) {
 }
 
 // Formatiranje (jezik ekrana)
-function makeFmt(lang, currency) {
+// Novac: kao u ostalim modulima, glavna valuta je EUR; ako je GA4 u drugoj valuti, originalni iznos ide u zagradu.
+// eurFactor = koliko EUR vredi 1 jedinica GA4 valute (null = kurs nije dostupan → ostaje originalna valuta).
+function makeFmt(lang, currency, eurFactor) {
   const loc = lang === "sr" ? "sr-RS" : "en-GB";
-  const moneyF = new Intl.NumberFormat(loc, { style: "currency", currency, maximumFractionDigits: 0 });
+  const nativeF = new Intl.NumberFormat(loc, { style: "currency", currency, maximumFractionDigits: 0 });
+  const eurF = new Intl.NumberFormat(loc, { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+  const useEur = currency !== "EUR" && eurFactor > 0;
+  const two = (a, sign) => (useEur ? `${sign}${eurF.format(a * eurFactor)} (${sign}${nativeF.format(a)})` : `${sign}${nativeF.format(a)}`);
   const intF = new Intl.NumberFormat(loc, { maximumFractionDigits: 0 });
   const decF = new Intl.NumberFormat(loc, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const p = (v) => {
@@ -60,8 +65,8 @@ function makeFmt(lang, currency) {
     const s = a < 10 && a > 0 ? (Math.round(a * 10) / 10).toLocaleString(loc) : Math.round(a).toLocaleString(loc);
     return (v > 0 ? "+" : v < 0 ? "−" : "") + s + "%";
   };
-  const money = (v) => { const s = moneyF.format(Math.abs(v)); return v < 0 ? "−" + s : s; };
-  const moneyDelta = (v) => (v > 0 ? "+" : v < 0 ? "−" : "") + moneyF.format(Math.abs(v));
+  const money = (v) => two(Math.abs(v), v < 0 ? "−" : "");
+  const moneyDelta = (v) => two(Math.abs(v), v > 0 ? "+" : v < 0 ? "−" : "");
   const date = (s) => { const [y, m, d] = s.split("-"); return lang === "sr" ? `${+d}. ${+m}.` : `${+d}/${+m}`; };
   const pp = (v) => (v > 0 ? "+" : v < 0 ? "−" : "") + (Math.round(Math.abs(v) * 10) / 10).toLocaleString(loc) + " p.p.";
   return { money, moneyDelta, int: (v) => intF.format(v), dec: (v) => decF.format(v), pct: p, date, pp, cr: (v) => decF.format(v * 100) + "%" };
@@ -129,7 +134,11 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: e.message });
   }
   const currency = ga4Conn.currency_code || "EUR";
-  const F = makeFmt(lang, currency);
+  // Kurs za prikaz u EUR (isti izvor kao ostali moduli)
+  let rates = null;
+  try { const fx = await db("exchange_rates?id=eq.1&select=rates"); rates = fx && fx[0] ? fx[0].rates : null; } catch (e) { rates = null; }
+  const eurFactor = currency === "EUR" ? 1 : convert(1, currency, "EUR", rates);
+  const F = makeFmt(lang, currency, eurFactor);
 
   // ── Slanje u delovima ──
   res.writeHead(200, { "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no" });
@@ -157,7 +166,7 @@ export default async function handler(req, res) {
     { id: "yoy", label: L("Isti period prošle godine", "Same period last year") },
     { id: "ai", label: L("Povezujem nalaze i pišem objašnjenje", "Connecting findings and writing the explanation") }
   ];
-  send({ type: "start", checks: CHECKS, period: { curS, curE, prevS, prevE, len }, currency });
+  send({ type: "start", checks: CHECKS, period: { curS, curE, prevS, prevE, len }, currency, eurFactor });
 
   const findings = [];     // { check, impact (u valuti prihoda, sa znakom), text, facts, label, force }
   const facts = {};        // činjenice koje AI sme da koristi preko oznaka {{...}}
@@ -195,7 +204,7 @@ export default async function handler(req, res) {
       gadsRev: gadsConn ? two(["sessionGoogleAdsCampaignId", "sessionGoogleAdsCampaignName"], BASE, { dimensionFilter: { filter: { fieldName: "sessionDefaultChannelGroup", inListFilter: { values: PAID_GADS_CHANNELS } } } }) : Promise.resolve(null),
       gadsSpendCur: gadsConn ? db("rpc/get_campaign_spend_totals", { method: "POST", body: JSON.stringify({ p_client_id: Number(client_id), p_start: curS, p_end: curE }) }) : Promise.resolve(null),
       gadsSpendPrev: gadsConn ? db("rpc/get_campaign_spend_totals", { method: "POST", body: JSON.stringify({ p_client_id: Number(client_id), p_start: prevS, p_end: prevE }) }) : Promise.resolve(null),
-      rates: db("exchange_rates?id=eq.1&select=rates").then((d) => (d && d[0] ? d[0].rates : null)).catch(() => null)
+      rates: Promise.resolve(rates)
     };
     // Rok za celu istragu: provera koja nije gotova za ~100 s od početka označava se kao neuspela,
     // a istraga se završava sa onim što ima (korisnik nikad ne čeka minutima na prazan ekran)
@@ -543,8 +552,14 @@ export default async function handler(req, res) {
     facts.period_prev = `${F.date(prevS)}–${F.date(prevE)}`;
 
     // ── AI: jedan poziv, povezuje nalaze ──
-    let ai = null;
-    if (closed) { markSkip("ai", L("Otkazano", "Cancelled")); }
+    let ai = null, unavailable = null;
+    const failedCount = warnings.filter((w) => w.check !== "sources").length;
+    if (!T) {
+      // Bez ukupnih brojeva nema istrage – AI bi samo nagađao (npr. "problem u merenju"), a uzrok je Google
+      unavailable = L("Google Analytics trenutno ne odgovara za ovaj nalog (provere nisu dobile podatke na vreme). To je privremeni problem na Google-ovoj strani, ne u vašem merenju. Pokušajte ponovo za nekoliko minuta.",
+                      "Google Analytics is not responding for this property right now (checks did not get data in time). This is a temporary problem on Google's side, not in your tracking. Please try again in a few minutes.");
+      markSkip("ai", L("Preskočeno – nema podataka", "Skipped – no data"));
+    } else if (closed) { markSkip("ai", L("Otkazano", "Cancelled")); }
     else if (!ANTHROPIC_API_KEY) { markFail("ai", "ANTHROPIC_API_KEY"); }
     else {
       try {
@@ -559,10 +574,10 @@ export default async function handler(req, res) {
       type: "result",
       question, qtype,
       period: { curS, curE, prevS, prevE, len },
-      currency,
+      currency, eurFactor, lang,
       totals: T, decomp, gads: gadsTotals,
       findings: top.map(({ id, check, impact, share, text }) => ({ id, check, impact, share, text })),
-      ai, checksDone, warnings,
+      ai, unavailable, checksDone, warnings, failedCount,
       durationMs: Date.now() - t0,
       _perf: perf
     });
@@ -581,7 +596,8 @@ async function explain({ lang, question, qtype, period, totals, decomp, gadsTota
   const factList = Object.entries(facts).map(([k, v]) => `{{${k}}} = ${v}`).join("\n");
   // Udeo se navodi samo kad ima smisla (ne kad se promene međusobno poništavaju pa udeo prelazi 150%)
   const findingList = findings.map((f) => `${f.id} [${f.check}] ${f.text}${facts[f.id + "_share"] ? ` (${sr ? "udeo u ukupnoj promeni" : "share of total change"}: {{${f.id}_share}})` : ""}`).join("\n");
-  const failed = warnings.map((w) => w.check).join(", ");
+  // Zašto provera nije uspela – da AI ne bi neuspeh tehničkog upita tumačio kao problem u merenju sajta
+  const failed = warnings.map((w) => `${w.check} (${/odgovor|respond|30 s|502|504|timeout/i.test(w.error) ? (sr ? "Google nije odgovorio na vreme – tehnički problem kod Google-a, NE problem merenja na sajtu" : "Google did not respond in time – a technical issue at Google, NOT a site tracking issue") : (sr ? "tehnička greška upita" : "technical query error")})`).join("; ");
 
   const system = sr
     ? `Ti si iskusan analitičar e-commerce performansi. Dobijaš NALAZE koje je server izračunao iz GA4 i Google Ads podataka. Tvoj posao je da ih povežeš u jasno objašnjenje za marketing tim.
