@@ -51,11 +51,23 @@ export function meterDone(meter, extra) {
 export async function ga4Fetch(propertyId, accessToken, body, { meter, limit } = {}) {
   const run = async () => {
     for (let attempt = 0; ; attempt++) {
-      const r = await fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify(meter ? { ...body, returnPropertyQuota: true } : body)
-      });
+      // Rok od 30 s po pokušaju: Google ponekad drži vezu 60 s pa vrati 502 – bolje prekinuti ranije i pokušati još jednom
+      let r;
+      try {
+        r = await fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify(meter ? { ...body, returnPropertyQuota: true } : body),
+          signal: AbortSignal.timeout(30000)
+        });
+      } catch (e) {
+        const msg = `GA4 ${e.name === "TimeoutError" ? "nije odgovorio za 30 s" : "veza: " + e.message}`;
+        console.warn(`[ga4] property=${propertyId} pokušaj ${attempt + 1}: ${msg}`);
+        if (attempt >= 1) throw new Error(msg); // najviše 2 pokušaja kad Google ne odgovara
+        if (meter) meter.retries++;
+        await sleep(1000 + Math.random() * 1000);
+        continue;
+      }
       const raw = await r.text().catch(() => "");
       let data = {};
       try { data = raw ? JSON.parse(raw) : {}; } catch (e) { data = null; }
@@ -66,7 +78,9 @@ export async function ga4Fetch(propertyId, accessToken, body, { meter, limit } =
       if (/tokens per (hour|day)|Exhausted property tokens|Exhausted.*tokens/i.test(msg) && !/concurrent/i.test(msg)) throw new Error(msg);
       const retryable = r.status === 429 || r.status === 500 || r.status === 502 || r.status === 503 || r.status === 504 || RETRYABLE.test(msg);
       console.warn(`[ga4] property=${propertyId} pokušaj ${attempt + 1}: ${msg.slice(0, 200)}`);
-      if (!retryable || attempt >= 5) throw new Error(msg);
+      // 502/504 = Google nije stigao da izračuna izveštaj; više od 2 pokušaja samo produžava čekanje
+      const maxAttempts = r.status === 502 || r.status === 504 ? 1 : 5;
+      if (!retryable || attempt >= maxAttempts) throw new Error(msg);
       if (meter) meter.retries++;
       await sleep(Math.min(10000, 1000 * 2 ** attempt) * (0.5 + Math.random())); // ~1, 2, 4, 8, 10 s ± 50%
     }
