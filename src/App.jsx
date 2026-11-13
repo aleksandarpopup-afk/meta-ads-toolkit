@@ -4002,14 +4002,15 @@ function invDateRange(a,b,sr){
   if(sr) return x.m===y.m?`${x.d}.–${y.d}. ${y.m}.`:`${x.d}. ${x.m}.–${y.d}. ${y.m}.`;
   return `${x.d}/${x.m}–${y.d}/${y.m}`;
 }
-async function invStart({client,days,from,to,qtype,question,lang,campaignId}){
+async function invStart({client,days,from,to,qtype,question,lang,campaignId,style}){
+  style=style==="simple"?"simple":((INV.last&&INV.last.style)||"expert");
   if(INV.ctrl) try{INV.ctrl.abort();}catch(e){}
   const ctrl=new AbortController(); INV.ctrl=ctrl;
   const sr=lang==="sr";
   invSet(null);
-  INV.last={clientId:String(client.id),days,from,to,qtype,question};
-  invSet({status:"running",client,qtype,question,lang,days,from,to,campaignId:campaignId||null,startedAt:Date.now(),checks:[],period:null,result:null,error:""});
-  const qs=new URLSearchParams({client_id:String(client.id),qtype,lang});
+  INV.last={clientId:String(client.id),days,from,to,qtype,question,style};
+  invSet({status:"running",client,qtype,question,lang,days,from,to,style,campaignId:campaignId||null,startedAt:Date.now(),checks:[],period:null,result:null,error:""});
+  const qs=new URLSearchParams({client_id:String(client.id),qtype,lang,style});
   if(from&&to){ qs.set("from",from); qs.set("to",to); } else qs.set("days",String(days));
   if(question) qs.set("q",question);
   if(campaignId) qs.set("campaign_id",String(campaignId));
@@ -4072,6 +4073,8 @@ function InvestigateMod({t,lang}){
   const [customFrom,setCustomFrom]=useState(L0.from||"");
   const [customTo,setCustomTo]=useState(L0.to||"");
   const [qtype,setQtype]=useState(L0.qtype||"revenue_drop");
+  const [style,setStyle]=useState(L0.style||"expert");
+  const [rwBusy,setRwBusy]=useState(false);
   const [question,setQuestion]=useState("");
   const [now,setNow]=useState(Date.now());
   const [showAll,setShowAll]=useState(false);
@@ -4107,7 +4110,7 @@ function InvestigateMod({t,lang}){
     const canStart=!!sel&&customOk;
     const qt=INV_QTYPES.find(x=>x.k===qtype);
     const start=()=>{ if(!canStart) return;
-      invStart({client:{id:sel.id,name:sel.name},days:period==="custom"?null:parseInt(period),from:period==="custom"?customFrom:null,to:period==="custom"?customTo:null,qtype,question:question.trim()||(sr?qt.qsr:qt.qen),lang}); };
+      invStart({client:{id:sel.id,name:sel.name},days:period==="custom"?null:parseInt(period),from:period==="custom"?customFrom:null,to:period==="custom"?customTo:null,qtype,question:question.trim()||(sr?qt.qsr:qt.qen),lang,style}); };
     const chip=(on)=>({padding:"8px 14px",borderRadius:20,border:`1px solid ${on?"rgba(99,102,241,0.6)":C.brd}`,background:on?"rgba(99,102,241,0.18)":"transparent",color:on?"#fff":C.mut,fontSize:12.5,fontWeight:600,cursor:"pointer"});
     return <div>
       {header}
@@ -4136,6 +4139,11 @@ function InvestigateMod({t,lang}){
         </div>
         <input value={question} onChange={e=>setQuestion(e.target.value.slice(0,300))} onKeyDown={e=>e.key==="Enter"&&start()} placeholder={sr?`Ili napiši svojim rečima (npr. „${qt.qsr}“)`:`Or write it in your own words (e.g. “${qt.qen}”)`} style={{width:"100%",padding:"12px 14px",background:"rgba(255,255,255,0.06)",border:`1px solid ${C.brd}`,borderRadius:10,color:C.txt,fontSize:14,outline:"none",boxSizing:"border-box",marginBottom:18}}/>
 
+        <Lbl c={sr?"Način pisanja":"Writing style"}/>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:18}}>
+          <button onClick={()=>setStyle("expert")} style={chip(style==="expert")}>{sr?"Stručno (za tim)":"Expert (for the team)"}</button>
+          <button onClick={()=>setStyle("simple")} style={chip(style==="simple")}>{sr?"Jednostavno (za klijenta)":"Simple (for the client)"}</button>
+        </div>
         <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
           <button onClick={start} disabled={!canStart} style={btn(true,!canStart)}>🔎 {sr?"Istraži":"Investigate"}</button>
           <span style={{color:C.dim,fontSize:12}}>{sr?"Traje oko 30–60 sekundi. Možeš u međuvremenu da pređeš u drugi modul.":"Takes about 30–60 seconds. You can switch to another module meanwhile."}</span>
@@ -4146,7 +4154,7 @@ function InvestigateMod({t,lang}){
 
   const rerunInLang=()=>{
     const std=INV_QTYPES.find(x=>x.qsr===inv.question||x.qen===inv.question);
-    invStart({client:inv.client,days:inv.days,from:inv.from,to:inv.to,qtype:inv.qtype,question:std?(sr?std.qsr:std.qen):inv.question,lang,campaignId:inv.campaignId});
+    invStart({client:inv.client,days:inv.days,from:inv.from,to:inv.to,qtype:inv.qtype,question:std?(sr?std.qsr:std.qen):inv.question,lang,campaignId:inv.campaignId,style:(inv.result&&inv.result.style)||inv.style});
   };
   const langBanner=inv.lang&&inv.lang!==lang&&inv.status!=="error"?<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",padding:"10px 14px",borderRadius:10,border:"1px solid rgba(99,102,241,0.35)",background:"rgba(99,102,241,0.08)",marginBottom:14}}>
     <span style={{color:C.txt,fontSize:13}}>{sr?"Ova istraga je napisana na engleskom.":"This investigation was written in Serbian."}</span>
@@ -4238,6 +4246,29 @@ function InvestigateMod({t,lang}){
     ]:[])
   ]:[];
   const ai=R.ai;
+  const curStyle=R.style||"expert";
+  // Ponovo napiši objašnjenje u drugom stilu – samo AI, iz već izračunatih nalaza (nema novih upita ka Google-u)
+  const switchStyle=async(st)=>{
+    if(st===curStyle||rwBusy||!ai) return;
+    const cache=(R.aiByStyle||{})[st];
+    if(cache){ invSet({result:{...R,ai:cache,style:st,aiByStyle:{...(R.aiByStyle||{}),[curStyle]:ai}}}); return; }
+    setRwBusy(true);
+    try{
+      const r=await fetch("/api/investigate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({client_id:inv.client.id,lang:inv.lang||lang,style:st,period:R.period,question:inv.question,qtype:inv.qtype,findings:R.findings,facts:R.facts,warnings:R.warnings,focus:R.focus})});
+      const d=await r.json().catch(()=>({}));
+      if(!r.ok||!d.ai) throw new Error(d.error||"error");
+      if(INV.state&&INV.state.result===R) invSet({result:{...R,ai:d.ai,style:st,aiByStyle:{...(R.aiByStyle||{}),[curStyle]:ai,[st]:d.ai}}});
+    }catch(e){ alert(sr?"Objašnjenje nije prepisano. Pokušaj ponovo.":"Could not rewrite the explanation. Please try again."); }
+    setRwBusy(false);
+  };
+  const seg=(on)=>({padding:"6px 12px",border:"none",background:on?"rgba(99,102,241,0.3)":"transparent",color:on?"#fff":C.mut,fontSize:12,fontWeight:700,cursor:rwBusy?"default":"pointer"});
+  const styleSwitch=ai&&R.facts?<div style={{display:"inline-flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+    <div style={{display:"inline-flex",border:`1px solid ${C.brd}`,borderRadius:8,overflow:"hidden"}}>
+      <button onClick={()=>switchStyle("expert")} style={seg(curStyle==="expert")}>{sr?"Stručno":"Expert"}</button>
+      <button onClick={()=>switchStyle("simple")} style={seg(curStyle==="simple")}>{sr?"Za klijenta":"For client"}</button>
+    </div>
+    {rwBusy&&<span style={{color:C.acl,fontSize:12}}>{sr?"Prepisujem...":"Rewriting..."}</span>}
+  </div>:null;
   const byId=Object.fromEntries((R.findings||[]).map(f=>[f.id,f]));
   const evidence=ai?(ai.evidence||[]).map(id=>byId[id]).filter(Boolean):[];
   const confMap={high:[sr?"Visoka sigurnost":"High confidence",C.grn,"rgba(52,211,153,0.12)","rgba(52,211,153,0.4)"],medium:[sr?"Srednja sigurnost":"Medium confidence",C.yel,"rgba(251,191,36,0.1)","rgba(251,191,36,0.4)"],low:[sr?"Niska sigurnost":"Low confidence",C.red,"rgba(248,113,113,0.1)","rgba(248,113,113,0.4)"]};
@@ -4269,7 +4300,8 @@ function InvestigateMod({t,lang}){
         <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>🔎 {inv.question}</h2>
         <div style={{color:C.mut,fontSize:12.5}}>{inv.client.name}{periodTxt?` · ${periodTxt}`:""}{dur?` · ${sr?"istraga trajala":"took"} ${dur} s`:""}</div>
       </div>
-      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+        {styleSwitch}
         <button onClick={downloadPdf} disabled={pdfBusy} style={{...btn(false),opacity:pdfBusy?0.6:1}}>📄 {pdfBusy?(sr?"Pravim PDF...":"Creating PDF..."):(sr?"Preuzmi PDF":"Download PDF")}</button>
         <button onClick={invCancel} style={btn(false)}>{sr?"Nova istraga":"New investigation"}</button>
       </div>
