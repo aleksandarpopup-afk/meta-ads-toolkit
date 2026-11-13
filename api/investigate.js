@@ -515,6 +515,21 @@ export default async function handler(req, res) {
           addFinding({ check: "gads", impact: Math.abs(dRev) >= Math.abs(dSp) ? dRev : -dSp, label: `${c.name}${status}`, drill: { type: "campaign", arg: c.id, name: c.name },
             text: `${L("Kampanja", "Campaign")} ${c.name}${status}: ${L("potrošnja", "spend")} ${F.money(c.sp)} → ${F.money(c.sc)} · ${L("prihod", "revenue")} ${F.money(c.rp)} → ${F.money(c.rc)} · ROAS ${F.dec(rate(c.rp, c.sp))} → ${F.dec(rate(c.rc, c.sc))}${cpcTxt}` });
         }
+        // Preraspodela potrošnje: novac je prešao iz jednih kampanja u druge – da li u bolje ili lošije (po ROAS-u)?
+        {
+          const up = list.filter((c) => c.sc - c.sp > 0), down = list.filter((c) => c.sc - c.sp < 0);
+          const moved = Math.min(up.reduce((a, c) => a + (c.sc - c.sp), 0), down.reduce((a, c) => a + (c.sp - c.sc), 0));
+          // ROAS kampanja koje dobijaju novac (tekući period) i onih koje gube (prethodni period – koliko je taj novac ranije donosio)
+          const roasUp = rate(up.reduce((a, c) => a + c.rc, 0), up.reduce((a, c) => a + c.sc, 0));
+          const roasDown = rate(down.reduce((a, c) => a + c.rp, 0), down.reduce((a, c) => a + c.sp, 0));
+          if (S0 > 0 && moved >= S0 * 0.1 && roasUp > 0 && roasDown > 0 && Math.abs(roasUp - roasDown) / Math.max(roasUp, roasDown) >= 0.2) {
+            const worse = roasUp < roasDown;
+            const names = (arr, key) => [...arr].sort((a, b) => Math.abs(b.sc - b.sp) - Math.abs(a.sc - a.sp)).slice(0, 2).map((c) => c.name).join(", ");
+            addFinding({ check: "gads", impact: moved * (roasUp - roasDown), force: worse, label: worse ? L("potrošnja prebačena u slabije kampanje", "spend moved to weaker campaigns") : L("potrošnja prebačena u jače kampanje", "spend moved to stronger campaigns"),
+              text: L(`Preraspodela potrošnje: oko ${F.money(moved)} je prešlo iz kampanja sa ROAS-om ${F.dec(roasDown)} (npr. ${names(down)}) u kampanje sa ROAS-om ${F.dec(roasUp)} (npr. ${names(up)}) – procena uticaja na prihod ${F.moneyDelta(moved * (roasUp - roasDown))}`,
+                      `Spend reallocation: about ${F.money(moved)} moved from campaigns with ROAS ${F.dec(roasDown)} (e.g. ${names(down)}) to campaigns with ROAS ${F.dec(roasUp)} (e.g. ${names(up)}) – estimated revenue effect ${F.moneyDelta(moved * (roasUp - roasDown))}`) });
+          }
+        }
         // Fokusirana kampanja: uvek u nalazima, sa svojim brojevima i proizvodima koji su se najviše promenili
         if (focusCampaignId) {
           const fc = camps[focusCampaignId];
