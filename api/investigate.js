@@ -105,6 +105,7 @@ export default async function handler(req, res) {
   const sr = lang === "sr";
   const qtype = ["revenue_drop", "roas_drop", "spend_up", "other"].includes(req.query.qtype) ? req.query.qtype : "other";
   const question = String(req.query.q || "").trim().slice(0, 300);
+  const focusCampaignId = /^\d{1,20}$/.test(String(req.query.campaign_id || "")) ? String(req.query.campaign_id) : null;
 
   // Periodi: tekući, prethodni (iste dužine, odmah pre) i isti period prošle godine (364 dana ranije – isti dani u nedelji)
   let curS, curE;
@@ -201,6 +202,8 @@ export default async function handler(req, res) {
       categories: two(["itemCategory"], ["itemsViewed", "itemsAddedToCart", "itemsPurchased", "itemRevenue"], {}, 10000),
       products: two(["itemId", "itemName"], ["itemsViewed", "itemsAddedToCart", "itemsPurchased", "itemRevenue"], { orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }] }, 100000),
       yoy: run({ dateRanges: [{ startDate: yoyS, endDate: yoyE }, { startDate: yoyPrevS, endDate: yoyPrevE }], metrics: BASE.map((name) => ({ name })) }).then((r) => twoRangeMap(r, 0, BASE)),
+      // Proizvodi fokusirane kampanje u oba perioda (samo kad je istraga pokrenuta iz kampanje)
+      focusProducts: focusCampaignId ? two(["itemId", "itemName"], ["itemsViewed", "itemsPurchased", "itemRevenue"], { dimensionFilter: { filter: { fieldName: "sessionGoogleAdsCampaignId", stringFilter: { matchType: "EXACT", value: focusCampaignId } } }, orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }] }, 20000) : Promise.resolve(null),
       gadsRev: gadsConn ? two(["sessionGoogleAdsCampaignId", "sessionGoogleAdsCampaignName"], BASE, { dimensionFilter: { filter: { fieldName: "sessionDefaultChannelGroup", inListFilter: { values: PAID_GADS_CHANNELS } } } }) : Promise.resolve(null),
       gadsSpendCur: gadsConn ? db("rpc/get_campaign_spend_totals", { method: "POST", body: JSON.stringify({ p_client_id: Number(client_id), p_start: curS, p_end: curE }) }) : Promise.resolve(null),
       gadsSpendPrev: gadsConn ? db("rpc/get_campaign_spend_totals", { method: "POST", body: JSON.stringify({ p_client_id: Number(client_id), p_start: prevS, p_end: prevE }) }) : Promise.resolve(null),
@@ -509,6 +512,23 @@ export default async function handler(req, res) {
           addFinding({ check: "gads", impact: Math.abs(dRev) >= Math.abs(dSp) ? dRev : -dSp, label: `${c.name}${status}`,
             text: `${L("Kampanja", "Campaign")} ${c.name}${status}: ${L("potrošnja", "spend")} ${F.money(c.sp)} → ${F.money(c.sc)} · ${L("prihod", "revenue")} ${F.money(c.rp)} → ${F.money(c.rc)} · ROAS ${F.dec(rate(c.rp, c.sp))} → ${F.dec(rate(c.rc, c.sc))}` });
         }
+        // Fokusirana kampanja: uvek u nalazima, sa svojim brojevima i proizvodima koji su se najviše promenili
+        if (focusCampaignId) {
+          const fc = camps[focusCampaignId];
+          if (fc) {
+            const fRoasC = rate(fc.rc, fc.sc), fRoasP = rate(fc.rp, fc.sp);
+            addFinding({ check: "gads", impact: 1e15, force: true, label: `${fc.name}: ROAS ${F.dec(fRoasP)} → ${F.dec(fRoasC)}`,
+              text: `${L("Izabrana kampanja", "Selected campaign")} ${fc.name}: ${L("potrošnja", "spend")} ${F.money(fc.sp)} → ${F.money(fc.sc)} (${F.pct(pct(fc.sc, fc.sp))}) · ${L("prihod", "revenue")} ${F.money(fc.rp)} → ${F.money(fc.rc)} (${F.pct(pct(fc.rc, fc.rp))}) · ROAS ${F.dec(fRoasP)} → ${F.dec(fRoasC)}`,
+              facts: { focus_campaign: fc.name, focus_roas: `${F.dec(fRoasP)} → ${F.dec(fRoasC)}`, focus_revenue_pct: F.pct(pct(fc.rc, fc.rp)), focus_spend_pct: F.pct(pct(fc.sc, fc.sp)) } });
+          }
+          try {
+            const fp = await P.focusProducts;
+            const items = Object.values(fp || {}).map((o) => ({ name: o.dims[1] || o.dims[0], c: o.cur, p: o.prev, d: o.cur.itemRevenue - o.prev.itemRevenue }))
+              .sort((a, b) => Math.abs(b.d) - Math.abs(a.d)).slice(0, 3);
+            if (items.length) addFinding({ check: "gads", impact: 1e15 - 1, force: true, label: L("proizvodi izabrane kampanje", "selected campaign's products"),
+              text: `${L("Proizvodi kampanje sa najvećom promenom", "Campaign products with the biggest change")}: ${items.map((x) => `${x.name} ${F.moneyDelta(x.d)} (${F.pct(pct(x.c.itemRevenue, x.p.itemRevenue))})`).join("; ")}` });
+          } catch (e) { warnings.push({ check: "focusProducts", error: String(e.message).slice(0, 200) }); }
+        }
         markDone("gads", `${L("Potrošnja", "Spend")} ${F.pct(pct(S1, S0))} · ${L("prihod iz Google Ads", "Google Ads revenue")} ${F.pct(pct(G1, G0))} · ROAS ${F.dec(rate(G0, S0))} → ${F.dec(rate(G1, S1))}${fxMissing ? L(" · kurs nedostaje", " · FX rate missing") : ""}`, list.length);
       } catch (e) { markFail("gads", e); }
     }
@@ -563,7 +583,7 @@ export default async function handler(req, res) {
     else if (!ANTHROPIC_API_KEY) { markFail("ai", "ANTHROPIC_API_KEY"); }
     else {
       try {
-        ai = await explain({ lang, question, qtype, period: { curS, curE, prevS, prevE }, totals: T, decomp, gadsTotals, findings: top, facts, warnings, F });
+        ai = await explain({ lang, question, qtype, period: { curS, curE, prevS, prevE }, totals: T, decomp, gadsTotals, findings: top, facts, warnings, F, focus: focusCampaignId ? facts.focus_campaign || focusCampaignId : null });
         markDone("ai", L("Objašnjenje napisano", "Explanation written"));
       } catch (e) { markFail("ai", e); }
     }
@@ -589,7 +609,24 @@ export default async function handler(req, res) {
 }
 
 // ───────────────────────── AI deo ─────────────────────────
-async function explain({ lang, question, qtype, period, totals, decomp, gadsTotals, findings, facts, warnings, F }) {
+// Odgovor se traži kroz "alat" sa tačnom šemom – Anthropic tada vraća već ispravan JSON objekat
+const REPORT_TOOL = {
+  name: "report",
+  description: "Objašnjenje istrage za marketing tim / Investigation explanation for a marketing team",
+  input_schema: {
+    type: "object",
+    properties: {
+      what: { type: "string" },
+      why: { type: "string" },
+      confidence: { type: "string", enum: ["high", "medium", "low"] },
+      evidence: { type: "array", items: { type: "string" } },
+      cannot_confirm: { type: "array", items: { type: "string" } },
+      next_steps: { type: "array", items: { type: "string" } }
+    },
+    required: ["what", "why", "confidence", "evidence", "cannot_confirm", "next_steps"]
+  }
+};
+async function explain({ lang, question, qtype, period, totals, decomp, gadsTotals, findings, facts, warnings, F, focus }) {
   const sr = lang === "sr";
   const qtxt = question || { revenue_drop: sr ? "Zašto je prihod pao?" : "Why did revenue drop?", roas_drop: sr ? "Zašto je ROAS pao?" : "Why did ROAS drop?", spend_up: sr ? "Potrošnja raste, a prihod ne – zašto?" : "Spend is up but revenue isn't – why?", other: sr ? "Šta se promenilo i zašto?" : "What changed and why?" }[qtype];
 
@@ -611,9 +648,8 @@ PRAVILA:
 - Ako postoji moguć problem u merenju, stavi ga na prvo mesto u proveri.
 - Meta i ostala potrošnja van Google Ads-a NIJE dostupna; izmene na sajtu, cene kod konkurencije, zalihe i promocije NISU u podacima.
 - Piši kratko, srpski latinicom, bez žargona gde nije potreban.
-Odgovori SAMO JSON objektom, bez ikakvog drugog teksta:
-{"what":"1-2 rečenice: šta se desilo","why":"2-4 rečenice: zašto se verovatno dešava, glavni pa drugi uzrok","confidence":"high|medium|low","evidence":["N1","N3"],"cannot_confirm":["..."],"next_steps":["..."]}
-evidence = 2-5 najvažnijih oznaka nalaza koje podržavaju objašnjenje. cannot_confirm i next_steps = po 2-4 kratke stavke.`
+Odgovor upiši ISKLJUČIVO pozivom alata "report". Za navodnike u tekstu koristi „ i “.
+what = 1-2 rečenice: šta se desilo; why = 2-4 rečenice: zašto se verovatno dešava, glavni pa drugi uzrok; evidence = 2-5 najvažnijih oznaka nalaza; cannot_confirm i next_steps = po 2-4 kratke stavke.`
     : `You are an experienced e-commerce performance analyst. You receive FINDINGS computed by the server from GA4 and Google Ads data. Connect them into a clear explanation for a marketing team.
 RULES:
 - DO NOT WRITE ANY number, percentage, amount or date yourself. Insert every number ONLY via a placeholder from the FACTS list, exactly as {{key}} (e.g. {{revenue_pct}}, {{N4}}). The server replaces placeholders with real values.
@@ -625,9 +661,8 @@ RULES:
 - If a possible tracking issue exists, put it first in next steps.
 - Meta and other non-Google-Ads spend is NOT available; site changes, competitor prices, stock and promotions are NOT in the data.
 - Be concise, plain English.
-Reply ONLY with a JSON object, no other text:
-{"what":"1-2 sentences: what happened","why":"2-4 sentences: why it likely happens, main then secondary cause","confidence":"high|medium|low","evidence":["N1","N3"],"cannot_confirm":["..."],"next_steps":["..."]}
-evidence = 2-5 most important finding ids. cannot_confirm and next_steps = 2-4 short items each.`;
+Reply ONLY by calling the "report" tool.
+what = 1-2 sentences: what happened; why = 2-4 sentences: why it likely happens, main then secondary cause; evidence = 2-5 most important finding ids; cannot_confirm and next_steps = 2-4 short items each.`;
 
   const user = `${sr ? "PITANJE" : "QUESTION"}: ${qtxt}
 ${sr ? "PERIOD" : "PERIOD"}: ${period.curS}..${period.curE} vs ${period.prevS}..${period.prevE}
@@ -636,27 +671,27 @@ ${factList}
 
 ${sr ? "NALAZI (poređani po težini, najveći uticaj prvi)" : "FINDINGS (ranked by weight, biggest impact first)"}:
 ${findingList || (sr ? "(nema značajnih nalaza)" : "(no significant findings)")}
-${failed ? `\n${sr ? "PROVERE KOJE NISU USPELE" : "FAILED CHECKS"}: ${failed}` : ""}`;
+${failed ? `\n${sr ? "PROVERE KOJE NISU USPELE" : "FAILED CHECKS"}: ${failed}` : ""}
+${focus ? `\n${sr ? "FOKUS: pitanje je o kampanji" : "FOCUS: the question is about campaign"} {{focus_campaign}}. ${sr ? "Prvo objasni šta se desilo sa njom (oznake {{focus_roas}}, {{focus_revenue_pct}}, {{focus_spend_pct}} i nalaz o njenim proizvodima), pa tek onda kako se to uklapa u promene celog sajta." : "First explain what happened to it (placeholders {{focus_roas}}, {{focus_revenue_pct}}, {{focus_spend_pct}} and the finding about its products), then how it fits the site-wide changes."}` : ""}`;
 
   // Do 2 pokušaja: AI ponekad bude zauzet (429/529) ili vrati nepotpun JSON (predug odgovor) – tada se pokušava još jednom
   let out = null, d = null, lastErr = null;
   for (let attempt = 0; attempt < 2 && !out; attempt++) {
     try {
       const msgs = [{ role: "user", content: user }];
-      if (attempt > 0 && lastErr && /JSON|max_tokens/.test(lastErr.message)) msgs[0].content += sr ? "\n\nVAŽNO: prethodni odgovor nije bio ispravan JSON ili je bio predug. Piši kraće i vrati SAMO ispravan JSON." : "\n\nIMPORTANT: the previous reply was not valid JSON or was too long. Be shorter and return ONLY valid JSON.";
+      if (attempt > 0 && lastErr && /max_tokens|alat|tool/.test(lastErr.message)) msgs[0].content += sr ? "\n\nVAŽNO: piši kraće i odgovori isključivo pozivom alata report." : "\n\nIMPORTANT: be shorter and reply only by calling the report tool.";
       const r = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: MODEL, max_tokens: 2500, system, messages: msgs }),
+        body: JSON.stringify({ model: MODEL, max_tokens: 2500, system, messages: msgs, tools: [REPORT_TOOL], tool_choice: { type: "tool", name: "report" } }),
         signal: AbortSignal.timeout(60000)
       });
       d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(`AI HTTP ${r.status}: ` + JSON.stringify(d).slice(0, 200));
       if (d.stop_reason === "max_tokens") throw new Error("AI: odgovor predugačak (max_tokens) – nepotpun JSON");
-      const text = (d.content || []).map((c) => c.text || "").join("");
-      const m = text.match(/\{[\s\S]*\}/);
-      if (!m) throw new Error("AI: odgovor bez JSON-a");
-      try { out = JSON.parse(m[0]); } catch (e) { throw new Error("AI: neispravan JSON – " + e.message); }
+      const tu = (d.content || []).find((c) => c.type === "tool_use" && c.name === "report");
+      if (!tu || !tu.input || typeof tu.input.what !== "string") throw new Error("AI: nije vratio alat report");
+      out = tu.input;
     } catch (e) {
       lastErr = e;
       console.error(`[investigate] AI pokušaj ${attempt + 1}: ${e.message}`);
