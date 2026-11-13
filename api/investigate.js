@@ -716,7 +716,9 @@ export default async function handler(req, res) {
     findings.sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact));
     // Obavezni nalazi + najbolji nalazi drugog kruga (do 4) uvek ulaze; ostatak po težini, ukupno do 16
     const forced = findings.filter((f) => f.force).slice(0, 6);
-    const deepKeep = findings.filter((f) => !f.force && f.deep).slice(0, 4);
+    // Kad je istraga pokrenuta iz kampanje, nalazi o NJENIM ad grupama imaju prednost (inače ih potisnu veće promene celog sajta)
+    const deepPri = (f) => (focusCampaignId && f.check === "drill_campaign" ? 1 : 0);
+    const deepKeep = findings.filter((f) => !f.force && f.deep).sort((a, b) => deepPri(b) - deepPri(a) || Math.abs(b.impact) - Math.abs(a.impact)).slice(0, 5);
     const rest = findings.filter((f) => !f.force && !deepKeep.includes(f)).slice(0, Math.max(0, 16 - forced.length - deepKeep.length));
     const top = [...forced, ...deepKeep, ...rest].sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact));
     top.forEach((f, i) => { f.id = "N" + (i + 1); if (dR && f.share == null && !f.force) f.share = f.impact / dR; });
@@ -840,7 +842,7 @@ ${factList}
 ${sr ? "NALAZI (poređani po težini, najveći uticaj prvi)" : "FINDINGS (ranked by weight, biggest impact first)"}:
 ${findingList || (sr ? "(nema značajnih nalaza)" : "(no significant findings)")}
 ${failed ? `\n${sr ? "PROVERE KOJE NISU USPELE" : "FAILED CHECKS"}: ${failed}` : ""}
-${focus ? `\n${sr ? "FOKUS: pitanje je o kampanji" : "FOCUS: the question is about campaign"} {{focus_campaign}}. ${sr ? "Prvo objasni šta se desilo sa njom (oznake {{focus_roas}}, {{focus_revenue_pct}}, {{focus_spend_pct}} i nalaz o njenim proizvodima), pa tek onda kako se to uklapa u promene celog sajta." : "First explain what happened to it (placeholders {{focus_roas}}, {{focus_revenue_pct}}, {{focus_spend_pct}} and the finding about its products), then how it fits the site-wide changes."}` : ""}`;
+${focus ? `\n${sr ? "FOKUS: pitanje je o kampanji" : "FOCUS: the question is about campaign"} {{focus_campaign}}. ${sr ? "Prvo objasni šta se desilo sa njom (oznake {{focus_roas}}, {{focus_revenue_pct}}, {{focus_spend_pct}}, nalaz o njenim proizvodima i nalazi [drill_campaign] o njenim ad grupama – navedi koja ad grupa najviše objašnjava pad ili rast), pa tek onda kako se to uklapa u promene celog sajta." : "First explain what happened to it (placeholders {{focus_roas}}, {{focus_revenue_pct}}, {{focus_spend_pct}}, the finding about its products and the [drill_campaign] findings about its ad groups – name the ad group that explains the change most), then how it fits the site-wide changes."}` : ""}`;
 
   // Do 2 pokušaja: AI ponekad bude zauzet (429/529) ili vrati nepotpun JSON (predug odgovor) – tada se pokušava još jednom
   let out = null, d = null, lastErr = null;
