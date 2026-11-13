@@ -570,7 +570,8 @@ export default async function handler(req, res) {
       : d.type === "campaign" ? `${L("kampanja", "campaign")} ${short(d.name)}`
       : d.type === "landing" ? `landing ${short(d.name)}` : short(d.name)}`;
     const ex = (field, value) => ({ filter: { fieldName: field, stringFilter: { matchType: "EXACT", value: String(value) } } });
-    const addDeep = (f) => { if (Math.abs(f.impact) >= significantBase * 0.03) findings.push({ ...f, deep: true }); };
+    // Prag je u odnosu na promenu celog sajta; za kampanju iz koje je istraga pokrenuta nalazi se čuvaju uvek (njene promene su male u odnosu na sajt)
+    const addDeep = (f, always) => { if (always || Math.abs(f.impact) >= significantBase * 0.03) findings.push({ ...f, deep: true }); };
     const segTxt = (c, p) => `${L("prihod", "revenue")} ${F.moneyDelta(c.totalRevenue - p.totalRevenue)} (${F.pct(pct(c.totalRevenue, p.totalRevenue))}) · ${L("posete", "sessions")} ${F.pct(pct(c.sessions, p.sessions))} · ${L("konverzija", "conversion")} ${F.pct(pct(rate(c.transactions, c.sessions), rate(p.transactions, p.sessions)))}`;
     const topChanges = (map, n, key = "totalRevenue") => Object.values(map || {}).map((o) => ({ o, d: o.cur[key] - o.prev[key] })).sort((a, b) => Math.abs(b.d) - Math.abs(a.d)).slice(0, n);
     const IT = ["itemsViewed", "itemsAddedToCart", "itemsPurchased", "itemRevenue"];
@@ -676,7 +677,7 @@ export default async function handler(req, res) {
         for (const a of tops) {
           const cpc = a.kp > 0 && a.kc > 0 ? ` · CPC ${F.pct(pct(rate(a.sc, a.kc), rate(a.sp, a.kp)))} · CTR ${F.pct(pct(rate(a.kc, a.ic), rate(a.kp, a.ip)))}` : "";
           addDeep({ check: "drill_campaign", impact: Math.abs(a.rc - a.rp) >= Math.abs(a.sc - a.sp) ? a.rc - a.rp : -(a.sc - a.sp), label: `${L("ad grupa", "ad group")} ${a.name}`,
-            text: `${d.name} – ${L("ad grupa", "ad group")} ${a.name}: ${L("potrošnja", "spend")} ${F.money(a.sp)} → ${F.money(a.sc)} · ${L("prihod", "revenue")} ${F.money(a.rp)} → ${F.money(a.rc)} · ROAS ${F.dec(rate(a.rp, a.sp))} → ${F.dec(rate(a.rc, a.sc))}${cpc}` });
+            text: `${d.name} – ${L("ad grupa", "ad group")} ${a.name}: ${L("potrošnja", "spend")} ${F.money(a.sp)} → ${F.money(a.sc)} · ${L("prihod", "revenue")} ${F.money(a.rp)} → ${F.money(a.rc)} · ROAS ${F.dec(rate(a.rp, a.sp))} → ${F.dec(rate(a.rc, a.sc))}${cpc}` }, String(d.arg) === String(focusCampaignId));
         }
         return { summary: `${short(tops[0].name, 30)}: ROAS ${F.dec(rate(tops[0].rp, tops[0].sp))} → ${F.dec(rate(tops[0].rc, tops[0].sc))}`, count: list.length };
       },
@@ -816,7 +817,7 @@ PRAVILA:
 - Nalazi označeni "drugi krug" su dublji pogled na najveće nalaze (npr. pregledač na mobilnom, proizvodi u kategoriji, ad grupe kampanje). Koristi ih da precizno kažeš GDE je problem; ako dva nalaza opisuju isti problem (npr. kategorija i uređaj), reci da je to jedan uzrok.
 - Ako postoji moguć problem u merenju, stavi ga na prvo mesto u proveri.
 - Meta i ostala potrošnja van Google Ads-a NIJE dostupna; izmene na sajtu, cene kod konkurencije, zalihe i promocije NISU u podacima.
-- Piši kratko, srpski latinicom, bez žargona gde nije potreban.
+- Piši kratko, srpski latinicom, bez žargona gde nije potreban. Nikad ne pominji tehničke oznake iz uglastih zagrada (npr. [drill_campaign], [gads]) – za korisnika to nema značenje.
 Odgovor upiši ISKLJUČIVO pozivom alata "report". Za navodnike u tekstu koristi „ i “.
 what = 1-2 rečenice: šta se desilo; why = 2-4 rečenice: zašto se verovatno dešava, glavni pa drugi uzrok; evidence = 2-5 najvažnijih oznaka nalaza; cannot_confirm i next_steps = po 2-4 kratke stavke.`
     : `You are an experienced e-commerce performance analyst. You receive FINDINGS computed by the server from GA4 and Google Ads data. Connect them into a clear explanation for a marketing team.
@@ -830,7 +831,7 @@ RULES:
 - Findings marked "second round" are a deeper look at the biggest findings (e.g. browser on mobile, products in a category, campaign ad groups). Use them to say precisely WHERE the problem is; if two findings describe the same problem (e.g. category and device), say it is one cause.
 - If a possible tracking issue exists, put it first in next steps.
 - Meta and other non-Google-Ads spend is NOT available; site changes, competitor prices, stock and promotions are NOT in the data.
-- Be concise, plain English.
+- Be concise, plain English. Never mention the technical tags in square brackets (e.g. [drill_campaign], [gads]) – they mean nothing to the user.
 Reply ONLY by calling the "report" tool.
 what = 1-2 sentences: what happened; why = 2-4 sentences: why it likely happens, main then secondary cause; evidence = 2-5 most important finding ids; cannot_confirm and next_steps = 2-4 short items each.`;
 
