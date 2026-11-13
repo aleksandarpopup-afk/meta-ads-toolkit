@@ -3778,7 +3778,7 @@ function CampaignsMod({t,lang,goMod}){
         <button onClick={resetDrill} style={{background:"none",border:"none",color:C.mut,cursor:"pointer",fontSize:12,padding:0,marginBottom:10}}>{sr?"← Sve kampanje":"← All campaigns"}</button>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
           <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 4px"}}>{drillCampaign.campaign_name}</h3>
-          <button onClick={()=>invLaunch(goMod,{client:selectedClient,period,customFrom,customTo,qtype:"other",question:sr?`Šta se promenilo kod kampanje „${drillCampaign.campaign_name}“ i zašto?`:`What changed with campaign “${drillCampaign.campaign_name}” and why?`,lang})} style={invBtnStyle}>🔎 {sr?"Istraži zašto":"Investigate why"}</button>
+          <button onClick={()=>invLaunch(goMod,{client:selectedClient,period,customFrom,customTo,qtype:"other",question:sr?`Šta se promenilo kod kampanje „${drillCampaign.campaign_name}“ i zašto?`:`What changed with campaign “${drillCampaign.campaign_name}” and why?`,lang,campaignId:drillCampaign.campaign_id})} style={invBtnStyle}>🔎 {sr?"Istraži zašto":"Investigate why"}</button>
         </div>
         <div style={{color:C.mut,fontSize:12,marginBottom:16}}>{drillCampaign.campaign_id} · {fmtMoney(drillCampaign.spendEUR,"EUR")} spend · {drillCampaign.roas.toFixed(2)}x ROAS</div>
 
@@ -4002,16 +4002,17 @@ function invDateRange(a,b,sr){
   if(sr) return x.m===y.m?`${x.d}.–${y.d}. ${y.m}.`:`${x.d}. ${x.m}.–${y.d}. ${y.m}.`;
   return `${x.d}/${x.m}–${y.d}/${y.m}`;
 }
-async function invStart({client,days,from,to,qtype,question,lang}){
+async function invStart({client,days,from,to,qtype,question,lang,campaignId}){
   if(INV.ctrl) try{INV.ctrl.abort();}catch(e){}
   const ctrl=new AbortController(); INV.ctrl=ctrl;
   const sr=lang==="sr";
   invSet(null);
   INV.last={clientId:String(client.id),days,from,to,qtype,question};
-  invSet({status:"running",client,qtype,question,lang,days,from,to,startedAt:Date.now(),checks:[],period:null,result:null,error:""});
+  invSet({status:"running",client,qtype,question,lang,days,from,to,campaignId:campaignId||null,startedAt:Date.now(),checks:[],period:null,result:null,error:""});
   const qs=new URLSearchParams({client_id:String(client.id),qtype,lang});
   if(from&&to){ qs.set("from",from); qs.set("to",to); } else qs.set("days",String(days));
   if(question) qs.set("q",question);
+  if(campaignId) qs.set("campaign_id",String(campaignId));
   try{
     const r=await fetch(`/api/investigate?${qs.toString()}`,{signal:ctrl.signal});
     if(!r.ok){
@@ -4138,7 +4139,7 @@ function InvestigateMod({t,lang}){
 
   const rerunInLang=()=>{
     const std=INV_QTYPES.find(x=>x.qsr===inv.question||x.qen===inv.question);
-    invStart({client:inv.client,days:inv.days,from:inv.from,to:inv.to,qtype:inv.qtype,question:std?(sr?std.qsr:std.qen):inv.question,lang});
+    invStart({client:inv.client,days:inv.days,from:inv.from,to:inv.to,qtype:inv.qtype,question:std?(sr?std.qsr:std.qen):inv.question,lang,campaignId:inv.campaignId});
   };
   const langBanner=inv.lang&&inv.lang!==lang&&inv.status!=="error"?<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",padding:"10px 14px",borderRadius:10,border:"1px solid rgba(99,102,241,0.35)",background:"rgba(99,102,241,0.08)",marginBottom:14}}>
     <span style={{color:C.txt,fontSize:13}}>{sr?"Ova istraga je napisana na engleskom.":"This investigation was written in Serbian."}</span>
@@ -4318,12 +4319,12 @@ function InvestigateMod({t,lang}){
 
 
 // Pokreće istragu iz drugog modula (CI/PI) sa istim klijentom i periodom i otvara Investigate
-function invLaunch(goMod,{client,period,customFrom,customTo,qtype,question,lang}){
+function invLaunch(goMod,{client,period,customFrom,customTo,qtype,question,lang,campaignId}){
   const sr=lang==="sr";
   const custom=period==="custom";
   if(custom&&!(customFrom&&customTo)){ alert(sr?"Prvo izaberi period (od–do).":"Choose a period (from–to) first."); return; }
   if(INV.state&&INV.state.status==="running"&&!window.confirm(sr?"Jedna istraga je već u toku. Da je prekinem i pokrenem novu?":"An investigation is already running. Stop it and start a new one?")) return;
-  invStart({client:{id:client.id,name:client.name},days:custom?null:Math.min(92,parseInt(period)||7),from:custom?customFrom:null,to:custom?customTo:null,qtype,question,lang});
+  invStart({client:{id:client.id,name:client.name},days:custom?null:Math.min(92,parseInt(period)||7),from:custom?customFrom:null,to:custom?customTo:null,qtype,question,lang,campaignId});
   if(goMod) goMod(16);
 }
 const invBtnStyle={padding:"6px 12px",borderRadius:8,border:"1px solid rgba(129,140,248,0.5)",background:"rgba(129,140,248,0.12)",color:"#C7D2FE",fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"};
