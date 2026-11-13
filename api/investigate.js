@@ -129,7 +129,7 @@ export default async function handler(req, res) {
     const g = await db(`ga4_connections?client_id=eq.${client_id}&select=property_id,refresh_token,currency_code`);
     if (!Array.isArray(g) || !g.length) return res.status(404).json({ error: "no_ga4" });
     ga4Conn = g[0];
-    const a = await db(`google_ads_connections?client_id=eq.${client_id}&select=customer_id,currency_code`);
+    const a = await db(`google_ads_connections?client_id=eq.${client_id}&select=customer_id,manager_id,currency_code,refresh_token`);
     if (Array.isArray(a) && a.length) gadsConn = a[0];
   } catch (e) {
     return res.status(500).json({ error: e.message });
@@ -253,14 +253,14 @@ export default async function handler(req, res) {
     const dimAnalysis = (map, check, nameOf, opts = {}) => {
       const rows = Object.values(map).map((o) => {
         const c = o.cur, p = o.prev;
-        return { name: nameOf(o), c, p, dRev: c.totalRevenue - p.totalRevenue,
+        return { name: nameOf(o), raw: o.dims[0], c, p, dRev: c.totalRevenue - p.totalRevenue,
           revPct: pct(c.totalRevenue, p.totalRevenue), sesPct: pct(c.sessions, p.sessions), crPct: pct(rate(c.transactions, c.sessions), rate(p.transactions, p.sessions)) };
       }).sort((a, b) => Math.abs(b.dRev) - Math.abs(a.dRev));
       const top = rows.slice(0, opts.top || 3);
       for (const r of top) {
         addFinding({ check, impact: r.dRev, label: `${r.name}: ${L("prihod", "revenue")} ${F.pct(r.revPct)}`,
           text: `${r.name}: ${L("prihod", "revenue")} ${F.moneyDelta(r.dRev)} (${F.pct(r.revPct)}) · ${L("posete", "sessions")} ${F.pct(r.sesPct)} · ${L("konverzija", "conversion")} ${F.pct(r.crPct)}`,
-          share: dR ? r.dRev / dR : null });
+          share: dR ? r.dRev / dR : null, drill: opts.drill && r.raw && r.raw !== "(not set)" ? { type: opts.drill, arg: r.raw, name: r.name } : null });
       }
       // Da li je promena ravnomerna (svuda slično) ili skoncentrisana
       const big = rows.filter((r) => r.p.totalRevenue >= R0 * 0.05 || r.c.totalRevenue >= R1 * 0.05);
@@ -281,7 +281,7 @@ export default async function handler(req, res) {
     let channelMap = null;
     try {
       channelMap = await P.channels;
-      const a = dimAnalysis(channelMap, "channels", (o) => o.dims[0] || "(not set)");
+      const a = dimAnalysis(channelMap, "channels", (o) => o.dims[0] || "(not set)", { drill: "channel" });
       try {
         const src = await P.sources;
         const sr2 = Object.values(src).map((o) => ({ name: o.dims[0], d: o.cur.totalRevenue - o.prev.totalRevenue, p: pct(o.cur.totalRevenue, o.prev.totalRevenue) })).sort((x, y) => Math.abs(y.d) - Math.abs(x.d));
@@ -296,7 +296,7 @@ export default async function handler(req, res) {
     // ── 5. Uređaji ──
     try {
       const dn = { mobile: L("mobilni", "mobile"), desktop: L("računar", "desktop"), tablet: "tablet", smart_tv: "smart TV" };
-      const a = dimAnalysis(await P.devices, "devices", (o) => dn[o.dims[0]] || o.dims[0]);
+      const a = dimAnalysis(await P.devices, "devices", (o) => dn[o.dims[0]] || o.dims[0], { drill: "device" });
       markDone("devices", a.summary, a.rows.length);
     }
     catch (e) { markFail("devices", e); }
@@ -336,7 +336,7 @@ export default async function handler(req, res) {
     let finishFlag = null;
     try {
       const m = await P.landing;
-      const a = dimAnalysis(m, "landing", (o) => o.dims[0] || "(not set)");
+      const a = dimAnalysis(m, "landing", (o) => o.dims[0] || "(not set)", { drill: "landing" });
       // Sesije koje POČINJU na stranici završetka kupovine/plaćanja = kupac se vratio sa stranice banke/kredita,
       // GA4 je započeo novu sesiju i prodaja se pripisuje pogrešnom izvoru.
       const FINISH = /(finish|thank|hvala|uspesn|success|confirm|potvrd|order-received|narudzbina-primljena|payment|placanje)/i;
@@ -346,8 +346,8 @@ export default async function handler(req, res) {
         const sc = rate(fc, R1) * 100, sp = rate(fp, R0) * 100;
         if (sc >= 3) {
           const ex = [...fin].sort((x, y) => y.cur.totalRevenue - x.cur.totalRevenue).slice(0, 2).map((o) => o.dims[0]).join(", ");
-          finishFlag = L(`${Math.round(sc)}% prihoda (ranije ${Math.round(sp)}%) dolazi iz sesija koje počinju na stranici završetka kupovine/plaćanja (${ex}) – kupac se vraća sa stranice banke ili kredita, GA4 započinje novu sesiju i ta prodaja se pripisuje pogrešnom izvoru`,
-                         `${Math.round(sc)}% of revenue (before ${Math.round(sp)}%) comes from sessions that start on an order-finish/payment page (${ex}) – buyers return from a bank/credit page, GA4 starts a new session and the sale is attributed to the wrong source`);
+          finishFlag = L(`${Math.round(sc)}% prihoda (ranije ${Math.round(sp)}%) dolazi iz sesija koje počinju na stranici završetka kupovine/plaćanja (${ex}) – kupac se vraća sa stranice banke ili kredita, GA4 započinje novu sesiju i ta prodaja se pripisuje pogrešnom izvoru (rešenje: GA4 → Admin → Data streams → Configure tag settings → List unwanted referrals – dodati domene banke i kreditnih partnera)`,
+                         `${Math.round(sc)}% of revenue (before ${Math.round(sp)}%) comes from sessions that start on an order-finish/payment page (${ex}) – buyers return from a bank/credit page, GA4 starts a new session and the sale is attributed to the wrong source (fix: GA4 → Admin → Data streams → Configure tag settings → List unwanted referrals – add bank/credit partner domains)`);
         }
       }
       markDone("landing", a.summary, a.rows.length);
@@ -443,7 +443,7 @@ export default async function handler(req, res) {
         // Prosečna cena po prodatom komadu – otkriva promenu "miksa" (prodaje se skuplje/jeftinije unutar kategorije)
         const upc = pct(rate(c.c.itemRevenue, c.c.itemsPurchased), rate(c.p.itemRevenue, c.p.itemsPurchased));
         const mix = upc != null && Math.abs(upc) >= 25 ? (upc > 0 ? L(" – prodaju se skuplji proizvodi nego ranije", " – more expensive items are selling than before") : L(" – prodaju se jeftiniji proizvodi nego ranije", " – cheaper items are selling than before")) : "";
-        addFinding({ check: "products", impact: c.d, label: `${L("kategorija", "category")} ${c.name} ${F.pct(pct(c.c.itemRevenue, c.p.itemRevenue))}`,
+        addFinding({ check: "products", impact: c.d, drill: c.name !== "(not set)" ? { type: "category", arg: c.name, name: c.name } : null, label: `${L("kategorija", "category")} ${c.name} ${F.pct(pct(c.c.itemRevenue, c.p.itemRevenue))}`,
           text: `${L("Kategorija", "Category")} ${c.name}: ${L("prihod", "revenue")} ${F.moneyDelta(c.d)} (${F.pct(pct(c.c.itemRevenue, c.p.itemRevenue))}) · ${L("pregledi", "views")} ${F.pct(pct(c.c.itemsViewed, c.p.itemsViewed))} · ${L("korpa", "cart")} ${F.pct(pct(c.c.itemsAddedToCart, c.p.itemsAddedToCart))} · ${L("kupljeno", "purchased")} ${F.pct(pct(c.c.itemsPurchased, c.p.itemsPurchased))} · ${L("prosečna cena po komadu", "avg. price per unit")} ${F.pct(upc)}${mix}` });
       }
       const prodMap = await P.products;
@@ -493,9 +493,9 @@ export default async function handler(req, res) {
         let fxMissing = false;
         const toRev = (v) => { const x = convert(v, gCur, currency, rates); if (x == null) { fxMissing = true; return v; } return x; };
         const camps = {};
-        const get = (id, name) => camps[id] || (camps[id] = { id, name: name || id, sc: 0, sp: 0, rc: 0, rp: 0 });
-        for (const r of sc || []) { const c = get(String(r.campaign_id), r.campaign_name); c.sc += toRev(num(r.total_spend)); }
-        for (const r of sp || []) { const c = get(String(r.campaign_id), r.campaign_name); c.sp += toRev(num(r.total_spend)); }
+        const get = (id, name) => camps[id] || (camps[id] = { id, name: name || id, sc: 0, sp: 0, rc: 0, rp: 0, kc: 0, kp: 0, ic: 0, ip: 0 });
+        for (const r of sc || []) { const c = get(String(r.campaign_id), r.campaign_name); c.sc += toRev(num(r.total_spend)); c.kc += num(r.total_clicks); c.ic += num(r.total_impressions); }
+        for (const r of sp || []) { const c = get(String(r.campaign_id), r.campaign_name); c.sp += toRev(num(r.total_spend)); c.kp += num(r.total_clicks); c.ip += num(r.total_impressions); }
         for (const o of Object.values(rev || {})) {
           const id = o.dims[0]; if (!id || id === "(not set)") continue;
           const c = get(id, o.dims[1] && o.dims[1] !== "(not set)" ? o.dims[1] : null); c.rc += o.cur.totalRevenue; c.rp += o.prev.totalRevenue;
@@ -509,8 +509,9 @@ export default async function handler(req, res) {
         for (const c of sorted.slice(0, 3)) {
           const dRev = c.rc - c.rp, dSp = c.sc - c.sp;
           const status = c.sp === 0 && c.sc > 0 ? L(" (nova u ovom periodu)", " (new this period)") : c.sc === 0 && c.sp > 0 ? L(" (bez potrošnje u ovom periodu – pauzirana?)", " (no spend this period – paused?)") : "";
-          addFinding({ check: "gads", impact: Math.abs(dRev) >= Math.abs(dSp) ? dRev : -dSp, label: `${c.name}${status}`,
-            text: `${L("Kampanja", "Campaign")} ${c.name}${status}: ${L("potrošnja", "spend")} ${F.money(c.sp)} → ${F.money(c.sc)} · ${L("prihod", "revenue")} ${F.money(c.rp)} → ${F.money(c.rc)} · ROAS ${F.dec(rate(c.rp, c.sp))} → ${F.dec(rate(c.rc, c.sc))}` });
+          const cpcTxt = c.kp > 0 && c.kc > 0 ? ` · CPC ${F.pct(pct(rate(c.sc, c.kc), rate(c.sp, c.kp)))} · CTR ${F.pct(pct(rate(c.kc, c.ic), rate(c.kp, c.ip)))}` : "";
+          addFinding({ check: "gads", impact: Math.abs(dRev) >= Math.abs(dSp) ? dRev : -dSp, label: `${c.name}${status}`, drill: { type: "campaign", arg: c.id, name: c.name },
+            text: `${L("Kampanja", "Campaign")} ${c.name}${status}: ${L("potrošnja", "spend")} ${F.money(c.sp)} → ${F.money(c.sc)} · ${L("prihod", "revenue")} ${F.money(c.rp)} → ${F.money(c.rc)} · ROAS ${F.dec(rate(c.rp, c.sp))} → ${F.dec(rate(c.rc, c.sc))}${cpcTxt}` });
         }
         // Fokusirana kampanja: uvek u nalazima, sa svojim brojevima i proizvodima koji su se najviše promenili
         if (focusCampaignId) {
@@ -548,11 +549,176 @@ export default async function handler(req, res) {
       }
     } catch (e) { markFail("yoy", e); }
 
+
+    // ── DRUGI KRUG: dublje provere za najveće nalaze (najviše 3) ──
+    // Server sam bira gde da kopa (po težini nalaza), radi dodatne GA4/Google Ads upite i računa nove nalaze.
+    const drills = [];
+    const want = (d) => { if (d && d.arg != null && drills.length < 3 && !drills.some((x) => x.type === d.type)) drills.push(d); };
+    if (focusCampaignId && gadsConn) {
+      const ff = findings.find((f) => f.facts && f.facts.focus_campaign);
+      want({ type: "campaign", arg: focusCampaignId, name: ff ? ff.facts.focus_campaign : focusCampaignId });
+    }
+    for (const f of findings.filter((x) => !x.force && x.drill).sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact))) {
+      if (f.drill.type === "campaign" && !gadsConn) continue;
+      want(f.drill);
+    }
+    if (drills.length < 3) drills.push({ type: "geo", arg: "", name: "" });
+
+    const short = (x, n = 40) => (String(x).length > n ? String(x).slice(0, n - 1) + "…" : String(x));
+    const drillLabel = (d) => `${L("Dublje", "Deeper")}: ${d.type === "geo" ? L("zemlje i gradovi", "countries and cities")
+      : d.type === "category" ? `${L("kategorija", "category")} ${short(d.name)}`
+      : d.type === "campaign" ? `${L("kampanja", "campaign")} ${short(d.name)}`
+      : d.type === "landing" ? `landing ${short(d.name)}` : short(d.name)}`;
+    const ex = (field, value) => ({ filter: { fieldName: field, stringFilter: { matchType: "EXACT", value: String(value) } } });
+    const addDeep = (f) => { if (Math.abs(f.impact) >= significantBase * 0.03) findings.push({ ...f, deep: true }); };
+    const segTxt = (c, p) => `${L("prihod", "revenue")} ${F.moneyDelta(c.totalRevenue - p.totalRevenue)} (${F.pct(pct(c.totalRevenue, p.totalRevenue))}) · ${L("posete", "sessions")} ${F.pct(pct(c.sessions, p.sessions))} · ${L("konverzija", "conversion")} ${F.pct(pct(rate(c.transactions, c.sessions), rate(p.transactions, p.sessions)))}`;
+    const topChanges = (map, n, key = "totalRevenue") => Object.values(map || {}).map((o) => ({ o, d: o.cur[key] - o.prev[key] })).sort((a, b) => Math.abs(b.d) - Math.abs(a.d)).slice(0, n);
+    const IT = ["itemsViewed", "itemsAddedToCart", "itemsPurchased", "itemRevenue"];
+
+    const DRILL = {
+      // Uređaj: operativni sistem/pregledač + koraci kupovine samo na tom uređaju
+      device: async (d) => {
+        const [osb, fun] = await Promise.all([
+          two(["operatingSystem", "browser"], BASE, { dimensionFilter: ex("deviceCategory", d.arg), orderBys: [{ metric: { metricName: "sessions" }, desc: true }] }, 2000),
+          two([], ["itemViewEvents", "addToCarts", "checkouts", "ecommercePurchases"], { dimensionFilter: ex("deviceCategory", d.arg) })
+        ]);
+        const tops = topChanges(osb, 2);
+        for (const { o, d: dd } of tops) addDeep({ check: "drill_device", impact: dd, label: `${d.name} – ${o.dims[0]} / ${o.dims[1]}`, text: `${d.name} – ${o.dims[0]} / ${o.dims[1]}: ${segTxt(o.cur, o.prev)}` });
+        const devPrev = Object.values(osb).reduce((a, o) => a + o.prev.totalRevenue, 0);
+        const f = fun && fun._total;
+        let stepTxt = "";
+        if (f) {
+          const steps = [[L("pregled → korpa", "view → cart"), f.cur.addToCarts / (f.cur.itemViewEvents || NaN), f.prev.addToCarts / (f.prev.itemViewEvents || NaN)],
+            [L("korpa → plaćanje", "cart → checkout"), f.cur.checkouts / (f.cur.addToCarts || NaN), f.prev.checkouts / (f.prev.addToCarts || NaN)],
+            [L("plaćanje → kupovina", "checkout → purchase"), f.cur.ecommercePurchases / (f.cur.checkouts || NaN), f.prev.ecommercePurchases / (f.prev.checkouts || NaN)]]
+            .filter(([, c, p]) => isFinite(c) && isFinite(p) && p > 0).map(([n, c, p]) => ({ n, c, p, ch: pct(c, p) }));
+          const w = [...steps].sort((a, b) => (dR < 0 ? a.ch - b.ch : b.ch - a.ch))[0];
+          if (w && Math.abs(w.ch) >= 10) {
+            stepTxt = ` · ${w.n} ${F.pct(w.ch)}`;
+            addDeep({ check: "drill_device", impact: devPrev * (w.ch / 100), label: `${d.name}: ${w.n} ${F.pct(w.ch)}`, text: `${d.name} – ${L("korak", "step")} ${w.n}: ${F.cr(w.p)} → ${F.cr(w.c)} (${F.pct(w.ch)})` });
+          }
+        }
+        return { summary: (tops[0] ? `${tops[0].o.dims[0]} / ${tops[0].o.dims[1]} ${F.pct(pct(tops[0].o.cur.totalRevenue, tops[0].o.prev.totalRevenue))}` : L("Nema podataka", "No data")) + stepTxt, count: Object.keys(osb).length };
+      },
+      // Kanal: izvor/medijum i UTM kampanja unutar tog kanala (npr. koja Meta kampanja u Paid Social)
+      channel: async (d) => {
+        const m = await two(["sessionSourceMedium", "sessionCampaignName"], BASE, { dimensionFilter: ex("sessionDefaultChannelGroup", d.arg), orderBys: [{ metric: { metricName: "totalRevenue" }, desc: true }] }, 5000);
+        const tops = topChanges(m, 3);
+        for (const { o, d: dd } of tops) {
+          const camp = o.dims[1] && o.dims[1] !== "(not set)" && o.dims[1] !== "(direct)" && o.dims[1] !== "(organic)" ? ` · ${L("kampanja", "campaign")} ${o.dims[1]}` : "";
+          addDeep({ check: "drill_channel", impact: dd, label: `${d.name} – ${o.dims[0]}${camp}`, text: `${d.name} – ${o.dims[0]}${camp}: ${segTxt(o.cur, o.prev)}` });
+        }
+        return { summary: tops[0] ? `${tops[0].o.dims[0]}${tops[0].o.dims[1] && tops[0].o.dims[1] !== "(not set)" ? " · " + short(tops[0].o.dims[1], 30) : ""} ${F.moneyDelta(tops[0].d)}` : L("Nema podataka", "No data"), count: Object.keys(m).length };
+      },
+      // Kategorija: proizvodi u njoj + podela po uređajima (da se vidi da li je to "isti problem" kao uređaj)
+      category: async (d) => {
+        const [items, dev] = await Promise.all([
+          two(["itemId", "itemName"], IT, { dimensionFilter: ex("itemCategory", d.arg), orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }] }, 20000),
+          two(["deviceCategory"], IT, { dimensionFilter: ex("itemCategory", d.arg) })
+        ]);
+        const ti = topChanges(items, 3, "itemRevenue");
+        if (ti.length) addDeep({ check: "drill_category", impact: ti.reduce((a, x) => a + x.d, 0), label: `${L("kategorija", "category")} ${d.name}: ${L("proizvodi", "products")}`,
+          text: `${L("Kategorija", "Category")} ${d.name} – ${L("proizvodi sa najvećom promenom", "products with the biggest change")}: ${ti.map(({ o, d: dd }) => `${o.dims[1] || o.dims[0]} ${F.moneyDelta(dd)} (${F.pct(pct(o.cur.itemRevenue, o.prev.itemRevenue))})`).join("; ")}` });
+        const dn = { mobile: L("mobilni", "mobile"), desktop: L("računar", "desktop"), tablet: "tablet" };
+        const devs = Object.values(dev).filter((o) => o.prev.itemRevenue > 0 || o.cur.itemRevenue > 0).sort((a, b) => b.prev.itemRevenue - a.prev.itemRevenue);
+        if (devs.length >= 2) {
+          const big = devs.reduce((a, o) => (Math.abs(o.cur.itemRevenue - o.prev.itemRevenue) > Math.abs(a.cur.itemRevenue - a.prev.itemRevenue) ? o : a));
+          addDeep({ check: "drill_category", impact: big.cur.itemRevenue - big.prev.itemRevenue, label: `${L("kategorija", "category")} ${d.name} ${L("po uređajima", "by device")}`,
+            text: `${L("Kategorija", "Category")} ${d.name} ${L("po uređajima", "by device")}: ${devs.map((o) => `${dn[o.dims[0]] || o.dims[0]} ${F.pct(pct(o.cur.itemRevenue, o.prev.itemRevenue))}`).join(" · ")}` });
+        }
+        return { summary: ti[0] ? `${short(ti[0].o.dims[1] || ti[0].o.dims[0], 30)} ${F.moneyDelta(ti[0].d)}` : L("Nema podataka", "No data"), count: Object.keys(items).length };
+      },
+      // Landing stranica: po uređaju i po kanalu
+      landing: async (d) => {
+        const [dev, ch] = await Promise.all([
+          two(["deviceCategory"], BASE, { dimensionFilter: ex("landingPage", d.arg) }),
+          two(["sessionDefaultChannelGroup"], BASE, { dimensionFilter: ex("landingPage", d.arg) })
+        ]);
+        const dn = { mobile: L("mobilni", "mobile"), desktop: L("računar", "desktop"), tablet: "tablet" };
+        const td = topChanges(dev, 1), tc = topChanges(ch, 1);
+        if (td[0]) addDeep({ check: "drill_landing", impact: td[0].d, label: `${short(d.name)} – ${dn[td[0].o.dims[0]] || td[0].o.dims[0]}`, text: `${d.name} – ${dn[td[0].o.dims[0]] || td[0].o.dims[0]}: ${segTxt(td[0].o.cur, td[0].o.prev)}` });
+        if (tc[0]) addDeep({ check: "drill_landing", impact: tc[0].d, label: `${short(d.name)} – ${tc[0].o.dims[0]}`, text: `${d.name} – ${tc[0].o.dims[0]}: ${segTxt(tc[0].o.cur, tc[0].o.prev)}` });
+        return { summary: [td[0] && `${dn[td[0].o.dims[0]] || td[0].o.dims[0]} ${F.pct(pct(td[0].o.cur.totalRevenue, td[0].o.prev.totalRevenue))}`, tc[0] && `${tc[0].o.dims[0]} ${F.pct(pct(tc[0].o.cur.totalRevenue, tc[0].o.prev.totalRevenue))}`].filter(Boolean).join(" · ") || L("Nema podataka", "No data") };
+      },
+      // Kampanja: ad grupe – potrošnja, klikovi i prikazi uživo iz Google Ads-a + prihod iz GA4
+      campaign: async (d) => {
+        const gCur = gadsConn.currency_code || "EUR";
+        const toRev = (v) => { const x = convert(v, gCur, currency, rates); return x == null ? v : x; };
+        const [ga, ads] = await Promise.all([
+          two(["sessionGoogleAdsAdGroupId", "sessionGoogleAdsAdGroupName"], BASE, { dimensionFilter: ex("sessionGoogleAdsCampaignId", d.arg) }, 5000),
+          (async () => {
+            const tok = await refreshAccessToken(gadsConn.refresh_token);
+            const headers = { "Content-Type": "application/json", Authorization: `Bearer ${tok}` };
+            // Isti način poziva kao google-ads-drilldown.js (koji radi)
+            if (gadsConn.manager_id) headers["login-customer-id"] = String(gadsConn.manager_id);
+            const query = `SELECT ad_group.id, ad_group.name, segments.date, metrics.cost_micros, metrics.clicks, metrics.impressions FROM ad_group WHERE campaign.id = ${d.arg} AND segments.date BETWEEN '${prevS}' AND '${curE}'`;
+            let all = [], pageToken;
+            do {
+              const r = await fetch(`https://googleads.googleapis.com/v25/customers/${gadsConn.customer_id}/googleAds:search`, { method: "POST", headers, body: JSON.stringify(pageToken ? { query, pageToken } : { query }), signal: AbortSignal.timeout(30000) });
+              const j = await r.json().catch(() => ({}));
+              if (!r.ok) throw new Error("Google Ads: " + JSON.stringify(j).slice(0, 200));
+              all = all.concat(j.results || []); pageToken = j.nextPageToken;
+            } while (pageToken);
+            return all;
+          })()
+        ]);
+        const g = {};
+        const get = (id, name) => g[id] || (g[id] = { id, name: name || id, sc: 0, sp: 0, kc: 0, kp: 0, ic: 0, ip: 0, rc: 0, rp: 0 });
+        for (const r of ads) {
+          const a = get(String(r.adGroup.id), r.adGroup.name); const cur = r.segments.date >= curS;
+          const cost = toRev((parseInt(r.metrics?.costMicros) || 0) / 1e6), cl = parseInt(r.metrics?.clicks) || 0, im = parseInt(r.metrics?.impressions) || 0;
+          if (cur) { a.sc += cost; a.kc += cl; a.ic += im; } else { a.sp += cost; a.kp += cl; a.ip += im; }
+        }
+        for (const o of Object.values(ga)) { if (!o.dims[0] || o.dims[0] === "(not set)") continue; const a = get(o.dims[0], o.dims[1] !== "(not set)" ? o.dims[1] : null); a.rc += o.cur.totalRevenue; a.rp += o.prev.totalRevenue; }
+        const list = Object.values(g);
+        if (!list.length) return { summary: L("Kampanja nema ad grupe (npr. Performance Max) – dublje nije moguće", "Campaign has no ad groups (e.g. Performance Max)"), count: 0 };
+        const tops = list.sort((a, b) => Math.max(Math.abs(b.rc - b.rp), Math.abs(b.sc - b.sp)) - Math.max(Math.abs(a.rc - a.rp), Math.abs(a.sc - a.sp))).slice(0, 3);
+        for (const a of tops) {
+          const cpc = a.kp > 0 && a.kc > 0 ? ` · CPC ${F.pct(pct(rate(a.sc, a.kc), rate(a.sp, a.kp)))} · CTR ${F.pct(pct(rate(a.kc, a.ic), rate(a.kp, a.ip)))}` : "";
+          addDeep({ check: "drill_campaign", impact: Math.abs(a.rc - a.rp) >= Math.abs(a.sc - a.sp) ? a.rc - a.rp : -(a.sc - a.sp), label: `${L("ad grupa", "ad group")} ${a.name}`,
+            text: `${d.name} – ${L("ad grupa", "ad group")} ${a.name}: ${L("potrošnja", "spend")} ${F.money(a.sp)} → ${F.money(a.sc)} · ${L("prihod", "revenue")} ${F.money(a.rp)} → ${F.money(a.rc)} · ROAS ${F.dec(rate(a.rp, a.sp))} → ${F.dec(rate(a.rc, a.sc))}${cpc}` });
+        }
+        return { summary: `${short(tops[0].name, 30)}: ROAS ${F.dec(rate(tops[0].rp, tops[0].sp))} → ${F.dec(rate(tops[0].rc, tops[0].sc))}`, count: list.length };
+      },
+      // Lokacija: zemlje, a ako je skoro sve iz jedne zemlje – gradovi u njoj
+      geo: async () => {
+        const c = await two(["country"], BASE, {}, 500);
+        const rows = Object.values(c).sort((a, b) => b.cur.totalRevenue - a.cur.totalRevenue);
+        const tot = rows.reduce((a, o) => a + o.cur.totalRevenue, 0);
+        let map = c, what = L("zemlja", "country");
+        if (rows[0] && tot > 0 && rows[0].cur.totalRevenue / tot > 0.9) {
+          map = await two(["city"], BASE, { dimensionFilter: ex("country", rows[0].dims[0]), orderBys: [{ metric: { metricName: "totalRevenue" }, desc: true }] }, 3000);
+          what = L("grad", "city");
+        }
+        const tops = topChanges(map, 2);
+        for (const { o, d: dd } of tops) addDeep({ check: "drill_geo", impact: dd, label: `${what} ${o.dims[0]}`, text: `${L("Lokacija", "Location")} (${what}) ${o.dims[0]}: ${segTxt(o.cur, o.prev)}` });
+        return { summary: tops.map(({ o }) => `${o.dims[0]} ${F.pct(pct(o.cur.totalRevenue, o.prev.totalRevenue))}`).join(" · ") || L("Nema podataka", "No data"), count: Object.keys(map).length };
+      }
+    };
+
+    if (!closed && drills.length && Date.now() < DEADLINE - 10000) {
+      const drillDeadline = Math.max(Date.now() + 20000, DEADLINE);
+      const aiIdx = CHECKS.findIndex((c) => c.id === "ai");
+      const jobs = drills.map((d, i) => {
+        const chk = { id: `drill_${d.type}`, label: drillLabel(d) };
+        CHECKS.splice(aiIdx + i, 0, chk);
+        send({ type: "check_add", check: chk, before: "ai" });
+        return Promise.race([
+          DRILL[d.type](d),
+          new Promise((_, rej) => { const tm = setTimeout(() => rej(new Error(L("Google nije odgovorio na vreme", "Google did not respond in time"))), Math.max(0, drillDeadline - Date.now())); if (tm.unref) tm.unref(); })
+        ]).then((r) => markDone(chk.id, r.summary, r.count)).catch((e) => { warnings.push({ check: chk.id, error: String(e && e.message || e).slice(0, 200) }); send({ type: "check", id: chk.id, status: "failed", summary: L("Provera nije uspela", "Check failed") }); });
+      });
+      await Promise.all(jobs);
+    }
+
     // ── Rangiranje nalaza po težini i oznake N1, N2… ──
     // "Obavezni" nalazi (merenje, sezona, uobičajeno kolebanje, dan promene) uvek ulaze; ostatak po težini, ukupno do 14.
     findings.sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact));
+    // Obavezni nalazi + najbolji nalazi drugog kruga (do 4) uvek ulaze; ostatak po težini, ukupno do 16
     const forced = findings.filter((f) => f.force).slice(0, 6);
-    const top = [...forced, ...findings.filter((f) => !f.force).slice(0, 14 - forced.length)].sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact));
+    const deepKeep = findings.filter((f) => !f.force && f.deep).slice(0, 4);
+    const rest = findings.filter((f) => !f.force && !deepKeep.includes(f)).slice(0, Math.max(0, 16 - forced.length - deepKeep.length));
+    const top = [...forced, ...deepKeep, ...rest].sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact));
     top.forEach((f, i) => { f.id = "N" + (i + 1); if (dR && f.share == null && !f.force) f.share = f.impact / dR; });
     for (const f of findings) if (f.facts) Object.assign(facts, f.facts);
 
@@ -632,7 +798,7 @@ async function explain({ lang, question, qtype, period, totals, decomp, gadsTota
 
   const factList = Object.entries(facts).map(([k, v]) => `{{${k}}} = ${v}`).join("\n");
   // Udeo se navodi samo kad ima smisla (ne kad se promene međusobno poništavaju pa udeo prelazi 150%)
-  const findingList = findings.map((f) => `${f.id} [${f.check}] ${f.text}${facts[f.id + "_share"] ? ` (${sr ? "udeo u ukupnoj promeni" : "share of total change"}: {{${f.id}_share}})` : ""}`).join("\n");
+  const findingList = findings.map((f) => `${f.id} [${f.check}${f.deep ? (sr ? ", drugi krug" : ", second round") : ""}] ${f.text}${facts[f.id + "_share"] ? ` (${sr ? "udeo u ukupnoj promeni" : "share of total change"}: {{${f.id}_share}})` : ""}`).join("\n");
   // Zašto provera nije uspela – da AI ne bi neuspeh tehničkog upita tumačio kao problem u merenju sajta
   const failed = warnings.map((w) => `${w.check} (${/odgovor|respond|30 s|502|504|timeout/i.test(w.error) ? (sr ? "Google nije odgovorio na vreme – tehnički problem kod Google-a, NE problem merenja na sajtu" : "Google did not respond in time – a technical issue at Google, NOT a site tracking issue") : (sr ? "tehnička greška upita" : "technical query error")})`).join("; ");
 
@@ -645,6 +811,7 @@ PRAVILA:
 - {{period_cur}} je tekući period, {{period_prev}} prethodni. {{change_start}} je samo DAN OD KOG počinje promena, nije period.
 - Korelacija NIJE dokaz uzroka. Koristi "verovatno", "ukazuje na". Ako nalazi ne objašnjavaju promenu dobro, to jasno reci i daj nisku sigurnost.
 - Ako je tekući period u granicama uobičajenog ili je sezonski obrazac, to je važan zaključak.
+- Nalazi označeni "drugi krug" su dublji pogled na najveće nalaze (npr. pregledač na mobilnom, proizvodi u kategoriji, ad grupe kampanje). Koristi ih da precizno kažeš GDE je problem; ako dva nalaza opisuju isti problem (npr. kategorija i uređaj), reci da je to jedan uzrok.
 - Ako postoji moguć problem u merenju, stavi ga na prvo mesto u proveri.
 - Meta i ostala potrošnja van Google Ads-a NIJE dostupna; izmene na sajtu, cene kod konkurencije, zalihe i promocije NISU u podacima.
 - Piši kratko, srpski latinicom, bez žargona gde nije potreban.
@@ -658,6 +825,7 @@ RULES:
 - {{period_cur}} is the current period, {{period_prev}} the previous one. {{change_start}} is only the DAY the change starts, not a period.
 - Correlation is NOT proof of cause. Use "likely", "suggests". If findings explain the change poorly, say so and give low confidence.
 - If the current period is within normal range or matches a seasonal pattern, that is an important conclusion.
+- Findings marked "second round" are a deeper look at the biggest findings (e.g. browser on mobile, products in a category, campaign ad groups). Use them to say precisely WHERE the problem is; if two findings describe the same problem (e.g. category and device), say it is one cause.
 - If a possible tracking issue exists, put it first in next steps.
 - Meta and other non-Google-Ads spend is NOT available; site changes, competitor prices, stock and promotions are NOT in the data.
 - Be concise, plain English.
