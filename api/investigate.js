@@ -93,6 +93,7 @@ function twoRangeMap(report, dimCount, metricNames) {
 // ───────────────────────── glavni deo ─────────────────────────
 export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method === "POST") return rewrite(req, res);
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
   const ctx = await guard(req, res);
@@ -105,6 +106,7 @@ export default async function handler(req, res) {
   const sr = lang === "sr";
   const qtype = ["revenue_drop", "roas_drop", "spend_up", "other"].includes(req.query.qtype) ? req.query.qtype : "other";
   const question = String(req.query.q || "").trim().slice(0, 300);
+  const style = req.query.style === "simple" ? "simple" : "expert";
   const focusCampaignId = /^\d{1,20}$/.test(String(req.query.campaign_id || "")) ? String(req.query.campaign_id) : null;
 
   // Periodi: tekući, prethodni (iste dužine, odmah pre) i isti period prošle godine (364 dana ranije – isti dani u nedelji)
@@ -752,7 +754,7 @@ export default async function handler(req, res) {
     else if (!ANTHROPIC_API_KEY) { markFail("ai", "ANTHROPIC_API_KEY"); }
     else {
       try {
-        ai = await explain({ lang, question, qtype, period: { curS, curE, prevS, prevE }, totals: T, decomp, gadsTotals, findings: top, facts, warnings, F, focus: focusCampaignId ? facts.focus_campaign || focusCampaignId : null });
+        ai = await explain({ lang, question, qtype, period: { curS, curE, prevS, prevE }, totals: T, decomp, gadsTotals, findings: top, facts, warnings, F, focus: focusCampaignId ? facts.focus_campaign || focusCampaignId : null, style });
         markDone("ai", L("Objašnjenje napisano", "Explanation written"));
       } catch (e) { console.error("[investigate] AI greška:", e && e.message); markFail("ai", e); }
     }
@@ -765,8 +767,9 @@ export default async function handler(req, res) {
       period: { curS, curE, prevS, prevE, len },
       currency, eurFactor, lang,
       totals: T, decomp, gads: gadsTotals,
-      findings: top.map(({ id, check, impact, share, text }) => ({ id, check, impact, share, text })),
-      ai, unavailable, checksDone, warnings, failedCount,
+      findings: top.map(({ id, check, impact, share, text, deep }) => ({ id, check, impact, share, text, deep: !!deep })),
+      ai, unavailable, checksDone, warnings, failedCount, style, facts,
+      focus: focusCampaignId ? facts.focus_campaign || focusCampaignId : null,
       durationMs: Date.now() - t0,
       _perf: perf
     });
@@ -775,6 +778,35 @@ export default async function handler(req, res) {
     send({ type: "error", error: e.message });
   }
   res.end();
+}
+
+// ── Ponovno pisanje objašnjenja u drugom stilu (stručno / za klijenta) – bez ponovnog vučenja podataka ──
+async function rewrite(req, res) {
+  const ctx = await guard(req, res);
+  if (!ctx) return;
+  const b = req.body || {};
+  if (!/^\d{1,12}$/.test(String(b.client_id || ""))) return res.status(400).json({ error: "Missing client_id" });
+  if (!(await clientInWorkspace(b.client_id, ctx.membership.workspace_id))) return res.status(404).json({ error: "client_not_found" });
+  if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: "AI not configured" });
+  const lang = b.lang === "en" ? "en" : "sr";
+  const style = b.style === "simple" ? "simple" : "expert";
+  const D = /^\d{4}-\d{2}-\d{2}$/;
+  const p = b.period || {};
+  if (![p.curS, p.curE, p.prevS, p.prevE].every((x) => D.test(String(x || "")))) return res.status(400).json({ error: "Invalid period" });
+  // Ograničenja veličine – AI dobija samo ono što je server ranije izračunao
+  const findings = (Array.isArray(b.findings) ? b.findings : []).slice(0, 20).map((f) => ({
+    id: String(f.id || "").slice(0, 5), check: String(f.check || "").slice(0, 30), text: String(f.text || "").slice(0, 700), deep: !!f.deep
+  })).filter((f) => /^N\d{1,2}$/.test(f.id));
+  const facts = {};
+  for (const [k, v] of Object.entries(b.facts || {}).slice(0, 100)) if (/^[A-Za-z0-9_]{1,40}$/.test(k)) facts[k] = String(v).slice(0, 200);
+  const warnings = (Array.isArray(b.warnings) ? b.warnings : []).slice(0, 20).map((w) => ({ check: String(w.check || "").slice(0, 40), error: String(w.error || "").slice(0, 200) }));
+  try {
+    const ai = await explain({ lang, question: String(b.question || "").slice(0, 300), qtype: String(b.qtype || "other"), period: p, findings, facts, warnings, focus: b.focus ? String(b.focus).slice(0, 200) : null, style });
+    return res.status(200).json({ ai, style });
+  } catch (e) {
+    console.error("[investigate] rewrite greška:", e.message);
+    return res.status(500).json({ error: e.message });
+  }
 }
 
 // ───────────────────────── AI deo ─────────────────────────
@@ -795,8 +827,12 @@ const REPORT_TOOL = {
     required: ["what", "why", "confidence", "evidence", "cannot_confirm", "next_steps"]
   }
 };
-async function explain({ lang, question, qtype, period, totals, decomp, gadsTotals, findings, facts, warnings, F, focus }) {
+async function explain({ lang, question, qtype, period, findings, facts, warnings, focus, style }) {
   const sr = lang === "sr";
+  const styleRule = style === "simple"
+    ? (sr ? `\nNAČIN PISANJA: za KLIJENTA (vlasnika ili menadžera prodavnice), ne za marketinški tim. Bez stručnih izraza: umesto „ROAS" piši „povrat na novac uložen u oglase", umesto „konverzija" „procenat posetilaca koji kupe", umesto „sesije" „posete", bez skraćenica CPC, CTR, UTM, GA4 i reči „landing". Kratke rečenice, smiren ton, bez panike. U next_steps navedi šta ćemo mi (agencija) uraditi ili šta preporučujemo, bez tehničkih uputstava iz alata. Oznake {{...}} i dalje koristi za sve brojeve.`
+          : `\nWRITING STYLE: for the CLIENT (shop owner or manager), not the marketing team. No jargon: instead of "ROAS" say "return on ad spend", instead of "conversion" say "share of visitors who buy", "sessions" → "visits", no CPC, CTR, UTM, GA4 or "landing". Short sentences, calm tone. In next_steps say what we (the agency) will do or recommend, without tool instructions. Still use {{...}} placeholders for all numbers.`)
+    : "";
   const qtxt = question || { revenue_drop: sr ? "Zašto je prihod pao?" : "Why did revenue drop?", roas_drop: sr ? "Zašto je ROAS pao?" : "Why did ROAS drop?", spend_up: sr ? "Potrošnja raste, a prihod ne – zašto?" : "Spend is up but revenue isn't – why?", other: sr ? "Šta se promenilo i zašto?" : "What changed and why?" }[qtype];
 
   const factList = Object.entries(facts).map(([k, v]) => `{{${k}}} = ${v}`).join("\n");
@@ -817,9 +853,9 @@ PRAVILA:
 - Nalazi označeni "drugi krug" su dublji pogled na najveće nalaze (npr. pregledač na mobilnom, proizvodi u kategoriji, ad grupe kampanje). Koristi ih da precizno kažeš GDE je problem; ako dva nalaza opisuju isti problem (npr. kategorija i uređaj), reci da je to jedan uzrok.
 - Ako postoji moguć problem u merenju, stavi ga na prvo mesto u proveri.
 - Meta i ostala potrošnja van Google Ads-a NIJE dostupna; izmene na sajtu, cene kod konkurencije, zalihe i promocije NISU u podacima.
-- Piši kratko, srpski latinicom, bez žargona gde nije potreban. Nikad ne pominji tehničke oznake iz uglastih zagrada (npr. [drill_campaign], [gads]) – za korisnika to nema značenje.
+- Piši kratko, srpski latinicom. Nikad ne pominji tehničke oznake iz uglastih zagrada (npr. [drill_campaign], [gads]) – za korisnika to nema značenje.
 Odgovor upiši ISKLJUČIVO pozivom alata "report". Za navodnike u tekstu koristi „ i “.
-what = 1-2 rečenice: šta se desilo; why = 2-4 rečenice: zašto se verovatno dešava, glavni pa drugi uzrok; evidence = 2-5 najvažnijih oznaka nalaza; cannot_confirm i next_steps = po 2-4 kratke stavke.`
+what = 1-2 rečenice: šta se desilo; why = 2-4 rečenice: zašto se verovatno dešava, glavni pa drugi uzrok; evidence = 2-5 najvažnijih oznaka nalaza; cannot_confirm i next_steps = po 2-4 kratke stavke.${styleRule}`
     : `You are an experienced e-commerce performance analyst. You receive FINDINGS computed by the server from GA4 and Google Ads data. Connect them into a clear explanation for a marketing team.
 RULES:
 - DO NOT WRITE ANY number, percentage, amount or date yourself. Insert every number ONLY via a placeholder from the FACTS list, exactly as {{key}} (e.g. {{revenue_pct}}, {{N4}}). The server replaces placeholders with real values.
@@ -833,7 +869,7 @@ RULES:
 - Meta and other non-Google-Ads spend is NOT available; site changes, competitor prices, stock and promotions are NOT in the data.
 - Be concise, plain English. Never mention the technical tags in square brackets (e.g. [drill_campaign], [gads]) – they mean nothing to the user.
 Reply ONLY by calling the "report" tool.
-what = 1-2 sentences: what happened; why = 2-4 sentences: why it likely happens, main then secondary cause; evidence = 2-5 most important finding ids; cannot_confirm and next_steps = 2-4 short items each.`;
+what = 1-2 sentences: what happened; why = 2-4 sentences: why it likely happens, main then secondary cause; evidence = 2-5 most important finding ids; cannot_confirm and next_steps = 2-4 short items each.${styleRule}`;
 
   const user = `${sr ? "PITANJE" : "QUESTION"}: ${qtxt}
 ${sr ? "PERIOD" : "PERIOD"}: ${period.curS}..${period.curE} vs ${period.prevS}..${period.prevE}
