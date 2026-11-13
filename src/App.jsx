@@ -2580,7 +2580,7 @@ function MyClientsMod({t,lang,goMod}){
   </div>;
 }
 
-function ProductIntelligenceMod({t,lang}){
+function ProductIntelligenceMod({t,lang,goMod}){
   const sr=lang==="sr";
   const [clients,setClients]=useState([]);
   const [clientsLoading,setClientsLoading]=useState(true);
@@ -2822,6 +2822,7 @@ ${summary}`;
       </div>
       <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
         {periods.map(p=><button key={p.v} onClick={()=>applyPeriod(p.v)} style={{padding:"6px 12px",borderRadius:8,border:`1px solid ${period===p.v?"rgba(99,102,241,0.6)":C.brd}`,background:period===p.v?"rgba(99,102,241,0.2)":"transparent",color:period===p.v?C.acl:C.mut,fontSize:12,fontWeight:600,cursor:"pointer"}}>{p.l}</button>)}
+        <button onClick={()=>invLaunch(goMod,{client:selectedClient,period,customFrom,customTo,qtype:"other",question:sr?"Šta se promenilo i zašto?":"What changed and why?",lang})} title={sr?"Pokreni istragu za ovog klijenta i period":"Investigate this client and period"} style={invBtnStyle}>🔎 {sr?"Istraži promene":"Investigate changes"}</button>
       </div>
     </div>
 
@@ -2902,6 +2903,10 @@ ${summary}`;
 
       {isExplorable&&<input value={search} onChange={e=>{setSearch(e.target.value);setVisibleCount(50);}} placeholder={sr?"🔍 Pretraži po nazivu ili ID-u...":"🔍 Search by name or ID..."} style={{width:"100%",padding:"10px 14px",borderRadius:10,border:`1px solid ${C.brd}`,background:"rgba(255,255,255,0.03)",color:C.txt,fontSize:13,marginBottom:14,boxSizing:"border-box"}}/>}
 
+      {filter==="drops"&&<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",padding:"10px 14px",borderRadius:10,border:"1px solid rgba(129,140,248,0.3)",background:"rgba(129,140,248,0.06)",marginBottom:10}}>
+        <span style={{color:C.txt,fontSize:12.5}}>{sr?"Vidiš pad? Istraga proverava kanale, uređaje, korake kupovine, cene i proizvode.":"See a drop? The investigation checks channels, devices, purchase steps, prices and products."}</span>
+        <button onClick={()=>invLaunch(goMod,{client:selectedClient,period,customFrom,customTo,qtype:"revenue_drop",question:sr?"Zašto pojedini proizvodi padaju?":"Why are some products dropping?",lang})} style={invBtnStyle}>🔎 {sr?"Istraži zašto":"Investigate why"}</button>
+      </div>}
       {filter==="categories"&&data.hasCategories===false&&<div style={{color:C.mut,fontSize:13,textAlign:"center",padding:"20px 0"}}>{sr?"Ovaj klijent nema podešene kategorije proizvoda u GA4-u.":"This client doesn't have product categories set up in GA4."}</div>}
 
       {rows.length===0&&filter!=="categories"&&(filter!=="sources"||(paidOrganic&&sourcePlatform))&&<div style={{color:C.mut,fontSize:13,textAlign:"center",padding:"20px 0"}}>{sr?"Nema proizvoda u ovoj kategoriji za izabrani period.":"No products in this category for the selected period."}</div>}
@@ -3379,7 +3384,7 @@ function CiKeywords({sr,mob,clientId,qs}){
   </div>;
 }
 
-function CampaignsMod({t,lang}){
+function CampaignsMod({t,lang,goMod}){
   const sr=lang==="sr";
   const [clients,setClients]=useState([]);
   const [clientsLoading,setClientsLoading]=useState(true);
@@ -3663,6 +3668,7 @@ function CampaignsMod({t,lang}){
       </div>
       <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
         {periods.map(p=><button key={p.v} onClick={()=>applyPeriod(p.v)} style={{padding:"6px 12px",borderRadius:8,border:`1px solid ${period===p.v?"rgba(99,102,241,0.6)":C.brd}`,background:period===p.v?"rgba(99,102,241,0.2)":"transparent",color:period===p.v?C.acl:C.mut,fontSize:12,fontWeight:600,cursor:"pointer"}}>{p.l}</button>)}
+        <button onClick={()=>invLaunch(goMod,{client:selectedClient,period,customFrom,customTo,qtype:"other",question:sr?"Šta se promenilo i zašto?":"What changed and why?",lang})} title={sr?"Pokreni istragu za ovog klijenta i period":"Investigate this client and period"} style={invBtnStyle}>🔎 {sr?"Istraži promene":"Investigate changes"}</button>
       </div>
     </div>
 
@@ -3770,7 +3776,10 @@ function CampaignsMod({t,lang}){
       {/* DRILL: KAMPANJA DETALJI */}
       {drillCampaign&&!drillAdGroup&&<div>
         <button onClick={resetDrill} style={{background:"none",border:"none",color:C.mut,cursor:"pointer",fontSize:12,padding:0,marginBottom:10}}>{sr?"← Sve kampanje":"← All campaigns"}</button>
-        <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 4px"}}>{drillCampaign.campaign_name}</h3>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
+          <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 4px"}}>{drillCampaign.campaign_name}</h3>
+          <button onClick={()=>invLaunch(goMod,{client:selectedClient,period,customFrom,customTo,qtype:"other",question:sr?`Šta se promenilo kod kampanje „${drillCampaign.campaign_name}“ i zašto?`:`What changed with campaign “${drillCampaign.campaign_name}” and why?`,lang})} style={invBtnStyle}>🔎 {sr?"Istraži zašto":"Investigate why"}</button>
+        </div>
         <div style={{color:C.mut,fontSize:12,marginBottom:16}}>{drillCampaign.campaign_id} · {fmtMoney(drillCampaign.spendEUR,"EUR")} spend · {drillCampaign.roas.toFixed(2)}x ROAS</div>
 
         <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:8}}>{sr?"Ad grupe":"Ad groups"}</div>
@@ -4305,6 +4314,18 @@ function InvestigateMod({t,lang}){
     </div>}
   </div>;
 }
+
+
+// Pokreće istragu iz drugog modula (CI/PI) sa istim klijentom i periodom i otvara Investigate
+function invLaunch(goMod,{client,period,customFrom,customTo,qtype,question,lang}){
+  const sr=lang==="sr";
+  const custom=period==="custom";
+  if(custom&&!(customFrom&&customTo)){ alert(sr?"Prvo izaberi period (od–do).":"Choose a period (from–to) first."); return; }
+  if(INV.state&&INV.state.status==="running"&&!window.confirm(sr?"Jedna istraga je već u toku. Da je prekinem i pokrenem novu?":"An investigation is already running. Stop it and start a new one?")) return;
+  invStart({client:{id:client.id,name:client.name},days:custom?null:Math.min(92,parseInt(period)||7),from:custom?customFrom:null,to:custom?customTo:null,qtype,question,lang});
+  if(goMod) goMod(16);
+}
+const invBtnStyle={padding:"6px 12px",borderRadius:8,border:"1px solid rgba(129,140,248,0.5)",background:"rgba(129,140,248,0.12)",color:"#C7D2FE",fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"};
 
 // PDF istrage – isti alat (pdfmake) i stil kao Report Studio
 function invPdfDoc({inv,R,stats,ai,evidence,findings,failedChecks,sr,pctTxt,periodTxt}){
