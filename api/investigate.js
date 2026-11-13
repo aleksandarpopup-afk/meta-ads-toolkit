@@ -638,18 +638,32 @@ ${sr ? "NALAZI (poređani po težini, najveći uticaj prvi)" : "FINDINGS (ranked
 ${findingList || (sr ? "(nema značajnih nalaza)" : "(no significant findings)")}
 ${failed ? `\n${sr ? "PROVERE KOJE NISU USPELE" : "FAILED CHECKS"}: ${failed}` : ""}`;
 
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model: MODEL, max_tokens: 1200, system, messages: [{ role: "user", content: user }] }),
-    signal: AbortSignal.timeout(60000)
-  });
-  const d = await r.json();
-  if (!r.ok) throw new Error("AI: " + JSON.stringify(d).slice(0, 200));
-  const text = (d.content || []).map((c) => c.text || "").join("");
-  const m = text.match(/\{[\s\S]*\}/);
-  if (!m) throw new Error("AI: no JSON");
-  const out = JSON.parse(m[0]);
+  // Do 2 pokušaja: AI ponekad bude zauzet (429/529) ili vrati nepotpun JSON (predug odgovor) – tada se pokušava još jednom
+  let out = null, d = null, lastErr = null;
+  for (let attempt = 0; attempt < 2 && !out; attempt++) {
+    try {
+      const msgs = [{ role: "user", content: user }];
+      if (attempt > 0 && lastErr && /JSON|max_tokens/.test(lastErr.message)) msgs[0].content += sr ? "\n\nVAŽNO: prethodni odgovor nije bio ispravan JSON ili je bio predug. Piši kraće i vrati SAMO ispravan JSON." : "\n\nIMPORTANT: the previous reply was not valid JSON or was too long. Be shorter and return ONLY valid JSON.";
+      const r = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({ model: MODEL, max_tokens: 2500, system, messages: msgs }),
+        signal: AbortSignal.timeout(60000)
+      });
+      d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(`AI HTTP ${r.status}: ` + JSON.stringify(d).slice(0, 200));
+      if (d.stop_reason === "max_tokens") throw new Error("AI: odgovor predugačak (max_tokens) – nepotpun JSON");
+      const text = (d.content || []).map((c) => c.text || "").join("");
+      const m = text.match(/\{[\s\S]*\}/);
+      if (!m) throw new Error("AI: odgovor bez JSON-a");
+      try { out = JSON.parse(m[0]); } catch (e) { throw new Error("AI: neispravan JSON – " + e.message); }
+    } catch (e) {
+      lastErr = e;
+      console.error(`[investigate] AI pokušaj ${attempt + 1}: ${e.message}`);
+      if (attempt === 0) await new Promise((res) => setTimeout(res, 2000));
+    }
+  }
+  if (!out) throw lastErr || new Error("AI: nepoznata greška");
 
   // Zamena oznaka pravim vrednostima; nepoznate oznake se uklanjaju
   const fill = (s) => String(s || "").replace(/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g, (_, k) => (facts[k] != null ? `**${facts[k]}**` : ""));
