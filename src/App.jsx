@@ -3974,7 +3974,7 @@ function CampaignsMod({t,lang}){
 // ── INVESTIGATE (mod 16) ─────────────────────────────────────────────────────
 // Istraga radi i kad korisnik pređe u drugi modul: stanje i veza sa serverom žive VAN komponente (INV),
 // a komponenta se samo "pretplati" na promene. Ništa se ne čuva u bazi – rezultat čeka dok je app otvoren.
-const INV={state:null,listeners:new Set(),ctrl:null};
+const INV={state:null,listeners:new Set(),ctrl:null,last:null};
 function invSet(patch){ INV.state=patch===null?null:{...(INV.state||{}),...patch}; INV.listeners.forEach(f=>f(INV.state)); }
 function useInv(){
   const [s,setS]=useState(INV.state);
@@ -3998,7 +3998,8 @@ async function invStart({client,days,from,to,qtype,question,lang}){
   const ctrl=new AbortController(); INV.ctrl=ctrl;
   const sr=lang==="sr";
   invSet(null);
-  invSet({status:"running",client,qtype,question,lang,startedAt:Date.now(),checks:[],period:null,result:null,error:""});
+  INV.last={clientId:String(client.id),days,from,to,qtype,question};
+  invSet({status:"running",client,qtype,question,lang,days,from,to,startedAt:Date.now(),checks:[],period:null,result:null,error:""});
   const qs=new URLSearchParams({client_id:String(client.id),qtype,lang});
   if(from&&to){ qs.set("from",from); qs.set("to",to); } else qs.set("days",String(days));
   if(question) qs.set("q",question);
@@ -4019,7 +4020,7 @@ async function invStart({client,days,from,to,qtype,question,lang}){
         const line=buf.slice(0,i); buf=buf.slice(i+1);
         if(!line.trim()||INV.ctrl!==ctrl) continue;
         let e; try{ e=JSON.parse(line); }catch(err){ continue; }
-        if(e.type==="start") invSet({checks:e.checks.map(c=>({...c,status:"pending",summary:""})),period:e.period,currency:e.currency});
+        if(e.type==="start") invSet({checks:e.checks.map(c=>({...c,status:"pending",summary:""})),period:e.period,currency:e.currency,eurFactor:e.eurFactor});
         else if(e.type==="check") invSet({checks:(INV.state.checks||[]).map(c=>c.id===e.id?{...c,status:e.status,summary:e.summary}:c)});
         else if(e.type==="result"){ gotResult=true; invSet({status:"done",result:e,finishedAt:Date.now()}); }
         else if(e.type==="error") invSet({status:"error",error:e.error});
@@ -4048,11 +4049,12 @@ function InvestigateMod({t,lang}){
   const narrow=useNarrow(860);
   const [clients,setClients]=useState([]);
   const [clientsLoading,setClientsLoading]=useState(true);
-  const [clientId,setClientId]=useState("");
-  const [period,setPeriod]=useState("7");
-  const [customFrom,setCustomFrom]=useState("");
-  const [customTo,setCustomTo]=useState("");
-  const [qtype,setQtype]=useState("revenue_drop");
+  const L0=INV.last||{};
+  const [clientId,setClientId]=useState(L0.clientId||"");
+  const [period,setPeriod]=useState(L0.from&&L0.to?"custom":String(L0.days||"7"));
+  const [customFrom,setCustomFrom]=useState(L0.from||"");
+  const [customTo,setCustomTo]=useState(L0.to||"");
+  const [qtype,setQtype]=useState(L0.qtype||"revenue_drop");
   const [question,setQuestion]=useState("");
   const [now,setNow]=useState(Date.now());
   const [showAll,setShowAll]=useState(false);
@@ -4124,10 +4126,20 @@ function InvestigateMod({t,lang}){
     </div>;
   }
 
+  const rerunInLang=()=>{
+    const std=INV_QTYPES.find(x=>x.qsr===inv.question||x.qen===inv.question);
+    invStart({client:inv.client,days:inv.days,from:inv.from,to:inv.to,qtype:inv.qtype,question:std?(sr?std.qsr:std.qen):inv.question,lang});
+  };
+  const langBanner=inv.lang&&inv.lang!==lang&&inv.status!=="error"?<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",padding:"10px 14px",borderRadius:10,border:"1px solid rgba(99,102,241,0.35)",background:"rgba(99,102,241,0.08)",marginBottom:14}}>
+    <span style={{color:C.txt,fontSize:13}}>{sr?"Ova istraga je napisana na engleskom.":"This investigation was written in Serbian."}</span>
+    <button onClick={rerunInLang} style={{padding:"7px 14px",borderRadius:8,border:"1px solid rgba(99,102,241,0.5)",background:"rgba(99,102,241,0.18)",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer"}}>{sr?"Ponovi na srpskom":"Run again in English"}</button>
+  </div>:null;
+  const backLink=<button onClick={invCancel} style={{background:"none",border:"none",color:C.mut,cursor:"pointer",fontSize:12,padding:0,marginBottom:6}}>{sr?"← Nazad (nova istraga)":"← Back (new investigation)"}</button>;
   const periodTxt=inv.period?`${invDateRange(inv.period.curS,inv.period.curE,sr)} ${sr?"u odnosu na":"vs"} ${invDateRange(inv.period.prevS,inv.period.prevE,sr)}`:"";
 
   // ── 2) GREŠKA ──
   if(inv.status==="error") return <div>
+    {backLink}
     {header}
     <div style={{...card,maxWidth:760,borderColor:"rgba(248,113,113,0.35)",background:"rgba(248,113,113,0.06)"}}>
       <div style={{color:C.red,fontWeight:700,fontSize:14,marginBottom:6}}>⚠️ {sr?"Istraga nije uspela":"The investigation failed"}</div>
@@ -4155,6 +4167,7 @@ function InvestigateMod({t,lang}){
     };
     return <div>
       {header}
+      {langBanner}
       <div style={{...card,padding:narrow?"16px":"22px 24px",maxWidth:1000}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:14}}>
           <div style={{minWidth:0}}>
@@ -4190,15 +4203,19 @@ function InvestigateMod({t,lang}){
   const R=inv.result||{};
   const T=R.totals;
   const cur=R.currency||"EUR";
-  const fm=v=>fmtMoney(v,cur);
+  // Kao u ostalim modulima: glavni iznos u EUR, originalna valuta ispod (ako se razlikuje i ako postoji kurs)
+  const ef=R.eurFactor;
+  const useEur=cur!=="EUR"&&ef>0;
+  const fm=v=>useEur?fmtMoney(v*ef,"EUR"):fmtMoney(v,cur);
+  const fmNative=v=>useEur?fmtMoney(v,cur):null;
   const dur=R.durationMs?Math.round(R.durationMs/1000):null;
   const stats=T?[
-    {l:sr?"Prihod":"Revenue",v:fm(T.cur.revenue),p:T.pct.revenue},
+    {l:sr?"Prihod":"Revenue",v:fm(T.cur.revenue),sub:fmNative(T.cur.revenue),p:T.pct.revenue},
     {l:sr?"Porudžbine":"Orders",v:Math.round(T.cur.orders).toLocaleString(sr?"sr-RS":"en-GB"),p:T.pct.orders},
     {l:sr?"Posete":"Sessions",v:Math.round(T.cur.sessions).toLocaleString(sr?"sr-RS":"en-GB"),p:T.pct.sessions},
     {l:sr?"Konverzija":"Conversion",v:(T.cur.cr*100).toLocaleString(sr?"sr-RS":"en-GB",{minimumFractionDigits:2,maximumFractionDigits:2})+"%",p:T.pct.cr},
     ...(R.gads?[
-      {l:sr?"Potrošnja (Google Ads)":"Spend (Google Ads)",v:fm(R.gads.spendCur),p:R.gads.spendPrev>0?(R.gads.spendCur-R.gads.spendPrev)/R.gads.spendPrev*100:null,inv:true},
+      {l:sr?"Potrošnja (Google Ads)":"Spend (Google Ads)",v:fm(R.gads.spendCur),sub:fmNative(R.gads.spendCur),p:R.gads.spendPrev>0?(R.gads.spendCur-R.gads.spendPrev)/R.gads.spendPrev*100:null,inv:true},
       {l:"ROAS (Google Ads)",v:R.gads.roasCur.toLocaleString(sr?"sr-RS":"en-GB",{minimumFractionDigits:2,maximumFractionDigits:2}),p:R.gads.roasPrev>0?(R.gads.roasCur-R.gads.roasPrev)/R.gads.roasPrev*100:null},
     ]:[])
   ]:[];
@@ -4215,6 +4232,8 @@ function InvestigateMod({t,lang}){
 
   return <div>
     <style>{INV_CSS}</style>
+    {backLink}
+    {langBanner}
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap",marginBottom:18}}>
       <div style={{minWidth:0}}>
         <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>🔎 {inv.question}</h2>
@@ -4227,6 +4246,7 @@ function InvestigateMod({t,lang}){
       {stats.map(s=><div key={s.l} style={{...card,padding:"12px 14px"}}>
         <div style={{color:C.mut,fontSize:10.5,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:6}}>{s.l}</div>
         <div style={{display:"flex",flexWrap:"wrap",alignItems:"baseline",columnGap:6,minWidth:0}}><span style={{fontSize:narrow?15:18,fontWeight:800,color:"#fff",overflowWrap:"break-word"}}>{s.v}</span><span style={{fontSize:12.5,fontWeight:700,color:s.inv?(s.p>0?C.yel:s.p<0?C.grn:C.mut):pctCol(s.p)}}>{pctTxt(s.p)}</span></div>
+        {s.sub&&<div style={{color:C.mut,fontSize:11.5,marginTop:3}}>{s.sub}</div>}
       </div>)}
     </div>}
 
