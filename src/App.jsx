@@ -5570,8 +5570,9 @@ const MODS=[
   {id:14,icon:"📢",col:"#84CC16",tk:"m14t",sk:"m14s",grp:"an"},
   {id:12,icon:"🛍️",col:"#F43F5E",tk:"m12t",sk:"m12s",grp:"an"},
   {id:17,icon:"🪙",col:"#F59E0B",tk:"m17t",sk:"m17s",grp:"an"},
-  {id:16,icon:"🔎",col:"#818CF8",tk:"m16t",sk:"m16s",grp:"an"},
   {id:13,icon:"💬",col:"#22D3EE",tk:"m13t",sk:"m13s",grp:"an"},
+  // Investigate je na početnoj široka traka ispod Analitike (ne kartica); u bočnom meniju je u Analitici
+  {id:16,icon:"🔎",col:"#818CF8",tk:"m16t",sk:"m16s",grp:"an",banner:true},
   {id:2,icon:"💰",col:"#10B981",tk:"m2t",sk:"m2s",grp:"dw"},
   {id:15,icon:"📑",col:"#F59E0B",tk:"m15t",sk:"m15s",grp:"dw"},
   {id:10,icon:"👥",col:"#A855F7",tk:"m10t",sk:"m10s",grp:"dw"},
@@ -5596,19 +5597,17 @@ const MOD_TAGS={
 // chat i forme ostaju uze da bi se lako citali
 const MOD_WIDTH={17:1320,14:1320,12:1320,15:1320,2:1320,10:1320,9:1320,13:1040,16:1320,1:920};
 const MOD_GROUPS=[{k:"an",tk:"grpAn"},{k:"dw",tk:"grpDw"}];
-const gridCols=n=>n===5?6:n<=4?n:3;
-// 5 analitičkih kartica: gore 3, dole 2 šire (mreža od 6 kolona)
-const gridSpan=(n,i)=>n===5?(i<3?"span 2":"span 3"):undefined;
+const gridCols=n=>n<=4?n:3;
 const CARD_CSS=`.mc{will-change:transform;transform:translateZ(0);transition:transform .18s ease,border-color .18s ease}
 .mc:hover{transform:translateY(-4px);border-color:var(--c)!important}
 .mc .mc-arr{display:inline-block;transition:transform .2s ease}
 .mc:hover .mc-arr{transform:translateX(4px)}
 .mc .mc-ic{transition:transform .2s ease}
 .mc:hover .mc-ic{transform:scale(1.12) rotate(-6deg)}
+.mc:focus-visible{outline:2px solid var(--c);outline-offset:2px}
 .st{transition:border-color .18s ease,transform .18s ease}
 button.st:hover{transform:translateY(-2px);border-color:rgba(248,113,113,0.6)!important}
-@media (hover:none){.mc:hover{transform:none}.mc:hover .mc-ic{transform:none}.mc:hover .mc-arr{transform:none}}
-@media (prefers-reduced-motion:reduce){.mc,.mc .mc-ic,.mc .mc-arr,.st{transition:none}.mc:hover,.mc:hover .mc-ic,.mc:hover .mc-arr,button.st:hover{transform:none}}`;
+@media (hover:none){.mc:hover{transform:none}.mc:hover .mc-ic{transform:none}.mc:hover .mc-arr{transform:none}}`;
 
 // ── RESPONSIVE HOOK ──────────────────────────────────────────────────────────
 function useWindowSize(){
@@ -5850,57 +5849,62 @@ function MainApp({account}){
     </button>)}
   </div>;
 
-  const ModCard=({m,i,large,compact,span})=>{
-    const tags=(MOD_TAGS[m.id]||{})[lang]||[];
+  // Kartica modula na početnoj: mirna tamna površina, boja modula samo u ikoni i na hover
+  const ModCard=({m,i,large})=>{
     const invS=m.id===16?INV.state:null;
     const live=m.id===2&&home?.bp?home.bp:invS&&invS.status==="running"?{text:lang==="sr"?`Istraga u toku: ${invS.client.name}…`:`Investigating ${invS.client.name}…`,bad:false}:invS&&invS.status==="done"?{text:lang==="sr"?`Rezultat čeka: ${invS.client.name}`:`Result ready: ${invS.client.name}`,bad:false}:null;
     const extra=m.id===10&&home?.clients!=null?`${home.clients} ${lang==="sr"?(home.clients===1?"klijent":"klijenata"):(home.clients===1?"client":"clients")}`:null;
     // Animacija samo prvih ~1,2 s posle otvaranja početne; zakašnjenje je stalno (ne menja se pri ponovnom iscrtavanju)
     const homeAnim=Date.now()-PM_HOME.t0<1200;
-    // Svakodnevni rad: uska traka (ikona, ime, jedan red), bez oznaka i "Otvori"
-    if(compact){
-      const sub=live?live.text:extra||t[m.sk];
-      const subCol=live?(live.bad?C.red:C.grn):extra?"rgba(255,255,255,0.8)":"rgba(255,255,255,0.5)";
-      return <button key={m.id} className={homeAnim?"mc pm-card-in":"mc"} onClick={()=>goMod(m.id)} style={{
-        "--c":m.col,...(homeAnim?{animationDelay:`${Math.min(i+5,10)*45}ms`}:null),
-        background:`linear-gradient(145deg,${m.col}1c,${m.col}08 60%,#0d0d1a)`,
-        border:`1px solid ${m.col}38`,borderRadius:14,padding:"12px 14px",textAlign:"left",
-        cursor:"pointer",display:"flex",alignItems:"center",gap:12,width:"100%",boxSizing:"border-box",
-        WebkitTapHighlightColor:"transparent",
-      }}>
-        <div className="mc-ic" style={{width:36,height:36,borderRadius:10,background:`linear-gradient(135deg,${m.col}45,${m.col}20)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{m.icon}</div>
-        <div style={{flex:1,minWidth:0}}>
-          <div style={{color:"#fff",fontWeight:800,fontSize:14.5,lineHeight:1.3}}>{t[m.tk]}</div>
-          <div style={{color:subCol,fontSize:12,fontWeight:live||extra?700:500,lineHeight:1.4,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{sub}</div>
-        </div>
-        <span className="mc-arr" style={{color:m.col,fontSize:15,fontWeight:700,flexShrink:0}}>→</span>
-      </button>;
-    }
+    const foot=live?{t:live.text,c:live.bad?C.red:C.grn}:extra?{t:extra,c:"rgba(255,255,255,0.78)"}:null;
     return <button key={m.id} className={homeAnim?"mc pm-card-in":"mc"} onClick={()=>goMod(m.id)} style={{
       "--c":m.col,...(homeAnim?{animationDelay:`${Math.min(i,8)*45}ms`}:null),
-      ...(span?{gridColumn:span}:null),
       background:`linear-gradient(145deg,${m.col}24,${m.col}0a 55%,#0d0d1a)`,
-      border:`1px solid ${m.col}45`,borderTop:`1px solid ${m.col}70`,
-      borderRadius:16,padding:large?"20px 20px 18px":"18px 16px 16px",textAlign:"left",
-      cursor:"pointer",display:"flex",flexDirection:"column",width:"100%",height:"100%",boxSizing:"border-box",
-      WebkitTapHighlightColor:"transparent",
-      boxShadow:`0 4px 24px ${m.col}18`,
+      border:`1px solid ${m.col}45`,borderTop:`1px solid ${m.col}70`,boxShadow:`0 4px 24px ${m.col}18`,borderRadius:16,padding:large?"20px 20px 18px":"18px 18px 16px",textAlign:"left",
+      cursor:"pointer",display:"flex",flexDirection:"column",width:"100%",height:"100%",minHeight:large?212:178,boxSizing:"border-box",
+      WebkitTapHighlightColor:"transparent",color:"#fff",
     }}>
-      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
         <div className="mc-ic" style={{width:large?46:40,height:large?46:40,borderRadius:12,background:`linear-gradient(135deg,${m.col}45,${m.col}20)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:large?23:20,flexShrink:0}}>{m.icon}</div>
-        <div style={{color:"#fff",fontWeight:800,fontSize:large?17:15,lineHeight:1.25}}>{t[m.tk]}</div>
       </div>
-      <div style={{color:"rgba(255,255,255,0.55)",fontSize:large?13:12,lineHeight:1.5}}>{t[m.sk]}</div>
-      {live&&<div style={{color:live.bad?C.red:C.grn,fontSize:12.5,fontWeight:700,lineHeight:1.5,marginTop:8}}>{live.text}</div>}
-      {extra&&<div style={{color:"rgba(255,255,255,0.8)",fontSize:12.5,fontWeight:700,marginTop:8}}>{extra}</div>}
-      {tags.length>0&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:12}}>
-        {tags.map(tg=><span key={tg} style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.6)",background:"rgba(255,255,255,0.05)",border:`1px solid ${m.col}35`,borderRadius:20,padding:"3px 9px"}}>{tg}</span>)}
-      </div>}
-      <div style={{marginTop:"auto",paddingTop:14,color:m.col,fontSize:13,fontWeight:700}}>{t.open} <span className="mc-arr">→</span></div>
+      <div style={{fontWeight:700,fontSize:large?16.5:15.5,lineHeight:1.3,marginTop:large?18:16,letterSpacing:"-0.1px"}}>{t[m.tk]}</div>
+      <div style={{color:"rgba(255,255,255,0.5)",fontSize:13,lineHeight:1.5,marginTop:5,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{t[m.sk]}</div>
+      {foot&&<div style={{marginTop:10,display:"flex",alignItems:"center",gap:7,color:foot.c,fontSize:12.5,fontWeight:600,minWidth:0}}>
+        <span style={{width:6,height:6,borderRadius:3,background:foot.c,flexShrink:0}}/><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{foot.t}</span></div>}
+      <div style={{marginTop:"auto",paddingTop:16,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,borderTop:`1px solid ${m.col}26`,width:"100%",boxSizing:"border-box"}}>
+        <span style={{flex:1,color:"rgba(255,255,255,0.5)",fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:0,paddingTop:12}}>{((MOD_TAGS[m.id]||{})[lang]||[]).join(" · ")}</span>
+        <span style={{color:m.col,fontSize:13,fontWeight:700,whiteSpace:"nowrap",paddingTop:12,marginLeft:"auto",flexShrink:0}}>{t.open} <span className="mc-arr">→</span></span>
+      </div>
     </button>;
   };
 
-  const GroupLabel=({g,mb})=><div style={{fontSize:11,fontWeight:700,letterSpacing:"1.5px",textTransform:"uppercase",color:"rgba(255,255,255,0.35)",marginBottom:mb}}>{t[g.tk]}</div>;
+  // Investigate: široka traka – pitanja-prečice i dugme vode u modul (kao kartica)
+  const InvBanner=({narrow})=>{
+    const m=MODS.find(x=>x.id===16); const sr=lang==="sr";
+    const invS=INV.state;
+    const st=invS&&invS.status==="running"?{t:sr?`Istraga u toku: ${invS.client.name}…`:`Investigating ${invS.client.name}…`,c:C.grn}:invS&&invS.status==="done"?{t:sr?`Rezultat čeka: ${invS.client.name}`:`Result ready: ${invS.client.name}`,c:C.grn}:null;
+    const go=(qtype)=>{ if(qtype) INV.last={...(INV.last||{}),qtype}; goMod(16); };
+    const homeAnim=Date.now()-PM_HOME.t0<1200;
+    return <div className={homeAnim?"pm-card-in":undefined} style={{...(homeAnim?{animationDelay:"180ms"}:null),background:`linear-gradient(120deg,${m.col}2a,${m.col}0d 50%,#0d0d1a)`,border:`1px solid ${m.col}45`,borderTop:`1px solid ${m.col}70`,boxShadow:`0 4px 24px ${m.col}18`,borderRadius:18,padding:narrow?"18px":"22px 26px",display:"flex",flexDirection:narrow?"column":"row",alignItems:narrow?"stretch":"center",gap:narrow?14:22}}>
+      <div style={{display:"flex",alignItems:"center",gap:18,flex:1,minWidth:0}}>
+        <div style={{width:narrow?48:58,height:narrow?48:58,borderRadius:14,background:`linear-gradient(135deg,${m.col}45,${m.col}20)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:narrow?24:28,flexShrink:0}}>{m.icon}</div>
+        <div style={{minWidth:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+            <span style={{fontSize:narrow?17:19,fontWeight:800,color:"#fff"}}>{t.m16t}</span>
+            <span style={{fontSize:10.5,fontWeight:800,letterSpacing:"1px",color:m.col,border:`1px solid ${m.col}55`,borderRadius:6,padding:"2px 7px"}}>{sr?"ISTRAGA":"INVESTIGATION"}</span>
+          </div>
+          <div style={{color:"rgba(255,255,255,0.55)",fontSize:13.5,lineHeight:1.5,marginTop:4}}>{t.m16s}</div>
+          {st&&<div style={{display:"flex",alignItems:"center",gap:7,color:st.c,fontSize:12.5,fontWeight:600,marginTop:6}}><span style={{width:6,height:6,borderRadius:3,background:st.c}}/>{st.t}</div>}
+        </div>
+      </div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+        {INV_QTYPES.slice(0,3).map(q=><button key={q.k} onClick={()=>go(q.k)} className="pm-lift" style={{padding:"8px 14px",borderRadius:20,border:`1px solid ${m.col}45`,background:"rgba(255,255,255,0.04)",color:"rgba(255,255,255,0.8)",fontSize:12.5,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>{sr?q.sr:q.en}</button>)}
+      </div>
+      <button onClick={()=>go()} style={{padding:"13px 22px",borderRadius:12,border:"none",background:"linear-gradient(135deg,#818CF8,#6366F1)",color:"#fff",fontSize:14,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>{st&&invS.status!=="error"?(sr?"Otvori istragu →":"Open investigation →"):(sr?"Pokreni istragu →":"Start investigation →")}</button>
+    </div>;
+  };
+
+  const GroupLabel=({g,mb})=><div style={{fontSize:14,fontWeight:600,color:"rgba(255,255,255,0.6)",marginBottom:mb}}>{t[g.tk]}</div>;
 
   // ── MOBILE ─────────────────────────────────────────────────────────────────
   if(!isDesktop) return <div style={{minHeight:"100vh",background:C.bg,fontFamily:"'Plus Jakarta Sans',sans-serif",color:C.txt}}>
@@ -5931,8 +5935,9 @@ function MainApp({account}){
           const list=VISIBLE_MODS.filter(m=>m.grp===g.k);
           return <div key={g.k} style={{padding:"0 12px",marginBottom:22}}>
             <div style={{paddingLeft:4}}><GroupLabel g={g} mb={10}/></div>
-            <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr)",gap:g.k==="an"?12:8}}>
-              {list.map((m,i)=>ModCard({m,i,large:g.k==="an",compact:g.k==="dw"}))}
+            <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr)",gap:10}}>
+              {list.filter(m=>!m.banner).map((m,i)=>ModCard({m,i:g.k==="an"?i:i+4,large:false}))}
+              {g.k==="an"&&<InvBanner narrow/>}
             </div>
           </div>;
         })}
@@ -5985,7 +5990,7 @@ function MainApp({account}){
       <div style={{width:270,background:"rgba(255,255,255,0.015)",borderRight:`1px solid ${C.brd}`,padding:"28px 14px",flexShrink:0,overflowY:"auto",display:"flex",flexDirection:"column",scrollbarWidth:"none",msOverflowStyle:"none"}}>
         <div style={{flex:1}}>
           {MOD_GROUPS.map(g=><div key={g.k} style={{marginBottom:14}}>
-          <div style={{fontSize:10,fontWeight:700,letterSpacing:"1.5px",textTransform:"uppercase",color:"rgba(255,255,255,0.25)",margin:"0 0 8px",paddingLeft:10}}>{t[g.tk]}</div>
+          <div style={{fontSize:12,fontWeight:600,color:"rgba(255,255,255,0.38)",margin:"0 0 8px",paddingLeft:10}}>{t[g.tk]}</div>
           {VISIBLE_MODS.filter(m=>m.grp===g.k).map((m,i)=>(
             <button key={m.id} onClick={()=>goMod(m.id)} style={{
               width:"100%",padding:"10px 12px",borderRadius:10,textAlign:"left",cursor:"pointer",
@@ -6023,9 +6028,10 @@ function MainApp({account}){
             const list=VISIBLE_MODS.filter(m=>m.grp===g.k);
             return <div key={g.k} style={{marginBottom:34}}>
               <GroupLabel g={g} mb={14}/>
-              <div style={{display:"grid",gridTemplateColumns:g.k==="dw"?`repeat(${Math.min(list.length,3)},minmax(0,1fr))`:`repeat(${gridCols(list.length)},minmax(0,1fr))`,gap:g.k==="dw"?14:18,alignItems:"stretch"}}>
-                {list.map((m,i)=>ModCard({m,i,large:g.k==="an",compact:g.k==="dw",span:g.k==="an"?gridSpan(list.length,i):undefined}))}
+              <div style={{display:"grid",gridTemplateColumns:`repeat(${gridCols(list.filter(m=>!m.banner).length)},minmax(0,1fr))`,gap:16,alignItems:"stretch"}}>
+                {list.filter(m=>!m.banner).map((m,i)=>ModCard({m,i:g.k==="an"?i:i+4,large:g.k==="an"}))}
               </div>
+              {g.k==="an"&&<div style={{marginTop:16}}><InvBanner/></div>}
             </div>;
           })}
         </div>}
