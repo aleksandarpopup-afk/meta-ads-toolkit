@@ -36,6 +36,52 @@ function useIsMobile(){ const [m,setM]=useState(window.innerWidth<520); useEffec
 
 // ── UI ATOMS ────────────────────────────────────────────────────────────────
 const BrandName=()=><span>Perf<span style={{background:"linear-gradient(90deg,#00E5FF,#A855F7)",WebkitBackgroundClip:"text",backgroundClip:"text",WebkitTextFillColor:"transparent",color:"#00E5FF"}}>Mind</span></span>;
+
+// ── UI ANIMACIJE (samo izgled; ne utiču na podatke) ─────────────────────────
+// Stilovi se ubacuju jednom. Ako korisnik u sistemu ima "smanji animacije", sve se prikazuje odmah.
+if(typeof document!=="undefined"&&!document.getElementById("pm-ui-css")){
+  const st=document.createElement("style"); st.id="pm-ui-css";
+  st.textContent=`@keyframes pmShimmer{0%{background-position:-480px 0}100%{background-position:480px 0}}
+.pm-sk{background:linear-gradient(90deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.10) 50%,rgba(255,255,255,0.04) 100%);background-size:960px 100%;animation:pmShimmer 1.4s linear infinite;border-radius:8px}
+@keyframes pmIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.pm-in{animation:pmIn .45s cubic-bezier(.2,.7,.2,1) both}
+.pm-lift{transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
+.pm-lift:hover{transform:translateY(-2px);border-color:rgba(165,180,252,0.35)!important;box-shadow:0 6px 18px rgba(0,0,0,0.25)}
+@media (prefers-reduced-motion: reduce){.pm-sk,.pm-in{animation:none}.pm-lift,.pm-lift:hover{transition:none;transform:none}}`;
+  document.head.appendChild(st);
+}
+const PM_REDUCED=typeof window!=="undefined"&&!!window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+// Poslednja prikazana vrednost svakog animiranog broja – da bi se pri promeni perioda brojalo od stare do nove vrednosti
+const PM_LAST=new Map();
+function pmAnimReset(prefix){ for(const k of [...PM_LAST.keys()]) if(k.startsWith(prefix)) PM_LAST.delete(k); }
+// Broj koji se "odbrojava" do tačne vrednosti (~0,7 s). Krajnji prikaz je uvek tačna vrednost.
+function AnimNum({value,format,k,dur=700}){
+  const target=Number(value);
+  const ok=isFinite(target);
+  const [v,setV]=useState(()=>!ok||PM_REDUCED?target:(PM_LAST.has(k)?PM_LAST.get(k):0));
+  useEffect(()=>{
+    if(!ok||PM_REDUCED){ setV(target); PM_LAST.set(k,target); return; }
+    const from=PM_LAST.has(k)?PM_LAST.get(k):0;
+    if(from===target){ setV(target); return; }
+    let raf; const t0=performance.now(); let cur=from;
+    const step=now=>{ const p=Math.min(1,(now-t0)/dur); const e=1-Math.pow(1-p,3); cur=from+(target-from)*e; setV(p<1?cur:target); if(p<1) raf=requestAnimationFrame(step); else PM_LAST.set(k,target); };
+    raf=requestAnimationFrame(step);
+    return()=>{ cancelAnimationFrame(raf); PM_LAST.set(k,target); };
+  },[target,k]);
+  return <>{format?format(v):v}</>;
+}
+// Skeleton (siv obris koji svetluca dok se podaci učitavaju)
+const Sk=({w="100%",h=14,r=8,style})=><div className="pm-sk" style={{width:w,height:h,borderRadius:r,...style}}/>;
+function SkCards({n=3,min=140}){ return <div style={{display:"grid",gridTemplateColumns:`repeat(auto-fit,minmax(${min}px,1fr))`,gap:10,marginBottom:20}}>
+  {Array.from({length:n},(_,i)=><div key={i} style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px"}}><Sk w="55%" h={10} style={{marginBottom:10}}/><Sk w="75%" h={20}/></div>)}
+</div>; }
+function SkTable({rows=8,cols=6}){ return <div style={{marginBottom:16}}>
+  <Sk h={36} r={10} style={{marginBottom:14}}/>
+  {Array.from({length:rows},(_,i)=><div key={i} style={{display:"grid",gridTemplateColumns:`2.4fr repeat(${cols-1},1fr)`,gap:12,padding:"10px 4px",borderTop:`1px solid ${C.brd}`}}>
+    {Array.from({length:cols},(_,j)=><Sk key={j} h={12} w={j===0?`${60+((i*17)%30)}%`:"70%"} style={j===0?null:{marginLeft:"auto"}}/>)}
+  </div>)}
+</div>; }
+
 const Lbl=({c})=><div style={{color:C.mut,fontSize:11,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:8}}>{c}</div>;
 const TIn=({v,ch,ph})=><input value={v} onChange={e=>ch(e.target.value)} placeholder={ph} style={{width:"100%",padding:"13px 14px",background:"rgba(255,255,255,0.06)",border:`1px solid ${C.brd}`,borderRadius:10,color:C.txt,fontSize:16,outline:"none",boxSizing:"border-box"}} onFocus={e=>e.target.style.borderColor="rgba(99,102,241,0.5)"} onBlur={e=>e.target.style.borderColor=C.brd}/>;
 
@@ -3386,6 +3432,7 @@ function CiKeywords({sr,mob,clientId,qs}){
 
 function CampaignsMod({t,lang,goMod}){
   const sr=lang==="sr";
+  useEffect(()=>{ pmAnimReset("ci:"); },[]); // pri svakom ulasku u modul brojevi se odbrojavaju od 0
   const [clients,setClients]=useState([]);
   const [clientsLoading,setClientsLoading]=useState(true);
   const [selectedClient,setSelectedClient]=useState(null);
@@ -3683,10 +3730,7 @@ function CampaignsMod({t,lang,goMod}){
     </div>
 
     {mode==="byCampaign"&&<>
-      {loading&&<div style={{textAlign:"center",padding:"40px 0"}}>
-        <div style={{fontSize:36,marginBottom:16}}>📢</div>
-        <div style={{color:C.acl,fontWeight:700,fontSize:15}}>{sr?"Učitavam podatke...":"Loading data..."}</div>
-      </div>}
+      {loading&&<div aria-busy="true" aria-label={sr?"Učitavam podatke":"Loading data"}><SkCards n={3}/><SkTable rows={8} cols={8}/></div>}
 
       {err==="no_gads"&&!loading&&<div style={{background:"rgba(0,212,255,0.08)",border:"1px solid rgba(0,212,255,0.2)",borderRadius:12,padding:"16px",color:C.txt,fontSize:13,marginBottom:16}}>
         🔗 {sr?"Google Ads nije povezan za ovog klijenta. Idi u":"Google Ads is not connected for this client. Go to"} <b>Clients</b> {sr?"da ga povežeš.":"to connect it."}
@@ -3710,19 +3754,19 @@ function CampaignsMod({t,lang,goMod}){
         </div>}
 
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:20}}>
-          <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px"}}>
+          <div className="pm-in pm-lift" style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px"}}>
             <div style={{color:C.mut,fontSize:11,marginBottom:4}}>{sr?"Ukupan spend":"Total spend"}</div>
-            <div style={{color:C.txt,fontSize:18,fontWeight:800}}>{fmtMoney(data.totalSpendEUR,"EUR")}</div>
+            <div style={{color:C.txt,fontSize:18,fontWeight:800}}><AnimNum k={`ci:${selectedClient.id}:spend`} value={data.totalSpendEUR} format={v=>fmtMoney(v,"EUR")}/></div>
             {data.showSpendNative&&<div style={{color:C.mut,fontSize:11,marginTop:2}}>≈ {fmtMoney(data.totalSpend,data.gadsCurrency)}</div>}
           </div>
-          <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px"}}>
+          <div className="pm-in pm-lift" style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px",animationDelay:"60ms"}}>
             <div style={{color:C.mut,fontSize:11,marginBottom:4}}>{sr?"Ukupan prihod":"Total revenue"}</div>
-            <div style={{color:C.grn,fontSize:18,fontWeight:800}}>{fmtMoney(data.totalRevenueEUR,"EUR")}</div>
+            <div style={{color:C.grn,fontSize:18,fontWeight:800}}><AnimNum k={`ci:${selectedClient.id}:rev`} value={data.totalRevenueEUR} format={v=>fmtMoney(v,"EUR")}/></div>
             {data.showRevenueNative&&<div style={{color:C.mut,fontSize:11,marginTop:2}}>≈ {fmtMoney(data.totalRevenue,data.currency)}</div>}
           </div>
-          <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px"}}>
+          <div className="pm-in pm-lift" style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px",animationDelay:"120ms"}}>
             <div style={{color:C.mut,fontSize:11,marginBottom:4}}>ROAS</div>
-            <div style={{color:C.acl,fontSize:18,fontWeight:800}}>{data.totalRoas.toFixed(2)}x</div>
+            <div style={{color:C.acl,fontSize:18,fontWeight:800}}><AnimNum k={`ci:${selectedClient.id}:roas`} value={data.totalRoas} format={v=>v.toFixed(2)+"x"}/></div>
           </div>
         </div>
 
@@ -3730,7 +3774,7 @@ function CampaignsMod({t,lang,goMod}){
 
         {data.campaigns.length>0&&<input value={campaignSearch} onChange={e=>setCampaignSearch(e.target.value)} placeholder={sr?"🔍 Pretraži kampanju...":"🔍 Search campaign..."} style={{width:"100%",padding:"9px 12px",borderRadius:10,border:`1px solid ${C.brd}`,background:"rgba(255,255,255,0.03)",color:C.txt,fontSize:13,marginBottom:10,boxSizing:"border-box"}}/>}
 
-        {data.campaigns.length>0&&<div style={{overflowX:"auto",marginBottom:16}}>
+        {data.campaigns.length>0&&<div className="pm-in" style={{overflowX:"auto",marginBottom:16,animationDelay:"160ms"}}>
           <table style={{width:"100%",fontSize:12,borderCollapse:"collapse"}}>
             <thead>
               <tr style={{color:C.mut,textAlign:"left"}}>
@@ -3745,7 +3789,7 @@ function CampaignsMod({t,lang,goMod}){
               </tr>
             </thead>
             <tbody>
-              {filteredCampaigns().map((c,i)=><tr key={i} onClick={()=>openCampaign(c)} style={{borderTop:`1px solid ${C.brd}`,cursor:"pointer"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.02)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+              {filteredCampaigns().map((c,i)=><tr key={i} className={i<12?"pm-in":undefined} onClick={()=>openCampaign(c)} style={{borderTop:`1px solid ${C.brd}`,cursor:"pointer",...(i<12?{animationDelay:`${180+i*30}ms`}:null)}} onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.02)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
                 <td style={{padding:"8px 4px",color:C.acl,textDecoration:"underline"}}>{c.campaign_name} <span style={{color:C.mut}}>({c.campaign_id})</span>{c.no_spend_in_period&&<span style={{display:"inline-block",marginLeft:6,color:C.yel,fontSize:10,textDecoration:"none"}}>{sr?"bez potrošnje u periodu":"no spend in period"}</span>}</td>
                 <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{c.clicks.toLocaleString()}</td>
                 <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{c.impressions.toLocaleString()}</td>
