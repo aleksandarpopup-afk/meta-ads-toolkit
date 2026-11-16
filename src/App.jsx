@@ -4806,7 +4806,7 @@ const MOD_TAGS={
 const MOD_WIDTH={14:1320,12:1320,15:1320,2:1320,10:1320,9:1320,13:1040,16:1320,1:920};
 const MOD_GROUPS=[{k:"an",tk:"grpAn"},{k:"dw",tk:"grpDw"}];
 const gridCols=n=>n<=4?n:3;
-const CARD_CSS=`.mc{transition:transform .18s ease,border-color .18s ease}
+const CARD_CSS=`.mc{will-change:transform;transform:translateZ(0);transition:transform .18s ease,border-color .18s ease}
 .mc:hover{transform:translateY(-4px);border-color:var(--c)!important}
 .mc .mc-arr{display:inline-block;transition:transform .2s ease}
 .mc:hover .mc-arr{transform:translateX(4px)}
