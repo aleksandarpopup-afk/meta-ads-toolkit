@@ -5569,16 +5569,15 @@ function BeyondRoasMod({t,lang}){
 const MODS=[
   {id:14,icon:"📢",col:"#84CC16",tk:"m14t",sk:"m14s",grp:"an"},
   {id:12,icon:"🛍️",col:"#F43F5E",tk:"m12t",sk:"m12s",grp:"an"},
-  {id:13,icon:"💬",col:"#22D3EE",tk:"m13t",sk:"m13s",grp:"an"},
+  {id:17,icon:"🪙",col:"#F59E0B",tk:"m17t",sk:"m17s",grp:"an"},
   {id:16,icon:"🔎",col:"#818CF8",tk:"m16t",sk:"m16s",grp:"an"},
+  {id:13,icon:"💬",col:"#22D3EE",tk:"m13t",sk:"m13s",grp:"an"},
   {id:2,icon:"💰",col:"#10B981",tk:"m2t",sk:"m2s",grp:"dw"},
   {id:15,icon:"📑",col:"#F59E0B",tk:"m15t",sk:"m15s",grp:"dw"},
   {id:10,icon:"👥",col:"#A855F7",tk:"m10t",sk:"m10s",grp:"dw"},
-  {id:1,icon:"📊",col:"#6366F1",tk:"m1t",sk:"m1s",grp:"dw"},
+  {id:1,icon:"📊",col:"#6366F1",tk:"m1t",sk:"m1s",grp:"dw",hidden:true},
   // mod=9 (stari bookmarklet/ekstenzija) vodi na uvoz u Report Studio; ne prikazuje se u meniju
   {id:9,icon:"📑",col:"#F59E0B",tk:"m15t",sk:"m15s",grp:"dw",hidden:true},
-  // Beyond ROAS – u izradi; otvara se samo preko adrese ?mod=17 dok se ne završi
-  {id:17,icon:"🪙",col:"#F59E0B",tk:"m17t",sk:"m17s",grp:"an",hidden:true},
 ];
 const VISIBLE_MODS=MODS.filter(m=>!m.hidden);
 // Male oznake na karticama pocetne strane (sta alat koristi / primer)
@@ -5587,6 +5586,7 @@ const MOD_TAGS={
   12:{sr:["Proizvodi","Korpe","Trendovi"],en:["Products","Carts","Trends"]},
   13:{sr:["„Koji proizvod raste?“"],en:["“Which product is growing?”"]},
   16:{sr:["Prihod","ROAS","Uzroci"],en:["Revenue","ROAS","Causes"]},
+  17:{sr:["Marža","Profit","ROAS na nuli"],en:["Margin","Profit","Break-even ROAS"]},
   2:{sr:["Meta","Google Ads"],en:["Meta","Google Ads"]},
   15:{sr:["Google Ads","Prodaja po kampanjama","PDF"],en:["Google Ads","Sales by campaign","PDF"]},
   10:{sr:["GA4","Google Ads"],en:["GA4","Google Ads"]},
@@ -5596,7 +5596,9 @@ const MOD_TAGS={
 // chat i forme ostaju uze da bi se lako citali
 const MOD_WIDTH={17:1320,14:1320,12:1320,15:1320,2:1320,10:1320,9:1320,13:1040,16:1320,1:920};
 const MOD_GROUPS=[{k:"an",tk:"grpAn"},{k:"dw",tk:"grpDw"}];
-const gridCols=n=>n<=4?n:3;
+const gridCols=n=>n===5?6:n<=4?n:3;
+// 5 analitičkih kartica: gore 3, dole 2 šire (mreža od 6 kolona)
+const gridSpan=(n,i)=>n===5?(i<3?"span 2":"span 3"):undefined;
 const CARD_CSS=`.mc{will-change:transform;transform:translateZ(0);transition:transform .18s ease,border-color .18s ease}
 .mc:hover{transform:translateY(-4px);border-color:var(--c)!important}
 .mc .mc-arr{display:inline-block;transition:transform .2s ease}
@@ -5848,15 +5850,35 @@ function MainApp({account}){
     </button>)}
   </div>;
 
-  const ModCard=({m,i,large})=>{
+  const ModCard=({m,i,large,compact,span})=>{
     const tags=(MOD_TAGS[m.id]||{})[lang]||[];
     const invS=m.id===16?INV.state:null;
     const live=m.id===2&&home?.bp?home.bp:invS&&invS.status==="running"?{text:lang==="sr"?`Istraga u toku: ${invS.client.name}…`:`Investigating ${invS.client.name}…`,bad:false}:invS&&invS.status==="done"?{text:lang==="sr"?`Rezultat čeka: ${invS.client.name}`:`Result ready: ${invS.client.name}`,bad:false}:null;
     const extra=m.id===10&&home?.clients!=null?`${home.clients} ${lang==="sr"?(home.clients===1?"klijent":"klijenata"):(home.clients===1?"client":"clients")}`:null;
     // Animacija samo prvih ~1,2 s posle otvaranja početne; zakašnjenje je stalno (ne menja se pri ponovnom iscrtavanju)
     const homeAnim=Date.now()-PM_HOME.t0<1200;
+    // Svakodnevni rad: uska traka (ikona, ime, jedan red), bez oznaka i "Otvori"
+    if(compact){
+      const sub=live?live.text:extra||t[m.sk];
+      const subCol=live?(live.bad?C.red:C.grn):extra?"rgba(255,255,255,0.8)":"rgba(255,255,255,0.5)";
+      return <button key={m.id} className={homeAnim?"mc pm-card-in":"mc"} onClick={()=>goMod(m.id)} style={{
+        "--c":m.col,...(homeAnim?{animationDelay:`${Math.min(i+5,10)*45}ms`}:null),
+        background:`linear-gradient(145deg,${m.col}1c,${m.col}08 60%,#0d0d1a)`,
+        border:`1px solid ${m.col}38`,borderRadius:14,padding:"12px 14px",textAlign:"left",
+        cursor:"pointer",display:"flex",alignItems:"center",gap:12,width:"100%",boxSizing:"border-box",
+        WebkitTapHighlightColor:"transparent",
+      }}>
+        <div className="mc-ic" style={{width:36,height:36,borderRadius:10,background:`linear-gradient(135deg,${m.col}45,${m.col}20)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{m.icon}</div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{color:"#fff",fontWeight:800,fontSize:14.5,lineHeight:1.3}}>{t[m.tk]}</div>
+          <div style={{color:subCol,fontSize:12,fontWeight:live||extra?700:500,lineHeight:1.4,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{sub}</div>
+        </div>
+        <span className="mc-arr" style={{color:m.col,fontSize:15,fontWeight:700,flexShrink:0}}>→</span>
+      </button>;
+    }
     return <button key={m.id} className={homeAnim?"mc pm-card-in":"mc"} onClick={()=>goMod(m.id)} style={{
       "--c":m.col,...(homeAnim?{animationDelay:`${Math.min(i,8)*45}ms`}:null),
+      ...(span?{gridColumn:span}:null),
       background:`linear-gradient(145deg,${m.col}24,${m.col}0a 55%,#0d0d1a)`,
       border:`1px solid ${m.col}45`,borderTop:`1px solid ${m.col}70`,
       borderRadius:16,padding:large?"20px 20px 18px":"18px 16px 16px",textAlign:"left",
@@ -5909,8 +5931,8 @@ function MainApp({account}){
           const list=VISIBLE_MODS.filter(m=>m.grp===g.k);
           return <div key={g.k} style={{padding:"0 12px",marginBottom:22}}>
             <div style={{paddingLeft:4}}><GroupLabel g={g} mb={10}/></div>
-            <div style={{display:"grid",gridTemplateColumns:g.k==="an"?"1fr":"1fr 1fr",gap:12}}>
-              {list.map((m,i)=>ModCard({m,i,large:g.k==="an"}))}
+            <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr)",gap:g.k==="an"?12:8}}>
+              {list.map((m,i)=>ModCard({m,i,large:g.k==="an",compact:g.k==="dw"}))}
             </div>
           </div>;
         })}
@@ -6001,8 +6023,8 @@ function MainApp({account}){
             const list=VISIBLE_MODS.filter(m=>m.grp===g.k);
             return <div key={g.k} style={{marginBottom:34}}>
               <GroupLabel g={g} mb={14}/>
-              <div style={{display:"grid",gridTemplateColumns:`repeat(${gridCols(list.length)},minmax(0,1fr))`,gap:18,alignItems:"stretch"}}>
-                {list.map((m,i)=>ModCard({m,i,large:g.k==="an"}))}
+              <div style={{display:"grid",gridTemplateColumns:g.k==="dw"?`repeat(${Math.min(list.length,3)},minmax(0,1fr))`:`repeat(${gridCols(list.length)},minmax(0,1fr))`,gap:g.k==="dw"?14:18,alignItems:"stretch"}}>
+                {list.map((m,i)=>ModCard({m,i,large:g.k==="an",compact:g.k==="dw",span:g.k==="an"?gridSpan(list.length,i):undefined}))}
               </div>
             </div>;
           })}
