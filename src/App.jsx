@@ -4283,7 +4283,7 @@ function InvestigateMod({t,lang}){
     const safe=x=>String(x||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/đ/g,"dj").replace(/Đ/g,"Dj").replace(/[^A-Za-z0-9_-]+/g,"_").replace(/^_+|_+$/g,"");
     try{
       const pm=await rsLoadPdfMake();
-      const doc=invPdfDoc({inv,R,stats,ai,evidence,findings:R.findings||[],failedChecks,sr,pctTxt,periodTxt});
+      const doc=invPdfDoc({inv,R,stats,ai,evidence,findings:R.findings||[],failedChecks,sr,pctTxt,periodTxt,toEur:v=>useEur?v*ef:v,curSym:useEur?"€":cur});
       pm.createPdf(doc).download(`${safe(inv.client.name)||"klijent"}_istraga_${inv.period?inv.period.curS+"_"+inv.period.curE:"rezultat"}.pdf`);
     }catch(e){ alert(sr?"PDF nije napravljen. Proveri internet vezu i pokušaj ponovo.":"The PDF could not be created. Check your connection and try again."); }
     setPdfBusy(false);
@@ -4553,8 +4553,103 @@ function invLaunch(goMod,{client,period,customFrom,customTo,qtype,question,lang,
 }
 const invBtnStyle={padding:"6px 12px",borderRadius:8,border:"1px solid rgba(129,140,248,0.5)",background:"rgba(129,140,248,0.12)",color:"#C7D2FE",fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"};
 
+// Grafikoni za PDF istrage (pdfmake "canvas" – oblici; sav tekst je pravi tekst sa našim slovima)
+function invPdfViz({R,sr,toEur,curSym,forClient}){
+  const V=R.viz||{}; const T=R.totals; const loc=sr?"sr-RS":"en-GB";
+  const out=[];
+  const h2=t=>({text:t.toUpperCase(),fontSize:9.5,bold:true,color:"#4338ca",characterSpacing:0.8,margin:[0,14,0,6]});
+  const k=(v,sign)=>{ const e=toEur(v); const a=Math.abs(e); const n=a>=1e6?(a/1e6).toLocaleString(loc,{maximumFractionDigits:1})+"M":a>=1e3?(a/1e3).toLocaleString(loc,{maximumFractionDigits:1})+"k":Math.round(a).toLocaleString(loc); return `${sign?(e>0?"+":e<0?"−":""):(e<0?"−":"")}${n} ${curSym}`; };
+  const pc=v=>{ if(v==null||!isFinite(v)) return sr?"novo":"new"; const a=Math.abs(v); return (v>0?"+":v<0?"−":"")+(a<10&&a>0?(Math.round(a*10)/10).toLocaleString(loc):Math.round(a).toLocaleString(loc))+"%"; };
+  const GRN="#059669", RED="#dc2626", IND="#6366f1", GRY="#9ca3af", YEL="#d97706";
+  const colr=v=>v>0?GRN:v<0?RED:"#6b7280";
+  const panel=(stack)=>({table:{widths:["*"],body:[[{stack,margin:[8,6,8,6]}]]},layout:{hLineWidth:()=>0.6,vLineWidth:()=>0.6,hLineColor:()=>"#e5e7eb",vLineColor:()=>"#e5e7eb"}});
+  const cap=(t)=>({text:t,fontSize:8.5,bold:true,color:"#4338ca",margin:[0,0,0,5]});
+
+  // Most od prihoda
+  let wf=null;
+  if(T&&R.decomp){
+    const steps=[[sr?"Posete":"Traffic",R.decomp.traffic],[sr?"Konverzija":"Conversion",R.decomp.conversion],[sr?"Korpa":"Basket",R.decomp.basket]];
+    const run=[T.prev.revenue]; steps.forEach(([,v])=>run.push(run[run.length-1]+v));
+    const all=[...run,T.cur.revenue]; const mx=Math.max(...all), mn=Math.min(...all);
+    const base=Math.max(0,mn-(mx-mn)*1.6); const W=235,H=95; const y=v=>H-(v-base)/((mx-base)||1)*H;
+    const cw=W/5, bw=cw*0.62, x=i=>i*cw+(cw-bw)/2;
+    const shapes=[{type:"line",x1:0,y1:H,x2:W,y2:H,lineWidth:0.5,lineColor:"#e5e7eb"},
+      {type:"rect",x:x(0),y:y(run[0]),w:bw,h:H-y(run[0]),color:"#c7d2fe"}];
+    steps.forEach(([,v],i)=>{ const a=run[i],b=run[i+1]; shapes.push({type:"rect",x:x(i+1),y:Math.min(y(a),y(b)),w:bw,h:Math.max(1.5,Math.abs(y(a)-y(b))),color:v>=0?"#34d399":"#f87171"}); });
+    shapes.push({type:"rect",x:x(4),y:y(T.cur.revenue),w:bw,h:H-y(T.cur.revenue),color:IND});
+    const labels=[[sr?"Pre":"Before",k(run[0]),"#111827"],...steps.map(([n,v])=>[n,k(v,true),colr(v)]),[sr?"Sada":"Now",k(T.cur.revenue),"#111827"]];
+    wf=panel([cap(sr?"Odakle dolazi promena prihoda":"Where the revenue change comes from"),{canvas:shapes},
+      {columns:labels.map(([n,v,c])=>({width:cw,stack:[{text:n,fontSize:7,color:"#6b7280",alignment:"center"},{text:v,fontSize:7.5,bold:true,color:c,alignment:"center"}]})),columnGap:0,margin:[0,3,0,0]}]);
+  }
+  // Kretanje po danima
+  let dy=null; const D=V.daily;
+  if(D&&D.cur&&D.cur.length>=2){
+    const n=D.cur.length, W=245, H=95; const mx=Math.max(1,...D.cur,...D.prev,...(D.band?D.band.max:[]));
+    const xs=i=>i*W/(n-1), ys=v=>H-v/mx*H;
+    const shapes=[{type:"line",x1:0,y1:H,x2:W,y2:H,lineWidth:0.5,lineColor:"#e5e7eb"}];
+    if(D.band) shapes.push({type:"polyline",closePath:true,color:"#eef2ff",lineWidth:0.1,lineColor:"#eef2ff",points:[...D.band.max.map((v,i)=>({x:xs(i),y:ys(v)})),...D.band.min.map((v,i)=>({x:xs(n-1-i),y:ys(D.band.min[n-1-i])}))]});
+    shapes.push({type:"polyline",lineWidth:1.2,lineColor:GRY,dash:{length:3},points:D.prev.map((v,i)=>({x:xs(i),y:ys(v)}))});
+    shapes.push({type:"polyline",lineWidth:2,lineColor:IND,points:D.cur.map((v,i)=>({x:xs(i),y:ys(v)}))});
+    const ci=D.changeStart?D.dates.indexOf(D.changeStart):-1;
+    if(ci>=0) shapes.push({type:"line",x1:xs(ci),y1:0,x2:xs(ci),y2:H,lineWidth:1,lineColor:YEL,dash:{length:2}});
+    const d=s=>`${+s.slice(8,10)}.${+s.slice(5,7)}.`;
+    const tot=D.cur.reduce((a,b)=>a+b,0); const inBand=D.band&&tot>=D.band.sumMin&&tot<=D.band.sumMax;
+    dy=panel([cap(sr?"Kretanje po danima":"Day by day"),{canvas:shapes},
+      {columns:[{text:d(D.dates[0]),fontSize:7,color:"#6b7280"},{text:d(D.dates[n-1]),fontSize:7,color:"#6b7280",alignment:"right"}],margin:[0,2,0,2]},
+      {text:[{text:sr?"ovaj period":"this period",color:IND,bold:true},"  ·  ",{text:sr?"prethodni (isprekidano)":"previous (dashed)",color:"#6b7280"},...(D.band?["  ·  ",{text:sr?"svetlo polje = uobičajeno":"light area = usual range",color:"#818cf8"}]:[]),...(D.changeStart?["  ·  ",{text:`${sr?"promena od":"change from"} ${d(D.changeStart)}`,color:YEL,bold:true}]:[])],fontSize:7,color:"#6b7280"},
+      ...(D.band?[{text:`${sr?"Ukupno":"Total"}: ${inBand?(sr?"u granicama uobičajenog":"within usual range"):(sr?"izvan uobičajenog":"outside usual range")} (${k(D.band.sumMin)}–${k(D.band.sumMax)})`,fontSize:7.5,color:"#374151",margin:[0,3,0,0]}]:[])]);
+  }
+  if(wf||dy){ out.push(h2(sr?"Pregled u grafikonima":"Visual overview")); out.push({columns:[wf||{text:""},dy||{text:""}],columnGap:10}); }
+
+  // Gde se promena desila (stručna verzija)
+  const panels=[["channels",sr?"Kanali":"Channels","channel"],["devices",sr?"Uređaji":"Devices","device"],["newret",sr?"Novi i povratni":"New vs returning",null],["categories",sr?"Kategorije":"Categories","category"]]
+    .filter(([key])=>V.dims&&V.dims[key]&&V.dims[key].rows&&V.dims[key].rows.length);
+  if(!forClient&&panels.length){
+    const BW=70;
+    const box=([key,label,dt])=>{ const rows=V.dims[key].rows.slice(0,5); const m=Math.max(1,...rows.map(r=>Math.abs(r.c-r.p)));
+      const dr=dt&&(V.drills||[]).find(x=>x.type===dt);
+      return panel([cap(label),{table:{widths:["*",BW,48],body:rows.map(r=>{ const v=r.c-r.p; const w=Math.max(1,Math.abs(v)/m*(BW/2-2));
+        return [{text:r.name,fontSize:7.5,noWrap:false},{canvas:[{type:"line",x1:BW/2,y1:0,x2:BW/2,y2:9,lineWidth:0.4,lineColor:"#d1d5db"},{type:"rect",x:v>=0?BW/2:BW/2-w,y:1.5,w,h:6,color:v>=0?"#34d399":"#f87171"}],margin:[0,1,0,0]},{text:k(v,true),fontSize:7.5,bold:true,color:colr(v),alignment:"right"}]; })},layout:"noBorders"},
+        ...(dr?[{text:`» ${sr?"Dublje":"Deeper"}: ${dr.summary}`,fontSize:7,color:"#4338ca",margin:[0,3,0,0]}]:[])]); };
+    out.push(h2(sr?"Gde se promena desila":"Where the change happened"));
+    for(let i=0;i<panels.length;i+=2) out.push({columns:[box(panels[i]),panels[i+1]?box(panels[i+1]):{text:""}],columnGap:10,margin:[0,0,0,8]});
+  }
+  // Koraci kupovine + sezona + merenje
+  const row=[];
+  if(!forClient&&(V.funnel||[]).length){
+    const m=Math.max(0.0001,...V.funnel.flatMap(s=>[s.p,s.c])); const BW=90;
+    row.push(panel([cap(sr?"Koraci kupovine":"Purchase steps"),{table:{widths:["*",BW,34],body:V.funnel.map(s=>[{text:s.name,fontSize:7.5},{canvas:[{type:"rect",x:0,y:0,w:Math.max(1,s.p/m*BW),h:4,color:"#d1d5db"},{type:"rect",x:0,y:5.5,w:Math.max(1,s.c/m*BW),h:4,color:IND}],margin:[0,1,0,0]},{text:pc(s.ch),fontSize:7.5,bold:true,color:colr(s.ch),alignment:"right"}])},layout:"noBorders"},
+      {text:[{text:sr?"svetlo = prethodni":"light = previous",color:"#9ca3af"},"  ·  ",{text:sr?"plavo = ovaj period":"blue = this period",color:IND}],fontSize:7,color:"#6b7280",margin:[0,3,0,0]}]));
+  }
+  const Y=V.yoy;
+  if(Y&&Y.lastYearChange!=null&&Y.nowChange!=null){
+    const m=Math.max(1,Math.abs(Y.lastYearChange),Math.abs(Y.nowChange)); const H=40; const h=v=>Math.max(2,Math.abs(v)/m*H);
+    row.push(panel([cap(sr?"Sezona":"Seasonality"),{canvas:[{type:"rect",x:10,y:H-h(Y.lastYearChange),w:40,h:h(Y.lastYearChange),color:"#d1d5db"},{type:"rect",x:70,y:H-h(Y.nowChange),w:40,h:h(Y.nowChange),color:IND}]},
+      {columns:[{width:60,text:`${sr?"prošle god.":"last year"}\n${pc(Y.lastYearChange)}`,fontSize:7,alignment:"center",color:"#374151"},{width:60,text:`${sr?"sada":"now"}\n${pc(Y.nowChange)}`,fontSize:7,alignment:"center",color:"#374151"}],margin:[0,2,0,0]},
+      {text:Y.seasonal?(sr?"Slična promena kao prošle godine – očekivano.":"Similar change as last year – expected."):(sr?"Prošle godine nije bilo slične promene.":"No similar change last year."),fontSize:7.5,color:"#374151",margin:[0,3,0,0]}]));
+  }
+  if(!forClient&&V.tracking) row.push(panel([cap(sr?"Provera merenja":"Tracking check"),{text:V.tracking.length?V.tracking.slice(0,2).join("\n\n"):(sr?"Nema znakova problema sa merenjem.":"No signs of tracking problems."),fontSize:7.5,color:V.tracking.length?"#92400e":"#065f46"}]));
+  if(row.length){ out.push({columns:row,columnGap:10,margin:[0,8,0,0]}); }
+
+  // Kampanje i proizvodi (stručna verzija)
+  const th=t=>({text:t,fontSize:7,bold:true,color:"#6b7280"});
+  if(!forClient&&(V.campaigns||[]).length){
+    out.push(h2(sr?"Google Ads kampanje":"Google Ads campaigns"));
+    out.push({table:{headerRows:1,widths:["*",90,90,60],body:[[th(sr?"Kampanja":"Campaign"),th(sr?"Potrošnja":"Spend"),th(sr?"Prihod":"Revenue"),th("ROAS")],
+      ...V.campaigns.map(c=>{ const r0=c.sp>0?c.rp/c.sp:0,r1=c.sc>0?c.rc/c.sc:0; return [{text:(c.focus?"» ":"")+c.name,fontSize:7.5,bold:!!c.focus},{text:`${k(c.sp)} → ${k(c.sc)}`,fontSize:7.5},{text:`${k(c.rp)} → ${k(c.rc)}`,fontSize:7.5},{text:`${r0.toLocaleString(loc,{maximumFractionDigits:2})} → ${r1.toLocaleString(loc,{maximumFractionDigits:2})}`,fontSize:7.5,color:Math.abs(r1-r0)/(r0||1)>=0.05?colr(r1-r0):"#374151"}]; })]},
+      layout:{hLineWidth:(i)=>i===0?0:0.5,vLineWidth:()=>0,hLineColor:()=>"#e5e7eb",paddingTop:()=>3,paddingBottom:()=>3}});
+  }
+  if(!forClient&&(V.products||[]).length){
+    out.push(h2(sr?"Proizvodi – najveće promene":"Products – biggest changes"));
+    out.push({table:{widths:["*",110],body:[...V.products.map(p=>{ const v=p.c-p.p; return [{text:p.name,fontSize:7.5},{text:`${k(v,true)} (${pc(p.p>0?(p.c-p.p)/p.p*100:null)})`,fontSize:7.5,color:colr(v),alignment:"right"}]; }),
+      ...(V.gone&&V.gone.count?[[{text:`${V.gone.count} ${sr?"„nestalih“ proizvoda – ranije donosili":"“vanished” products – previously brought"} ${k(V.gone.prevRevenue)}`,fontSize:7.5,color:YEL,colSpan:2},{}]]:[])]},
+      layout:{hLineWidth:(i)=>i===0?0:0.5,vLineWidth:()=>0,hLineColor:()=>"#e5e7eb",paddingTop:()=>3,paddingBottom:()=>3}});
+  }
+  return out;
+}
+
 // PDF istrage – isti alat (pdfmake) i stil kao Report Studio
-function invPdfDoc({inv,R,stats,ai,evidence,findings,failedChecks,sr,pctTxt,periodTxt}){
+function invPdfDoc({inv,R,stats,ai,evidence,findings,failedChecks,sr,pctTxt,periodTxt,toEur,curSym}){
   const h2=t=>({text:t.toUpperCase(),style:"h2"});
   const confTxt={high:sr?"visoka sigurnost":"high confidence",medium:sr?"srednja sigurnost":"medium confidence",low:sr?"niska sigurnost":"low confidence"};
   const kCell=x=>({stack:[
@@ -4589,6 +4684,7 @@ function invPdfDoc({inv,R,stats,ai,evidence,findings,failedChecks,sr,pctTxt,peri
       ],fillColor:"#1e1b4b",margin:[14,12,14,12]}]]},layout:"noBorders"},
       ...(stats.length?[h2(sr?"Glavni brojevi":"Key numbers"),{table:{widths:["*","*","*"],body:kRows,dontBreakRows:true},
         layout:{hLineWidth:()=>5,vLineWidth:()=>5,hLineColor:()=>"#ffffff",vLineColor:()=>"#ffffff",paddingLeft:()=>0,paddingRight:()=>0,paddingTop:()=>0,paddingBottom:()=>0}}]:[]),
+      ...(!R.unavailable&&R.viz&&toEur?invPdfViz({R,sr,toEur,curSym,forClient:R.style==="simple"&&!!ai}):[]),
       ...(R.unavailable?[h2(sr?"Podaci nisu dostupni":"Data not available"),box([{text:R.unavailable}],"#d97706","#fffbeb")]:[]),
       ...(ai?[
         h2(sr?"Šta se desilo":"What happened"),box([{text:rsRich(ai.what)}]),
