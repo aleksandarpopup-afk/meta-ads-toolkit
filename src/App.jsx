@@ -4236,13 +4236,13 @@ function InvestigateMod({t,lang}){
   const fmNative=v=>useEur?fmtMoney(v,cur):null;
   const dur=R.durationMs?Math.round(R.durationMs/1000):null;
   const stats=T?[
-    {l:sr?"Prihod":"Revenue",v:fm(T.cur.revenue),sub:fmNative(T.cur.revenue),p:T.pct.revenue},
-    {l:sr?"Porudžbine":"Orders",v:Math.round(T.cur.orders).toLocaleString(sr?"sr-RS":"en-GB"),p:T.pct.orders},
-    {l:sr?"Posete":"Sessions",v:Math.round(T.cur.sessions).toLocaleString(sr?"sr-RS":"en-GB"),p:T.pct.sessions},
-    {l:sr?"Konverzija":"Conversion",v:(T.cur.cr*100).toLocaleString(sr?"sr-RS":"en-GB",{minimumFractionDigits:2,maximumFractionDigits:2})+"%",p:T.pct.cr},
+    {l:sr?"Prihod":"Revenue",v:fm(T.cur.revenue),sub:fmNative(T.cur.revenue),p:T.pct.revenue,was:fm(T.prev.revenue)},
+    {l:sr?"Porudžbine":"Orders",v:Math.round(T.cur.orders).toLocaleString(sr?"sr-RS":"en-GB"),p:T.pct.orders,was:Math.round(T.prev.orders).toLocaleString(sr?"sr-RS":"en-GB")},
+    {l:sr?"Posete":"Sessions",v:Math.round(T.cur.sessions).toLocaleString(sr?"sr-RS":"en-GB"),p:T.pct.sessions,was:Math.round(T.prev.sessions).toLocaleString(sr?"sr-RS":"en-GB")},
+    {l:sr?"Konverzija":"Conversion",v:(T.cur.cr*100).toLocaleString(sr?"sr-RS":"en-GB",{minimumFractionDigits:2,maximumFractionDigits:2})+"%",p:T.pct.cr,was:(T.prev.cr*100).toLocaleString(sr?"sr-RS":"en-GB",{minimumFractionDigits:2,maximumFractionDigits:2})+"%"},
     ...(R.gads?[
-      {l:sr?"Potrošnja (Google Ads)":"Spend (Google Ads)",v:fm(R.gads.spendCur),sub:fmNative(R.gads.spendCur),p:R.gads.spendPrev>0?(R.gads.spendCur-R.gads.spendPrev)/R.gads.spendPrev*100:null,inv:true},
-      {l:"ROAS (Google Ads)",v:R.gads.roasCur.toLocaleString(sr?"sr-RS":"en-GB",{minimumFractionDigits:2,maximumFractionDigits:2}),p:R.gads.roasPrev>0?(R.gads.roasCur-R.gads.roasPrev)/R.gads.roasPrev*100:null},
+      {l:sr?"Potrošnja (Google Ads)":"Spend (Google Ads)",v:fm(R.gads.spendCur),was:fm(R.gads.spendPrev),p:R.gads.spendPrev>0?(R.gads.spendCur-R.gads.spendPrev)/R.gads.spendPrev*100:null,inv:true},
+      {l:"ROAS (Google Ads)",v:R.gads.roasCur.toLocaleString(sr?"sr-RS":"en-GB",{minimumFractionDigits:2,maximumFractionDigits:2}),was:R.gads.roasPrev.toLocaleString(sr?"sr-RS":"en-GB",{minimumFractionDigits:2,maximumFractionDigits:2}),p:R.gads.roasPrev>0?(R.gads.roasCur-R.gads.roasPrev)/R.gads.roasPrev*100:null},
     ]:[])
   ]:[];
   const ai=R.ai;
@@ -4307,13 +4307,8 @@ function InvestigateMod({t,lang}){
       </div>
     </div>
 
-    {stats.length>0&&<div style={{display:"grid",gridTemplateColumns:`repeat(auto-fit,minmax(${narrow?140:170}px,1fr))`,gap:10,marginBottom:16}}>
-      {stats.map(s=><div key={s.l} style={{...card,padding:"12px 14px"}}>
-        <div style={{color:C.mut,fontSize:10.5,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase",marginBottom:6}}>{s.l}</div>
-        <div style={{display:"flex",flexWrap:"wrap",alignItems:"baseline",columnGap:6,minWidth:0}}><span style={{fontSize:narrow?15:18,fontWeight:800,color:"#fff",overflowWrap:"break-word"}}>{s.v}</span><span style={{fontSize:12.5,fontWeight:700,color:s.inv?(s.p>0?C.yel:s.p<0?C.grn:C.mut):pctCol(s.p)}}>{pctTxt(s.p)}</span></div>
-        {s.sub&&<div style={{color:C.mut,fontSize:11.5,marginTop:3}}>{s.sub}</div>}
-      </div>)}
-    </div>}
+    {stats.length>0&&!R.unavailable&&<InvVisuals R={R} ai={ai} sr={sr} narrow={narrow} stats={stats} conf={conf} toEur={v=>useEur?v*ef:v} curSym={useEur?"€":cur}/>}
+    {!R.unavailable&&stats.length>0&&<div style={{color:C.acl,fontSize:11,fontWeight:800,letterSpacing:"1px",textTransform:"uppercase",margin:"22px 0 12px"}}>{sr?"Objašnjenje i dokazi":"Explanation and evidence"}</div>}
 
     {R.unavailable&&<div style={{...card,borderColor:"rgba(251,191,36,0.35)",background:"rgba(251,191,36,0.06)",marginBottom:16}}>
       <div style={{color:C.yel,fontWeight:700,fontSize:14,marginBottom:6}}>⏳ {sr?"Podaci trenutno nisu dostupni":"Data is not available right now"}</div>
@@ -4322,7 +4317,7 @@ function InvestigateMod({t,lang}){
 
     {!R.unavailable&&<div style={{display:"grid",gridTemplateColumns:narrow?"1fr":"1.15fr 1fr",gap:14,alignItems:"start"}}>
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
-        {ai&&<div style={card}>{secT(sr?"Šta se desilo":"What happened")}<div style={{fontSize:13.5,lineHeight:1.7,color:C.txt}}><InvRich text={ai.what}/></div></div>}
+        {ai&&!(stats.length>0)&&<div style={card}>{secT(sr?"Šta se desilo":"What happened")}<div style={{fontSize:13.5,lineHeight:1.7,color:C.txt}}><InvRich text={ai.what}/></div></div>}
         {ai&&<div style={card}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:10,flexWrap:"wrap"}}>
             <div style={{color:C.acl,fontSize:11,fontWeight:800,letterSpacing:"1px",textTransform:"uppercase"}}>{sr?"Zašto se verovatno dešava":"Why it is likely happening"}</div>
@@ -4356,6 +4351,196 @@ function InvestigateMod({t,lang}){
   </div>;
 }
 
+
+// ── Investigate: grafički prikaz rezultata (iznad teksta). Sve iz podataka koje server već šalje (R.viz) – nema novih upita.
+function InvVisuals({R,ai,sr,narrow,stats,conf,toEur,curSym}){
+  const V=R.viz||{}; const T=R.totals; const loc=sr?"sr-RS":"en-GB";
+  const card={background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:14,padding:"16px 18px",minWidth:0};
+  const title=(t,small,col)=><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+    <span style={{color:col||C.acl,fontSize:11,fontWeight:800,letterSpacing:"1px",textTransform:"uppercase"}}>{t}</span>
+    {small&&<span style={{color:C.dim,fontSize:11}}>{small}</span>}</div>;
+  // Kratak zapis novca (npr. +47,8k €)
+  const k=(v,sign)=>{ const e=toEur(v); const a=Math.abs(e); const n=a>=1e6?(a/1e6).toLocaleString(loc,{maximumFractionDigits:1})+"M":a>=1e3?(a/1e3).toLocaleString(loc,{maximumFractionDigits:1})+"k":Math.round(a).toLocaleString(loc); return `${sign?(e>0?"+":e<0?"−":""):(e<0?"−":"")}${n} ${curSym}`; };
+  const pc=v=>{ if(v==null||!isFinite(v)) return sr?"novo":"new"; const a=Math.abs(v); return (v>0?"+":v<0?"−":"")+(a<10&&a>0?(Math.round(a*10)/10).toLocaleString(loc):Math.round(a).toLocaleString(loc))+"%"; };
+  const pct=(c,p)=>p>0?(c-p)/p*100:null;
+  const col=v=>v>0?C.grn:v<0?C.red:C.mut;
+  const dR=T?T.cur.revenue-T.prev.revenue:0;
+
+  // ── 1. Glavni zaključak + značke + brojevi
+  const chips=[];
+  if(V.yoy&&V.yoy.seasonal) chips.push(["📈",`${sr?"Sezona (prošle godine":"Seasonal (last year"} ${pc(V.yoy.lastYearChange)})`,"g"]);
+  const topOf=key=>{ const d=V.dims&&V.dims[key]; if(!d||!d.rows||!d.rows.length||!dR) return null; const r=[...d.rows].sort((a,b)=>Math.abs(b.c-b.p)-Math.abs(a.c-a.p))[0]; const sh=(r.c-r.p)/dR; return sh>=0.4&&sh<=1.5?{r,sh}:null; };
+  const fc=(V.campaigns||[]).find(c=>c.focus);
+  if(fc) chips.push(["🎯",`${fc.name.length>28?fc.name.slice(0,27)+"…":fc.name}: ROAS ${(fc.sp>0?fc.rp/fc.sp:0).toLocaleString(loc,{maximumFractionDigits:2})} → ${(fc.sc>0?fc.rc/fc.sc:0).toLocaleString(loc,{maximumFractionDigits:2})}`,fc.sc>0&&fc.sp>0&&fc.rc/fc.sc<fc.rp/fc.sp?"r":"g"]);
+  const td=topOf("devices"); if(td) chips.push(["📱",`${td.r.name} ≈${Math.round(td.sh*100)}% ${sr?"promene":"of change"}`,dR>=0?"g":"r"]);
+  const tc=topOf("channels"); if(tc) chips.push(["🔎",`${tc.r.name} ≈${Math.round(tc.sh*100)}% ${sr?"promene":"of change"}`,dR>=0?"g":"r"]);
+  if((V.tracking||[]).length) chips.push(["⚠️",sr?"Moguć problem u merenju":"Possible tracking issue","y"]);
+  if(V.gone&&V.gone.count>=10) chips.push(["📦",`${V.gone.count} ${sr?"„nestalih“ proizvoda":"“vanished” products"}`,"y"]);
+  const chipCol={g:["rgba(52,211,153,0.1)","rgba(52,211,153,0.3)"],r:["rgba(248,113,113,0.1)","rgba(248,113,113,0.35)"],y:["rgba(251,191,36,0.1)","rgba(251,191,36,0.35)"]};
+  const hero=<div style={{...card,borderColor:"rgba(99,102,241,0.4)",background:"linear-gradient(135deg,rgba(99,102,241,0.12),rgba(99,102,241,0.03))"}}>
+    <div style={{display:"grid",gridTemplateColumns:narrow?"1fr":"1.2fr 1fr",gap:20,alignItems:"center"}}>
+      <div style={{minWidth:0}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:8}}>
+          <span style={{color:C.acl,fontSize:11,fontWeight:800,letterSpacing:"1px",textTransform:"uppercase"}}>{sr?"Glavni zaključak":"Main conclusion"}</span>
+          {conf&&<span style={{padding:"3px 10px",borderRadius:20,fontSize:10.5,fontWeight:800,letterSpacing:"0.6px",textTransform:"uppercase",color:conf[1],background:conf[2],border:`1px solid ${conf[3]}`}}>{conf[0]}</span>}
+        </div>
+        <div style={{fontSize:narrow?14.5:15.5,lineHeight:1.6,fontWeight:600,color:"#fff"}}>{ai?<InvRich text={ai.what}/>:T?`${sr?"Prihod":"Revenue"} ${pc(T.pct.revenue)}, ${sr?"porudžbine":"orders"} ${pc(T.pct.orders)}, ${sr?"posete":"sessions"} ${pc(T.pct.sessions)}.`:""}</div>
+        {chips.length>0&&<div style={{display:"flex",gap:6,marginTop:12,flexWrap:"wrap"}}>{chips.slice(0,4).map(([ic,t,c],i)=><span key={i} style={{padding:"4px 10px",borderRadius:20,background:chipCol[c][0],border:`1px solid ${chipCol[c][1]}`,fontSize:11.5,color:C.txt}}>{ic} {t}</span>)}</div>}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:8}}>
+        {stats.map(s=><div key={s.l} style={{padding:"10px 12px",borderRadius:10,background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,minWidth:0}}>
+          <div style={{color:C.mut,fontSize:10,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase"}}>{s.l}</div>
+          <div style={{display:"flex",flexWrap:"wrap",alignItems:"baseline",columnGap:6,marginTop:3}}><span style={{fontSize:narrow?15:16.5,fontWeight:800,color:"#fff"}}>{s.v}</span><span style={{fontSize:12,fontWeight:700,color:s.inv?(s.p>0?C.yel:s.p<0?C.grn:C.mut):col(s.p)}}>{pc(s.p)}</span></div>
+          {(s.was||s.sub)&&<div style={{color:C.dim,fontSize:11,marginTop:2}}>{s.was?`${sr?"bilo":"was"} ${s.was}`:""}{s.was&&s.sub?" · ":""}{s.sub||""}</div>}
+        </div>)}
+      </div>
+    </div>
+  </div>;
+
+  // ── 2. Most od prihoda (posete × konverzija × korpa)
+  let waterfall=null;
+  if(T&&R.decomp){
+    const steps=[[sr?"Posete":"Traffic",R.decomp.traffic],[sr?"Konverzija":"Conversion",R.decomp.conversion],[sr?"Korpa":"Basket",R.decomp.basket]];
+    const run=[T.prev.revenue]; steps.forEach(([,v])=>run.push(run[run.length-1]+v));
+    const all=[...run,T.cur.revenue]; const mx=Math.max(...all), mn=Math.min(...all);
+    const base=Math.max(0,mn-(mx-mn)*1.6); const H=150, top=30, y=v=>top+H-(v-base)/((mx-base)||1)*H;
+    const W=400, bw=56, gap=(W-40-bw*5)/4; const x=i=>30+i*(bw+gap);
+    const biggest=[...steps].sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]))[0];
+    waterfall=<div style={card}>
+      {title(sr?"Odakle dolazi promena prihoda":"Where the revenue change comes from",sr?"posete × konverzija × korpa":"traffic × conversion × basket")}
+      <svg viewBox={`0 0 ${W} 215`} width="100%" style={{display:"block"}}>
+        <line x1="20" y1={top+H} x2={W-5} y2={top+H} stroke="rgba(255,255,255,0.1)"/>
+        <rect x={x(0)} y={y(run[0])} width={bw} height={top+H-y(run[0])} rx="4" fill="rgba(165,180,252,0.35)"/>
+        <text x={x(0)+bw/2} y={y(run[0])-7} textAnchor="middle" fontSize="11" fontWeight="700" fill="#fff">{k(run[0])}</text>
+        {steps.map(([n,v],i)=>{ const a=run[i],b=run[i+1]; const yt=Math.min(y(a),y(b)); const h=Math.max(2,Math.abs(y(a)-y(b)));
+          return <g key={n}><line x1={x(i)+bw} y1={y(a)} x2={x(i+1)} y2={y(a)} stroke="rgba(255,255,255,0.25)" strokeDasharray="3 3"/>
+            <rect x={x(i+1)} y={yt} width={bw} height={h} rx="3" fill={v>=0?C.grn:C.red}/>
+            <text x={x(i+1)+bw/2} y={yt-7} textAnchor="middle" fontSize="11" fontWeight="700" fill={v>=0?C.grn:C.red}>{k(v,true)}</text></g>; })}
+        <line x1={x(3)+bw} y1={y(run[3])} x2={x(4)} y2={y(run[3])} stroke="rgba(255,255,255,0.25)" strokeDasharray="3 3"/>
+        <rect x={x(4)} y={y(T.cur.revenue)} width={bw} height={top+H-y(T.cur.revenue)} rx="4" fill="#6366F1"/>
+        <text x={x(4)+bw/2} y={y(T.cur.revenue)-7} textAnchor="middle" fontSize="11" fontWeight="700" fill="#fff">{k(T.cur.revenue)}</text>
+        {[sr?"Pre":"Before",...steps.map(s=>s[0]),sr?"Sada":"Now"].map((n,i)=><text key={i} x={x(i)+bw/2} y={top+H+16} textAnchor="middle" fontSize="10.5" fill={C.mut}>{n}</text>)}
+      </svg>
+      <div style={{color:C.mut,fontSize:11.5,lineHeight:1.5}}>{sr?"Najveći uticaj ima":"Biggest effect"}: <b style={{color:"#fff"}}>{biggest[0].toLowerCase()}</b> ({k(biggest[1],true)}).</div>
+    </div>;
+  }
+
+  // ── 3. Kretanje po danima
+  let daily=null;
+  const D=V.daily;
+  if(D&&D.cur&&D.cur.length>=2){
+    const n=D.cur.length; const vals=[...D.cur,...D.prev,...(D.band?D.band.max:[])]; const mx=Math.max(1,...vals);
+    const W=520,H=150,top=28,left=8,right=8; const xs=i=>left+(n===1?0:i*(W-left-right)/(n-1)); const ys=v=>top+H-v/mx*H;
+    const pts=a=>a.map((v,i)=>`${xs(i)},${ys(v)}`).join(" ");
+    const ci=D.changeStart?D.dates.indexOf(D.changeStart):-1;
+    const wd=s=>{ const d=new Date(s+"T00:00:00Z"); return n<=14?d.toLocaleDateString(sr?"sr-Latn-RS":"en-GB",{weekday:"short",timeZone:"UTC"}):`${d.getUTCDate()}.${d.getUTCMonth()+1}.`; };
+    const every=Math.max(1,Math.ceil(n/8));
+    const tot=D.cur.reduce((a,b)=>a+b,0);
+    const inBand=D.band&&tot>=D.band.sumMin&&tot<=D.band.sumMax;
+    daily=<div style={card}>
+      {title(sr?"Kretanje po danima":"Day by day",<span><span style={{color:"#818CF8"}}>━</span> {sr?"ovaj period":"this period"} &nbsp;<span style={{color:"#9ca3af"}}>┅</span> {sr?"prethodni":"previous"}{D.band?<> &nbsp;<span style={{color:"rgba(165,180,252,0.6)"}}>▬</span> {sr?"uobičajeno":"usual range"}</>:null}</span>)}
+      <svg viewBox={`0 0 ${W} ${top+H+22}`} width="100%" style={{display:"block"}}>
+        {D.band&&<polygon points={`${pts(D.band.max)} ${D.band.min.map((v,i)=>`${xs(n-1-i)},${ys(D.band.min[n-1-i])}`).join(" ")}`} fill="rgba(165,180,252,0.08)"/>}
+        <line x1={left} y1={top+H} x2={W-right} y2={top+H} stroke="rgba(255,255,255,0.1)"/>
+        <polyline points={pts(D.prev)} fill="none" stroke="#9ca3af" strokeWidth="2" strokeDasharray="4 4" opacity="0.8"/>
+        <polyline points={pts(D.cur)} fill="none" stroke="#818CF8" strokeWidth="3"/>
+        {n<=31&&D.cur.map((v,i)=><circle key={i} cx={xs(i)} cy={ys(v)} r="3" fill="#818CF8"/>)}
+        {ci>=0&&<g><line x1={xs(ci)} y1={top-10} x2={xs(ci)} y2={top+H} stroke={C.yel} strokeDasharray="3 3"/><text x={Math.min(xs(ci)+5,W-120)} y={top-12} fontSize="10.5" fontWeight="700" fill={C.yel}>{sr?"promena od":"change from"} {D.changeStart.slice(8,10).replace(/^0/,"")}.{D.changeStart.slice(5,7).replace(/^0/,"")}.</text></g>}
+        {D.dates.map((d,i)=>i%every===0||i===n-1?<text key={i} x={xs(i)} y={top+H+15} textAnchor={i===0?"start":i===n-1?"end":"middle"} fontSize="10" fill={C.dim}>{wd(d)}</text>:null)}
+      </svg>
+      <div style={{color:C.mut,fontSize:11.5,lineHeight:1.5}}>
+        {D.changeStart&&ci<0?<>{sr?"Promena počinje":"The change starts"} {D.changeStart.slice(8,10).replace(/^0/,"")}.{D.changeStart.slice(5,7).replace(/^0/,"")}. ({sr?"u prethodnom periodu":"in the previous period"}). </>:null}
+        {D.band?<>{sr?"Ukupno je":"In total it is"} <b style={{color:"#fff"}}>{inBand?(sr?"u granicama uobičajenog":"within the usual range"):(sr?"izvan uobičajenog":"outside the usual range")}</b> {sr?"za ovog klijenta":"for this client"} ({sr?"poslednjih":"last"} {D.band.periods} {sr?"perioda":"periods"}: {k(D.band.sumMin)}–{k(D.band.sumMax)}).</>:null}
+      </div>
+    </div>;
+  }
+
+  // ── 4. Gde se promena desila (podeljeno po delovima)
+  const drillFor=t=>(V.drills||[]).find(d=>d.type===t);
+  const panels=[["channels",sr?"Kanali":"Channels","channel"],["devices",sr?"Uređaji":"Devices","device"],["newret",sr?"Novi i povratni":"New vs returning",null],["categories",sr?"Kategorije":"Categories","category"]]
+    .filter(([key])=>V.dims&&V.dims[key]&&V.dims[key].rows&&V.dims[key].rows.length);
+  const where=panels.length?<div style={card}>
+    {title(sr?"Gde se promena desila":"Where the change happened",sr?"promena prihoda po delovima":"revenue change by segment")}
+    <div style={{display:"grid",gridTemplateColumns:narrow?"1fr":`repeat(${Math.min(panels.length,4)},minmax(0,1fr))`,gap:narrow?18:22}}>
+      {panels.map(([key,label,dt])=>{ const d=V.dims[key]; const rows=d.rows.slice(0,5); const m=Math.max(1,...rows.map(r=>Math.abs(toEur(r.c-r.p))));
+        const dr=dt&&drillFor(dt); const catNote=key==="categories"&&rows.find(r=>r.upc!=null&&Math.abs(r.upc)>=25);
+        return <div key={key} style={{minWidth:0}}>
+          <div style={{fontWeight:700,fontSize:12.5,marginBottom:6,color:"#fff"}}>{label}</div>
+          {rows.map(r=>{ const v=toEur(r.c-r.p); const w=Math.abs(v)/m*48;
+            return <div key={r.name} style={{display:"grid",gridTemplateColumns:"minmax(0,1.1fr) minmax(0,1fr) auto",alignItems:"center",gap:8,margin:"6px 0",fontSize:12}}>
+              <span title={r.name} style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:C.txt}}>{r.name}</span>
+              <div style={{position:"relative",height:12}}><div style={{position:"absolute",left:"50%",top:-3,bottom:-3,borderLeft:"1px dashed rgba(255,255,255,0.18)"}}/>
+                <div style={{position:"absolute",top:1,height:10,borderRadius:3,background:v>=0?C.grn:C.red,width:`${Math.max(1,w)}%`,...(v>=0?{left:"50%"}:{right:"50%"})}}/></div>
+              <span style={{color:col(v),fontWeight:700,fontSize:11.5,whiteSpace:"nowrap"}}>{k(r.c-r.p,true)}</span>
+            </div>; })}
+          {d.uniform&&<div style={{fontSize:11,color:C.mut,marginTop:6}}>{sr?"Promena je ravnomerna – nije problem jedne stavke.":"The change is even – not a single-item issue."}</div>}
+          {dr&&<div style={{fontSize:11,color:C.acl,marginTop:6,lineHeight:1.45}}>↳ {sr?"Dublje":"Deeper"}: {dr.summary}</div>}
+          {catNote&&<div style={{fontSize:11,color:C.acl,marginTop:4,lineHeight:1.45}}>↳ {catNote.name}: {catNote.upc>0?(sr?"skuplji proizvodi":"pricier items"):(sr?"jeftiniji proizvodi":"cheaper items")} ({sr?"cena po komadu":"price per unit"} {pc(catNote.upc)})</div>}
+        </div>; })}
+    </div>
+  </div>:null;
+
+  // ── 5. Koraci kupovine · Provera merenja · Sezona
+  const F_=V.funnel||[];
+  const funnel=F_.length?<div style={card}>
+    {title(sr?"Koraci kupovine":"Purchase steps",sr?"stopa prelaska":"step rate")}
+    {(()=>{ const m=Math.max(0.0001,...F_.flatMap(s=>[s.p,s.c])); return F_.map(s=><div key={s.name} style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1.3fr) auto",gap:8,alignItems:"center",margin:"8px 0",fontSize:12}}>
+      <span style={{color:C.txt}}>{s.name}</span>
+      <div><div style={{height:7,width:`${s.p/m*100}%`,background:"rgba(156,163,175,0.55)",borderRadius:3,marginBottom:3}}/><div style={{height:7,width:`${s.c/m*100}%`,background:"#6366F1",borderRadius:3}}/></div>
+      <span style={{color:col(s.ch),fontWeight:700}}>{pc(s.ch)}</span></div>); })()}
+    <div style={{color:C.dim,fontSize:11,marginTop:8}}><span style={{color:"#9ca3af"}}>▬</span> {sr?"prethodni":"previous"} &nbsp; <span style={{color:"#6366F1"}}>▬</span> {sr?"ovaj period":"this period"}</div>
+  </div>:null;
+  const trk=V.tracking||[];
+  const tracking=V.tracking?(trk.length?<div style={{...card,borderColor:"rgba(251,191,36,0.35)",background:"rgba(251,191,36,0.05)"}}>
+    {title(`⚠️ ${sr?"Provera merenja":"Tracking check"}`,null,C.yel)}
+    {trk.slice(0,2).map((t,i)=><div key={i} style={{fontSize:12.5,lineHeight:1.55,color:C.txt,marginBottom:8}}>{t}</div>)}
+    {trk.length>2&&<div style={{color:C.mut,fontSize:11.5}}>+{trk.length-2} {sr?"još":"more"}</div>}
+  </div>:<div style={{...card,borderColor:"rgba(52,211,153,0.3)",background:"rgba(52,211,153,0.04)"}}>
+    {title(`✓ ${sr?"Provera merenja":"Tracking check"}`,null,C.grn)}
+    <div style={{fontSize:12.5,color:C.txt,lineHeight:1.55}}>{sr?"Nema znakova problema sa merenjem – brojevima se može verovati.":"No signs of tracking problems – the numbers can be trusted."}</div>
+  </div>):null;
+  const Y=V.yoy;
+  const season=Y&&Y.lastYearChange!=null&&Y.nowChange!=null?(()=>{ const m=Math.max(1,Math.abs(Y.lastYearChange),Math.abs(Y.nowChange)); const h=v=>Math.max(4,Math.abs(v)/m*56);
+    return <div style={card}>{title(sr?"Sezona":"Seasonality")}
+      <div style={{display:"flex",alignItems:"flex-end",gap:16,height:86,padding:"0 6px"}}>
+        {[[sr?"prošle god.":"last year",Y.lastYearChange,"rgba(156,163,175,0.5)"],[sr?"sada":"now",Y.nowChange,"#6366F1"]].map(([l,v,c])=><div key={l} style={{flex:1,textAlign:"center"}}>
+          <div style={{color:col(v),fontWeight:800,fontSize:13}}>{pc(v)}</div><div style={{height:h(v),background:c,borderRadius:"4px 4px 0 0",marginTop:4}}/><div style={{color:C.mut,fontSize:11,marginTop:4}}>{l}</div></div>)}
+      </div>
+      <div style={{color:C.mut,fontSize:11.5,marginTop:8,lineHeight:1.5}}>{Y.seasonal?(sr?<>Slična promena kao prošle godine – <b style={{color:"#fff"}}>očekivano</b>.</>:<>Similar change as last year – <b style={{color:"#fff"}}>expected</b>.</>):(sr?"Prošle godine u ovim nedeljama nije bilo slične promene.":"Last year these weeks did not change similarly.")}{Y.vsLastYear!=null?` ${sr?"U odnosu na prošlu godinu":"Vs last year"}: ${pc(Y.vsLastYear)}.`:""}</div>
+    </div>; })():null;
+  const row5=[funnel,tracking,season].filter(Boolean);
+
+  // ── 6. Kampanje i proizvodi
+  const th={color:C.dim,fontWeight:700,fontSize:10.5,textTransform:"uppercase",letterSpacing:"0.5px",textAlign:"left",padding:"0 6px 6px"};
+  const tdS={padding:"8px 6px",borderTop:`1px solid ${C.brd}`,fontSize:12,verticalAlign:"top"};
+  const camps=(V.campaigns||[]).length?<div style={{...card,overflowX:"auto"}}>
+    {title(sr?"Google Ads kampanje":"Google Ads campaigns",sr?"najveće promene":"biggest changes")}
+    <table style={{width:"100%",borderCollapse:"collapse",minWidth:440}}><thead><tr><th style={th}>{sr?"Kampanja":"Campaign"}</th><th style={th}>{sr?"Potrošnja":"Spend"}</th><th style={th}>{sr?"Prihod":"Revenue"}</th><th style={th}>ROAS</th></tr></thead>
+    <tbody>{V.campaigns.map(c=>{ const r0=c.sp>0?c.rp/c.sp:0, r1=c.sc>0?c.rc/c.sc:0; const sp=pct(c.sc,c.sp), rp=pct(c.rc,c.rp);
+      return <tr key={c.id} style={c.focus?{background:"rgba(99,102,241,0.08)"}:null}>
+        <td style={{...tdS,color:"#fff",maxWidth:220}}>{c.focus?"🎯 ":""}{c.name}</td>
+        <td style={tdS}>{k(c.sp)} → {k(c.sc)} {sp!=null&&Math.abs(sp)>=1?<span style={{color:sp>0?C.yel:C.grn}}>{pc(sp)}</span>:null}</td>
+        <td style={tdS}>{k(c.rp)} → {k(c.rc)} {rp!=null&&Math.abs(rp)>=1?<span style={{color:col(rp)}}>{pc(rp)}</span>:null}</td>
+        <td style={{...tdS,color:Math.abs(r1-r0)/(r0||1)>=0.05?col(r1-r0):C.mut,whiteSpace:"nowrap"}}>{r0.toLocaleString(loc,{maximumFractionDigits:2})} → {r1.toLocaleString(loc,{maximumFractionDigits:2})}</td></tr>; })}</tbody></table>
+  </div>:null;
+  const prods=(V.products||[]).length?<div style={card}>
+    {title(sr?"Proizvodi":"Products",sr?"najveće promene prihoda":"biggest revenue changes")}
+    <table style={{width:"100%",borderCollapse:"collapse"}}><tbody>{V.products.map((p,i)=>{ const v=p.c-p.p; return <tr key={i}>
+      <td style={{...tdS,color:C.txt,borderTop:i?tdS.borderTop:"none"}}>{p.name}</td>
+      <td style={{...tdS,color:col(v),textAlign:"right",whiteSpace:"nowrap",borderTop:i?tdS.borderTop:"none"}}>{k(v,true)} <span style={{color:C.mut}}>({pc(pct(p.c,p.p))})</span></td></tr>; })}
+      {V.gone&&V.gone.count>0&&<tr><td colSpan={2} style={{...tdS,color:C.yel}}>⚠️ {V.gone.count} {sr?"„nestalih“ proizvoda – ranije donosili":"“vanished” products – previously brought"} {k(V.gone.prevRevenue)}{V.gone.examples&&V.gone.examples.length?<div style={{color:C.mut,fontSize:11,marginTop:3}}>{sr?"npr.":"e.g."} {V.gone.examples.join(", ")}</div>:null}</td></tr>}
+    </tbody></table>
+  </div>:null;
+
+  const gap={display:"grid",gap:14,marginBottom:14};
+  return <>
+    <div style={{marginBottom:14}}>{hero}</div>
+    {(waterfall||daily)&&<div style={{...gap,gridTemplateColumns:narrow||!(waterfall&&daily)?"1fr":"1fr 1.35fr"}}>{waterfall}{daily}</div>}
+    {where&&<div style={{marginBottom:14}}>{where}</div>}
+    {row5.length>0&&<div style={{...gap,gridTemplateColumns:narrow?"1fr":row5.length===3?"1.2fr 1fr 0.8fr":row5.length===2?"1fr 1fr":"1fr"}}>{funnel}{tracking}{season}</div>}
+    {(camps||prods)&&<div style={{...gap,gridTemplateColumns:narrow||!(camps&&prods)?"1fr":"1.2fr 1fr"}}>{camps}{prods}</div>}
+  </>;
+}
 
 // Pokreće istragu iz drugog modula (CI/PI) sa istim klijentom i periodom i otvara Investigate
 function invLaunch(goMod,{client,period,customFrom,customTo,qtype,question,lang,campaignId}){
