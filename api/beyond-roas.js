@@ -1,9 +1,43 @@
 // api/beyond-roas.js — Beyond ROAS (korak 1): podešavanje po klijentu i učitavanje nabavnih cena / zarade.
 // Fajl se čita i prepoznaje u PREGLEDAČU (CSV, Excel, XML feed); ovde stižu samo već očišćeni redovi
 // u delovima (najviše 5.000 redova po pozivu), pa nema problema sa Vercel-ovim limitom od 4,5 MB.
-// Novi fajl se upisuje kao nova "serija" (batch); tek kad stignu SVI delovi ("commit") postaje važeći,
-// a stara serija se briše. Ako učitavanje pukne na pola, stari podaci ostaju netaknuti.
+// Novi fajl se upisuje kao nova "serija" (batch); tek kad stignu SVI delovi ("commit") postaje važeći.
+// Podrazumevano novi fajl DOPUNJUJE stare podatke: proizvodi kojih nema u novom fajlu zadržavaju poslednju
+// poznatu vrednost (feed obično sadrži samo trenutnu ponudu). "replace" briše sve stare podatke.
+// Ako učitavanje pukne na pola, stari podaci ostaju netaknuti.
+// Korak 2: GET ?action=report – profit po proizvodu (GA4 prodaja × nabavna cena / zarada).
 import { guard, clientInWorkspace, dbHeaders, SUPABASE_URL, UUID_RE } from "./_lib/auth.js";
+import { createLimiter, ga4FetchAll, newMeter, meterStep, meterDone } from "./_lib/ga4.js";
+import { cacheKey, cacheGet, cacheSet } from "./_lib/cache.js";
+
+const CALC_VERSION = "br-1";
+const CACHE_TTL_SEC = 30 * 60;
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+
+async function refreshAccessToken(refresh_token) {
+  const r = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ refresh_token, client_id: GOOGLE_CLIENT_ID, client_secret: GOOGLE_CLIENT_SECRET, grant_type: "refresh_token" })
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error(JSON.stringify(data));
+  return data.access_token;
+}
+
+// Kursevi: tabela exchange_rates (jedan red, osnova EUR: rates[X] = koliko X vredi 1 EUR)
+function convert(amount, from, to, rates) {
+  if (from === to) return amount;
+  if (!rates) return null;
+  const rf = from === "EUR" ? 1 : rates[from];
+  const rt = to === "EUR" ? 1 : rates[to];
+  if (!rf || !rt) return null;
+  return (amount / rf) * rt;
+}
+// GA4 ponekad šalje nazive sa HTML oznakama (&amp; i sl.)
+const unesc = (t) => String(t || "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#x([0-9a-f]+);/gi, (m, h) => String.fromCodePoint(parseInt(h, 16))).replace(/&#(\d+);/g, (m, d) => String.fromCodePoint(+d));
+const r2 = (v) => (v == null || !isFinite(v) ? null : Math.round(v * 100) / 100);
 
 const MAX_CHUNK = 5000;
 const CUR_RE = /^[A-Z]{3}$/;
@@ -18,7 +52,7 @@ async function dbJson(path, init) {
   if (!r.ok) {
     const msg = typeof d === "object" && d ? (d.message || JSON.stringify(d)) : String(d);
     // Tabela ne postoji = SQL (br.sql) još nije pokrenut
-    if (/br_settings|br_costs/.test(msg) && /does not exist|Could not find/i.test(msg)) throw new Error("setup_missing");
+    if (/br_settings|br_costs|br_commit|committed/.test(msg) && /does not exist|Could not find/i.test(msg)) throw new Error("setup_missing");
     throw new Error(`Baza ${r.status}: ${String(msg).slice(0, 200)}`);
   }
   return d;
@@ -65,6 +99,139 @@ async function countBatch(clientId, batch) {
   return isFinite(n) ? n : 0;
 }
 
+// Sve važeće vrednosti klijenta (Supabase vraća najviše 1.000 redova po pozivu → delovi istovremeno, po 4)
+async function loadCosts(clientId) {
+  const PAGE = 1000;
+  const base = `br_costs?client_id=eq.${clientId}&committed=eq.true&select=sku,value,price,currency&order=sku`;
+  const r = await db(`${base}&limit=${PAGE}&offset=0`, { headers: { Prefer: "count=exact" } });
+  const txt = await r.text();
+  if (!r.ok) {
+    if (/committed/.test(txt) && /does not exist|column/i.test(txt)) throw new Error("setup_missing");
+    throw new Error(`Baza ${r.status}: ${txt.slice(0, 200)}`);
+  }
+  const first = JSON.parse(txt || "[]");
+  const total = parseInt((r.headers.get("content-range") || "").split("/")[1], 10) || first.length;
+  const offsets = [];
+  for (let o = PAGE; o < total; o += PAGE) offsets.push(o);
+  const limit = createLimiter(4);
+  const pages = await Promise.all(offsets.map((o) => limit(() => dbJson(`${base}&limit=${PAGE}&offset=${o}`))));
+  return first.concat(...pages);
+}
+
+async function report(req, res, clientId, s) {
+  const { days, from, to } = req.query;
+  const DATE_OK = /^\d{4}-\d{2}-\d{2}$/;
+  if ((from || to) && !(DATE_OK.test(from || "") && DATE_OK.test(to || "") && from <= to)) return res.status(400).json({ error: "Invalid period" });
+  const periodDays = Math.min(Math.max(parseInt(days) || 30, 1), 730);
+  const range = from && to ? { startDate: from, endDate: to } : { startDate: `${periodDays}daysAgo`, endDate: "yesterday" };
+  if (!s || !s.row_count) return res.status(200).json({ empty: true });
+
+  const conn = await dbJson(`ga4_connections?client_id=eq.${clientId}&select=property_id,refresh_token,currency_code`);
+  if (!Array.isArray(conn) || !conn.length) return res.status(200).json({ error: "no_ga4" });
+  const { property_id, refresh_token, currency_code } = conn[0];
+  const currency = currency_code || "EUR";
+  const todayUtc = new Date().toISOString().slice(0, 10);
+  const meter = newMeter(`beyond-roas client=${clientId} period=${from && to ? from + ".." + to : periodDays + "d"}`);
+  // Ključ sadrži i vreme poslednjeg učitavanja / izmene podešavanja → novi fajl ili PDV odmah daju nov rezultat
+  const key = cacheKey({ kind: "br-report", v: CALC_VERSION, client: clientId, property: String(property_id), currency, range, today: from && to ? null : todayUtc, up: s.uploaded_at, set: s.updated_at });
+  if (req.query.refresh !== "1") {
+    const hit = await cacheGet(key);
+    if (hit) { hit.data._perf = meterDone(meter, { cache: "hit" }); return res.status(200).json(hit.data); }
+  }
+  let t = Date.now();
+  const limit = createLimiter(4);
+  const accessToken = await refreshAccessToken(refresh_token);
+  const [rep, costs, fx] = await Promise.all([
+    ga4FetchAll(property_id, accessToken, {
+      dateRanges: [range],
+      dimensions: [{ name: "itemId" }, { name: "itemName" }, { name: "itemCategory" }],
+      metrics: [{ name: "itemsPurchased" }, { name: "itemRevenue" }],
+      orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }]
+    }, { maxRows: 300000, meter, limit }),
+    loadCosts(clientId),
+    dbJson("exchange_rates?id=eq.1&select=rates").catch(() => null)
+  ]);
+  meterStep(meter, `ga4+costs(${(rep.rows || []).length} rows, ${costs.length} costs)`, t);
+  const rates = fx && fx[0] ? fx[0].rates : null;
+  const eurFactor = currency === "EUR" ? 1 : convert(1, currency, "EUR", rates);
+
+  // GA4 redovi → po šifri (isti proizvod može da ima više naziva/kategorija)
+  const byId = new Map();
+  for (const row of rep.rows || []) {
+    const id = String(row.dimensionValues[0].value || "").trim();
+    if (!id || id === "(not set)") continue;
+    const q = parseFloat(row.metricValues[0].value) || 0;
+    const rev = parseFloat(row.metricValues[1].value) || 0;
+    let it = byId.get(id);
+    if (!it) { it = { id, n: unesc(row.dimensionValues[1].value), cat: unesc(row.dimensionValues[2].value), q: 0, r: 0 }; byId.set(id, it); }
+    it.q += q; it.r += rev;
+  }
+  const costMap = new Map();
+  for (const c of costs) costMap.set(String(c.sku).trim().toLowerCase(), c);
+
+  const vat = Number(s.vat_rate) || 0;
+  const pv = s.prices_include_vat === false ? 1 : 1 + vat / 100;   // cene na sajtu / u GA4
+  const vv = s.value_includes_vat ? 1 + vat / 100 : 1;             // vrednost iz fajla
+  const isMargin = s.value_type === "margin";
+  const fxCache = {};
+  const fxTo = (cur) => {
+    const c = cur || s.value_currency || currency;
+    if (!(c in fxCache)) fxCache[c] = convert(1, c, currency, rates);
+    return fxCache[c];
+  };
+
+  const T = { r: 0, rn: 0, rOk: 0, rnOk: 0, cogs: 0, gp: 0, nItems: 0, nOk: 0, nMissing: 0, nSusp: 0, nNeg: 0, rMissing: 0, rSusp: 0, gpNeg: 0, noFx: 0 };
+  const items = [];
+  for (const it of byId.values()) {
+    if (!(it.q > 0 || it.r !== 0)) continue;
+    const rn = it.r / pv;
+    T.nItems++; T.r += it.r; T.rn += rn;
+    const c = costMap.get(it.id.toLowerCase());
+    let st = "missing", cogs = null, gp = null;
+    if (c) {
+      const f = fxTo(c.currency);
+      if (f == null) { T.noFx++; }
+      else {
+        const v = (Number(c.value) * f) / vv;
+        const p = c.price != null ? (Number(c.price) * f) / pv : null;
+        let unitCost = null;
+        if (isMargin) { if (p != null) unitCost = p - v; }
+        else unitCost = v;
+        const bad = !(it.q > 0) || (isMargin ? (p != null && v > p) : (v <= 0 || (p != null && v > p)));
+        if (bad) st = "susp";
+        else {
+          st = "ok";
+          if (unitCost != null) { cogs = it.q * unitCost; gp = rn - cogs; }
+          else { gp = it.q * v; cogs = rn - gp; } // zarada bez cene u fajlu: zarada × komada
+        }
+      }
+    }
+    if (st === "ok") {
+      T.nOk++; T.rOk += it.r; T.rnOk += rn; T.cogs += cogs; T.gp += gp;
+      if (gp < 0) { T.nNeg++; T.gpNeg += gp; }
+    } else if (st === "susp") { T.nSusp++; T.rSusp += it.r; }
+    else { T.nMissing++; T.rMissing += it.r; }
+    items.push({ id: it.id, n: it.n, cat: it.cat && it.cat !== "(not set)" ? it.cat : null, q: r2(it.q), r: r2(it.r), rn: r2(rn), cogs: r2(cogs), gp: r2(gp), st });
+  }
+  items.sort((a, b) => b.r - a.r);
+  const totals = {
+    ...Object.fromEntries(Object.entries(T).map(([k, v]) => [k, r2(v)])),
+    marginPct: T.rnOk > 0 ? r2((T.gp / T.rnOk) * 100) : null,
+    beRoas: T.gp > 0 ? r2(T.rOk / T.gp) : null,          // ROAS (prihod sa PDV-om kao u GA4 / potrošnja) pri kome je profit posle oglasa = 0
+    coveragePct: T.r > 0 ? r2((T.rOk / T.r) * 100) : null
+  };
+  const payload = {
+    currency, eurFactor: eurFactor ? Math.round(eurFactor * 1e8) / 1e8 : null,
+    range, periodDays: from && to ? null : periodDays,
+    basis: { valueType: s.value_type, pricesIncludeVat: s.prices_include_vat !== false, vatRate: vat, valueIncludesVat: !!s.value_includes_vat, valueCurrency: s.value_currency || currency },
+    totals, items: items.slice(0, 8000), truncated: items.length > 8000
+  };
+  const json = JSON.stringify(payload);
+  await cacheSet(key, { clientId, kind: "br-report", json, ttlSec: CACHE_TTL_SEC });
+  payload._perf = meterDone(meter, { cache: "miss", items: items.length, bytes: json.length });
+  return res.status(200).json(payload);
+}
+
 export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
   const ctx = await guard(req, res);
@@ -77,6 +244,9 @@ export default async function handler(req, res) {
 
   try {
     // ── Stanje: podešavanje + šta je učitano ──
+    if (req.method === "GET" && req.query.action === "report") {
+      return await report(req, res, clientId, await getSettings(clientId));
+    }
     if (req.method === "GET") {
       const s = await getSettings(clientId);
       let sample = [];
@@ -134,19 +304,19 @@ export default async function handler(req, res) {
         await db(`br_costs?client_id=eq.${clientId}&batch=eq.${batch}`, { method: "DELETE" }).catch(() => {});
         return res.status(409).json({ error: "incomplete", have, expected });
       }
+      // Uključi novi fajl (u bazi, jednim potezom): dopuna ili potpuna zamena
+      const total = await dbJson(`rpc/br_commit`, { method: "POST", body: JSON.stringify({ p_client: clientId, p_batch: batch, p_replace: body.replace === true }) });
       const fields = cleanSettings(body.settings);
       const cm = body.column_map && typeof body.column_map === "object" ? body.column_map : null;
       await saveSettings(clientId, {
         ...fields,
         column_map: cm && JSON.stringify(cm).length < 20000 ? cm : null,
         source_name: str(body.source_name, 200),
-        row_count: have,
+        row_count: Number(total) || have,
         active_batch: batch,
         uploaded_at: new Date().toISOString()
       });
-      // Stara serija (i eventualno nedovršena učitavanja) se brišu tek kad je nova uključena
-      await db(`br_costs?client_id=eq.${clientId}&batch=neq.${batch}`, { method: "DELETE" });
-      return res.status(200).json({ ok: true, row_count: have, settings: await getSettings(clientId) });
+      return res.status(200).json({ ok: true, row_count: have, total: Number(total) || have, settings: await getSettings(clientId) });
     }
 
     if (action === "upload_abort") {
@@ -154,7 +324,7 @@ export default async function handler(req, res) {
       if (!UUID_RE.test(batch)) return res.status(400).json({ error: "bad_batch" });
       const s = await getSettings(clientId);
       if (s && s.active_batch === batch) return res.status(400).json({ error: "active_batch" });
-      await db(`br_costs?client_id=eq.${clientId}&batch=eq.${batch}`, { method: "DELETE" });
+      await db(`br_costs?client_id=eq.${clientId}&batch=eq.${batch}&committed=eq.false`, { method: "DELETE" });
       return res.status(200).json({ ok: true });
     }
 
