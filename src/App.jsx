@@ -5262,7 +5262,7 @@ function BrReport({clientId,sr,st}){
               <td style={{padding:"8px 10px",textAlign:"right",color:"#d1d5db"}}>{ok?eur(i.cogs):i.st==="susp"?sus:na}</td>
               <td style={{padding:"8px 10px",textAlign:"right",fontWeight:700,color:ok?(i.gp<0?C.red:C.grn):C.dim}}>{ok?eur(i.gp):"–"}</td>
               <td style={{padding:"8px 10px",textAlign:"right",color:m==null?C.dim:m<0?C.red:m<10?C.yel:"#d1d5db"}}>{m==null?"–":pct(m)}</td>
-              <td style={{padding:"8px 10px",textAlign:"right",color:ok&&i.gp<=0?C.red:"#d1d5db"}}>{ok?(be==null?(sr?"uvek gubitak":"always a loss"):roasF(be)):"–"}</td>
+              <td style={{padding:"8px 10px",textAlign:"right",color:ok&&i.gp<=0?C.red:"#d1d5db"}}>{ok?(be==null?(sr?"u minusu i bez oglasa":"loses money even without ads"):roasF(be)):"–"}</td>
             </tr>; })}
             {!rows.length&&<tr><td colSpan={7} style={{padding:"18px",textAlign:"center",color:C.mut}}>{sr?"Nema proizvoda za ovaj izbor.":"No products for this filter."}</td></tr>}
           </tbody>
