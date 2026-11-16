@@ -269,7 +269,7 @@ async function campaigns(req, res, clientId, s) {
   }
 
   const out = [];
-  const TT = { spend: 0, r: 0, rOk: 0, gp: 0, gpEst: 0, profit: 0, nUnknown: 0 };
+  const TT = { spend: 0, r: 0, rOk: 0, gp: 0, gpEst: 0, profit: 0, nUnknown: 0, spendUnknown: 0 };
   for (const c of C.values()) {
     const items = [];
     for (const it of c.items.values()) {
@@ -285,7 +285,7 @@ async function campaigns(req, res, clientId, s) {
     const gpEst = c.rOk > 0 && cov >= 0.5 ? c.gp * (c.r / c.rOk) : (c.r === 0 ? 0 : null);
     const profit = gpEst != null ? gpEst - c.spend : null;
     TT.spend += c.spend; TT.r += c.r; TT.rOk += c.rOk; TT.gp += c.gp;
-    if (gpEst != null) { TT.gpEst += gpEst; TT.profit += profit; } else TT.nUnknown++;
+    if (gpEst != null) { TT.gpEst += gpEst; TT.profit += profit; } else { TT.nUnknown++; TT.spendUnknown += c.spend; }
     // Proizvodi: najveći prihod + najveći trošak bez prodaje (čist gubitak)
     const byRev = items.filter((i) => i.st !== "nosale").sort((a, b) => b.r - a.r).slice(0, 250);
     const noSale = items.filter((i) => i.st === "nosale" && i.ad > 0).sort((a, b) => b.ad - a.ad);
@@ -303,7 +303,7 @@ async function campaigns(req, res, clientId, s) {
   const payload = {
     currency, eurFactor: eurFactor ? Math.round(eurFactor * 1e8) / 1e8 : null, adsCurrency: adsCur, range, periodDays: per.days,
     shopping: !!shopRows,
-    totals: { spend: r2(TT.spend), r: r2(TT.r), rOk: r2(TT.rOk), gp: r2(TT.gp), gpEst: r2(TT.gpEst), profit: r2(TT.profit), nUnknown: TT.nUnknown,
+    totals: { spend: r2(TT.spend), r: r2(TT.r), rOk: r2(TT.rOk), gp: r2(TT.gp), gpEst: r2(TT.gpEst), profit: r2(TT.profit), nUnknown: TT.nUnknown, spendUnknown: r2(TT.spendUnknown),
       roas: TT.spend > 0 ? r2(TT.r / TT.spend) : null, beRoas: TT.gp > 0 && TT.rOk > 0 ? r2(TT.rOk / TT.gp) : null, cov: TT.r > 0 ? r2((TT.rOk / TT.r) * 100) : null },
     campaigns: out
   };
