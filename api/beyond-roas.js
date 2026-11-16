@@ -12,7 +12,7 @@ import { guard, clientInWorkspace, dbHeaders, SUPABASE_URL, UUID_RE } from "./_l
 import { createLimiter, ga4FetchAll, newMeter, meterStep, meterDone } from "./_lib/ga4.js";
 import { cacheKey, cacheGet, cacheSet } from "./_lib/cache.js";
 
-const CALC_VERSION = "br-1";
+const CALC_VERSION = "br-2"; // br-2: cena u GA4 ispod 20% cene iz fajla = sumnjivo
 const CACHE_TTL_SEC = 30 * 60;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -159,7 +159,7 @@ function makeCalc(s, currency, rates, costs) {
     if (f == null) return { st: "missing", rn, cogs: null, gp: null, noFx: true };
     const v = (Number(c.value) * f) / vv;
     const p = c.price != null ? (Number(c.price) * f) / pv : null;
-    const bad = !(q > 0) || (isMargin ? (p != null && v > p) : (v <= 0 || (p != null && v > p)));
+    const bad = !(q > 0) || (isMargin ? (p != null && v > p) : (v <= 0 || (p != null && v > p))) || (p != null && p > 0 && rn / q < p * 0.2);
     if (bad) return { st: "susp", rn, cogs: null, gp: null };
     if (isMargin && p == null) { const gp = q * v; return { st: "ok", rn, cogs: rn - gp, gp }; }
     const unitCost = isMargin ? p - v : v;
@@ -392,7 +392,9 @@ async function report(req, res, clientId, s) {
         let unitCost = null;
         if (isMargin) { if (p != null) unitCost = p - v; }
         else unitCost = v;
-        const bad = !(it.q > 0) || (isMargin ? (p != null && v > p) : (v <= 0 || (p != null && v > p)));
+        // Sumnjivo: vrednost nema smisla, ili je prodajna cena po komadu u GA4 manja od 20% cene iz fajla
+        // (poklon uz drugi proizvod, kupon 100%, pogrešno poslata cena) – takav red bi napravio "maržu" od −300.000%
+        const bad = !(it.q > 0) || (isMargin ? (p != null && v > p) : (v <= 0 || (p != null && v > p))) || (p != null && p > 0 && rn / it.q < p * 0.2);
         if (bad) st = "susp";
         else {
           st = "ok";
