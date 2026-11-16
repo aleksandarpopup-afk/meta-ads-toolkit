@@ -5054,7 +5054,20 @@ function brCoverage(rows,catalog){
 const BR_ROLE_LBL={sr:{"":"— ne koristi",sku:"Šifra",cost:"Nabavna cena",margin:"Zarada po komadu",price:"Prodajna cena",title:"Naziv",category:"Kategorija",currency:"Valuta",vat:"PDV stopa (%)"},
   en:{"":"— ignore",sku:"Product ID",cost:"Purchase price",margin:"Profit per unit",price:"Selling price",title:"Name",category:"Category",currency:"Currency",vat:"VAT rate (%)"}};
 const BR_CURS=["EUR","RSD","BAM","MKD","HUF","RON","BGN","USD","GBP","CHF"];
-const brTemplate=()=>{ const csv="\uFEFFŠifra;Naziv;Nabavna cena\r\n100022;Primer proizvoda;5270,00\r\n"; const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"})); a.download="sablon_nabavne_cene.csv"; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),2000); };
+// Šablon kao pravi Excel (.xlsx): CSV se u Excel-u sa engleskim podešavanjima otvara u jednoj koloni i kvari decimale
+const brTemplate=async(sr)=>{
+  try{
+    const XLSX=await brLoadXlsx();
+    const rows=[[sr?"Šifra":"Product ID",sr?"Naziv":"Name",sr?"Nabavna cena":"Purchase price",sr?"PDV stopa (%)":"VAT rate (%)"],
+      ["100022",sr?"Primer proizvoda 1":"Example product 1",5270,20],
+      ["100029",sr?"Primer proizvoda 2":"Example product 2",1899.5,20],
+      ["100040",sr?"Primer proizvoda 3 (PDV kolona može da ostane prazna)":"Example product 3 (VAT can be left empty)",3150,""]];
+    const ws=XLSX.utils.aoa_to_sheet(rows);
+    ws["!cols"]=[{wch:16},{wch:48},{wch:16},{wch:15}];
+    const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,sr?"Nabavne cene":"Purchase prices");
+    XLSX.writeFile(wb,sr?"sablon_nabavne_cene.xlsx":"purchase_prices_template.xlsx");
+  }catch(e){ alert(sr?"Šablon nije mogao da se napravi. Proveri internet vezu i pokušaj ponovo.":"Could not create the template. Check your connection and try again."); }
+};
 
 // Profit po Google Ads kampanji (korak 3) + proizvodi u kampanji sa troškom oglasa
 const BR_TYPE={PERFORMANCE_MAX:"PMax",SHOPPING:"Shopping",SEARCH:"Search",DISPLAY:"Display",VIDEO:"Video",DEMAND_GEN:"Demand Gen",DISCOVERY:"Demand Gen",SMART:"Smart",LOCAL:"Local",APP:"App"};
@@ -5580,7 +5593,7 @@ function BeyondRoasMod({t,lang}){
         <div style={{display:"flex",gap:10,marginTop:14,flexWrap:"wrap",alignItems:"center"}}>
           <input ref={fileRef} type="file" accept=".csv,.txt,.tsv,.xlsx,.xls,.xlsm,.xml" style={{display:"none"}} onChange={e=>onFile(e.target.files&&e.target.files[0])}/>
           <button disabled={parsing} onClick={()=>fileRef.current&&fileRef.current.click()} style={btn(true,parsing)}>{parsing?<>{sr?"Čitam fajl i proveravam sa GA4 ":"Reading file and checking GA4 "}<PmDots/></>:s.active_batch?(sr?"Učitaj novi fajl":"Upload a new file"):(sr?"Učitaj fajl":"Upload file")}</button>
-          {!s.active_batch&&<button onClick={brTemplate} style={btn(false)}>{sr?"Preuzmi šablon":"Download template"}</button>}
+          <button onClick={()=>brTemplate(sr)} style={btn(false)}>{sr?"Preuzmi šablon (Excel)":"Download template (Excel)"}</button>
         </div>
       </div>
       <div className="pm-in" style={card}>
