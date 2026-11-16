@@ -45,6 +45,8 @@ if(typeof document!=="undefined"&&!document.getElementById("pm-ui-css")){
 .pm-sk{background:linear-gradient(90deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.10) 50%,rgba(255,255,255,0.04) 100%);background-size:960px 100%;animation:pmShimmer 1.4s linear infinite;border-radius:8px}
 @keyframes pmIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .pm-in{animation:pmIn .45s cubic-bezier(.2,.7,.2,1) backwards}
+select{color-scheme:dark}
+select option{background:#13131f;color:#e5e7eb}
 .pm-lift{transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
 .pm-lift:hover{transform:translateY(-2px);border-color:rgba(165,180,252,0.35)!important;box-shadow:0 6px 18px rgba(0,0,0,0.25)}
 @keyframes pmDot{0%,80%,100%{opacity:.25;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}
@@ -1195,8 +1197,8 @@ function BpForm({form,sr,mob,clients,setClients,clientsLoading,range,ym,onClose,
       <L c={sr?"Klijent":"Client"}/>
       {clientsLoading?<div style={{color:C.acl,fontSize:13,marginBottom:12}}>✦ {sr?"Učitavam klijente...":"Loading clients..."}</div>:
         <select value={clientId} onChange={e=>setClientId(e.target.value)} disabled={!!edit} style={{...bpInp,marginBottom:8}}>
-          <option value="" style={{color:"#111"}}>{sr?"— izaberi klijenta —":"— choose a client —"}</option>
-          {clients.map(c=><option key={c.id} value={String(c.id)} style={{color:"#111"}}>{c.name}</option>)}
+          <option value="" style={{background:"#13131f",color:"#e5e7eb"}}>{sr?"— izaberi klijenta —":"— choose a client —"}</option>
+          {clients.map(c=><option key={c.id} value={String(c.id)} style={{background:"#13131f",color:"#e5e7eb"}}>{c.name}</option>)}
         </select>}
       {!edit&&<div style={{display:"flex",gap:8,marginBottom:12}}>
         <input value={newName} onChange={e=>setNewName(e.target.value)} placeholder={sr?"ili upiši ime novog klijenta":"or type a new client name"} style={{...bpInp,flex:1,width:"auto"}}/>
@@ -1205,11 +1207,11 @@ function BpForm({form,sr,mob,clients,setClients,clientsLoading,range,ym,onClose,
       <div style={{display:"grid",gridTemplateColumns:mob?"1fr":"1fr 1fr",gap:10,marginBottom:12}}>
         <div><L c={sr?"Platforma":"Platform"}/>
           <select value={platform} onChange={e=>setPlatform(e.target.value)} style={bpInp}>
-            {BP_PLATFORMS.map(p=><option key={p.k} value={p.k} style={{color:"#111"}}>{p.k==="other"?(sr?"Ostalo":"Other"):p.l}</option>)}
+            {BP_PLATFORMS.map(p=><option key={p.k} value={p.k} style={{background:"#13131f",color:"#e5e7eb"}}>{p.k==="other"?(sr?"Ostalo":"Other"):p.l}</option>)}
           </select></div>
         <div><L c={sr?"Valuta":"Currency"}/>
           <select value={currency} onChange={e=>setCurrency(e.target.value)} style={bpInp}>
-            {(BP_CURRENCIES.includes(currency)?BP_CURRENCIES:[currency,...BP_CURRENCIES]).map(c=><option key={c} value={c} style={{color:"#111"}}>{c}</option>)}
+            {(BP_CURRENCIES.includes(currency)?BP_CURRENCIES:[currency,...BP_CURRENCIES]).map(c=><option key={c} value={c} style={{background:"#13131f",color:"#e5e7eb"}}>{c}</option>)}
           </select></div>
       </div>
       {dates}
@@ -2116,8 +2118,8 @@ function ReportStudioMod({t,lang,initialTab}){
       {clientsLoading?<div style={{color:C.acl,fontSize:13}}>✦ {sr?"Učitavam klijente...":"Loading clients..."}</div>:
         clients.length===0?<div style={{color:C.mut,fontSize:13}}>{sr?"Nema klijenata još. Dodaj klijenta u Clients.":"No clients yet. Add a client in Clients."}</div>:
         <select value={clientId} onChange={e=>{setClientId(e.target.value);setRep(null);setAi("");setErr("");}} style={bpInp}>
-          <option value="" style={{color:"#111"}}>{sr?"— izaberi klijenta —":"— choose a client —"}</option>
-          {clients.map(c=><option key={c.id} value={String(c.id)} style={{color:"#111"}}>{c.name}</option>)}
+          <option value="" style={{background:"#13131f",color:"#e5e7eb"}}>{sr?"— izaberi klijenta —":"— choose a client —"}</option>
+          {clients.map(c=><option key={c.id} value={String(c.id)} style={{background:"#13131f",color:"#e5e7eb"}}>{c.name}</option>)}
         </select>}
     </div>
 
