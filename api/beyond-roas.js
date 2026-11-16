@@ -6,6 +6,8 @@
 // poznatu vrednost (feed obično sadrži samo trenutnu ponudu). "replace" briše sve stare podatke.
 // Ako učitavanje pukne na pola, stari podaci ostaju netaknuti.
 // Korak 2: GET ?action=report – profit po proizvodu (GA4 prodaja × nabavna cena / zarada).
+// Korak 3: GET ?action=campaigns – profit po Google Ads kampanji i proizvod × kampanja, sa troškom oglasa
+//          (potrošnja kampanje iz Google Ads-a; trošak po proizvodu iz shopping_performance_view za Shopping/PMax).
 import { guard, clientInWorkspace, dbHeaders, SUPABASE_URL, UUID_RE } from "./_lib/auth.js";
 import { createLimiter, ga4FetchAll, newMeter, meterStep, meterDone } from "./_lib/ga4.js";
 import { cacheKey, cacheGet, cacheSet } from "./_lib/cache.js";
@@ -24,6 +26,27 @@ async function refreshAccessToken(refresh_token) {
   const data = await r.json();
   if (!r.ok) throw new Error(JSON.stringify(data));
   return data.access_token;
+}
+
+const GADS_VERSION = "v25";
+// Google Ads pretraga (isti način kao google-ads-drilldown.js; developer token više nije potreban)
+async function gadsSearch(customerId, accessToken, query, loginCustomerId) {
+  const headers = { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` };
+  if (loginCustomerId) headers["login-customer-id"] = loginCustomerId;
+  let all = [];
+  let pageToken;
+  do {
+    const body = { query };
+    if (pageToken) body.pageToken = pageToken;
+    const r = await fetch(`https://googleads.googleapis.com/${GADS_VERSION}/customers/${customerId}/googleAds:search`, {
+      method: "POST", headers, body: JSON.stringify(body), signal: AbortSignal.timeout(45000)
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error("Google Ads: " + JSON.stringify(data).slice(0, 300));
+    all = all.concat(data.results || []);
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+  return all;
 }
 
 // Kursevi: tabela exchange_rates (jedan red, osnova EUR: rates[X] = koliko X vredi 1 EUR)
@@ -102,7 +125,7 @@ async function countBatch(clientId, batch) {
 // Sve važeće vrednosti klijenta (Supabase vraća najviše 1.000 redova po pozivu → delovi istovremeno, po 4)
 async function loadCosts(clientId) {
   const PAGE = 1000;
-  const base = `br_costs?client_id=eq.${clientId}&committed=eq.true&select=sku,value,price,currency&order=sku`;
+  const base = `br_costs?client_id=eq.${clientId}&committed=eq.true&select=sku,value,price,currency,title&order=sku`;
   const r = await db(`${base}&limit=${PAGE}&offset=0`, { headers: { Prefer: "count=exact" } });
   const txt = await r.text();
   if (!r.ok) {
@@ -116,6 +139,178 @@ async function loadCosts(clientId) {
   const limit = createLimiter(4);
   const pages = await Promise.all(offsets.map((o) => limit(() => dbJson(`${base}&limit=${PAGE}&offset=${o}`))));
   return first.concat(...pages);
+}
+
+// Pravila računice (zajednička za proizvode i kampanje): vraća f(sku, komada, prihod) → {st, rn, cogs, gp}
+function makeCalc(s, currency, rates, costs) {
+  const costMap = new Map();
+  for (const c of costs) costMap.set(String(c.sku).trim().toLowerCase(), c);
+  const vat = Number(s.vat_rate) || 0;
+  const pv = s.prices_include_vat === false ? 1 : 1 + vat / 100;
+  const vv = s.value_includes_vat ? 1 + vat / 100 : 1;
+  const isMargin = s.value_type === "margin";
+  const fxCache = {};
+  const fxTo = (cur) => { const c = cur || s.value_currency || currency; if (!(c in fxCache)) fxCache[c] = convert(1, c, currency, rates); return fxCache[c]; };
+  const calc = (id, q, r) => {
+    const rn = r / pv;
+    const c = costMap.get(String(id).trim().toLowerCase());
+    if (!c) return { st: "missing", rn, cogs: null, gp: null };
+    const f = fxTo(c.currency);
+    if (f == null) return { st: "missing", rn, cogs: null, gp: null, noFx: true };
+    const v = (Number(c.value) * f) / vv;
+    const p = c.price != null ? (Number(c.price) * f) / pv : null;
+    const bad = !(q > 0) || (isMargin ? (p != null && v > p) : (v <= 0 || (p != null && v > p)));
+    if (bad) return { st: "susp", rn, cogs: null, gp: null };
+    if (isMargin && p == null) { const gp = q * v; return { st: "ok", rn, cogs: rn - gp, gp }; }
+    const unitCost = isMargin ? p - v : v;
+    const cogs = q * unitCost;
+    return { st: "ok", rn, cogs, gp: rn - cogs };
+  };
+  calc.title = (id) => { const c = costMap.get(String(id).trim().toLowerCase()); return c ? c.title : null; };
+  return { calc, vat };
+}
+
+// Tačni datumi perioda (za Google Ads su potrebni pravi datumi, ne "30daysAgo")
+function periodDates(q) {
+  const DATE_OK = /^\d{4}-\d{2}-\d{2}$/;
+  if (q.from || q.to) {
+    if (!(DATE_OK.test(q.from || "") && DATE_OK.test(q.to || "") && q.from <= q.to)) return null;
+    return { startDate: q.from, endDate: q.to, days: null };
+  }
+  const days = Math.min(Math.max(parseInt(q.days) || 30, 1), 730);
+  const end = new Date(); end.setUTCDate(end.getUTCDate() - 1);
+  const start = new Date(); start.setUTCDate(start.getUTCDate() - days);
+  return { startDate: start.toISOString().slice(0, 10), endDate: end.toISOString().slice(0, 10), days };
+}
+
+async function campaigns(req, res, clientId, s) {
+  const per = periodDates(req.query);
+  if (!per) return res.status(400).json({ error: "Invalid period" });
+  if (!s || !s.row_count) return res.status(200).json({ empty: true });
+  const [g4, ga] = await Promise.all([
+    dbJson(`ga4_connections?client_id=eq.${clientId}&select=property_id,refresh_token,currency_code`),
+    dbJson(`google_ads_connections?client_id=eq.${clientId}&select=customer_id,manager_id,currency_code,refresh_token`)
+  ]);
+  if (!Array.isArray(g4) || !g4.length) return res.status(200).json({ error: "no_ga4" });
+  if (!Array.isArray(ga) || !ga.length) return res.status(200).json({ error: "no_gads" });
+  const { property_id, refresh_token: g4Token, currency_code: g4Cur } = g4[0];
+  const { customer_id, manager_id, currency_code: adsCurRaw, refresh_token: adsToken } = ga[0];
+  const currency = g4Cur || "EUR";
+  const adsCur = adsCurRaw || "EUR";
+  const range = { startDate: per.startDate, endDate: per.endDate };
+  const meter = newMeter(`beyond-roas-campaigns client=${clientId} ${range.startDate}..${range.endDate}`);
+  const key = cacheKey({ kind: "br-camp", v: CALC_VERSION, client: clientId, property: String(property_id), customer: String(customer_id), currency, range, up: s.uploaded_at, set: s.updated_at });
+  if (req.query.refresh !== "1") {
+    const hit = await cacheGet(key);
+    if (hit) { hit.data._perf = meterDone(meter, { cache: "hit" }); return res.status(200).json(hit.data); }
+  }
+  const t = Date.now();
+  const limit = createLimiter(4);
+  const [g4At, adsAt] = await Promise.all([refreshAccessToken(g4Token), refreshAccessToken(adsToken)]);
+  const login = manager_id || undefined;
+  const dq = `segments.date BETWEEN '${range.startDate}' AND '${range.endDate}'`;
+  const [ga4rep, campRows, shopRows, costs, fx] = await Promise.all([
+    ga4FetchAll(property_id, g4At, {
+      dateRanges: [range],
+      dimensions: [{ name: "sessionGoogleAdsCampaignId" }, { name: "itemId" }, { name: "itemName" }],
+      metrics: [{ name: "itemsPurchased" }, { name: "itemRevenue" }],
+      orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }]
+    }, { maxRows: 300000, meter, limit }),
+    gadsSearch(customer_id, adsAt, `SELECT campaign.id, campaign.name, campaign.advertising_channel_type, campaign.status, metrics.cost_micros, metrics.clicks FROM campaign WHERE ${dq} AND metrics.cost_micros > 0`, login),
+    // Trošak po proizvodu postoji samo za Shopping i Performance Max (ako ga nema, nastavlja se bez njega)
+    gadsSearch(customer_id, adsAt, `SELECT campaign.id, segments.product_item_id, metrics.cost_micros, metrics.clicks FROM shopping_performance_view WHERE ${dq} AND metrics.cost_micros > 0`, login)
+      .catch((e) => { console.warn("[beyond-roas] shopping_performance_view:", e.message.slice(0, 200)); return null; }),
+    loadCosts(clientId),
+    dbJson("exchange_rates?id=eq.1&select=rates").catch(() => null)
+  ]);
+  meterStep(meter, `ga4+ads(${(ga4rep.rows || []).length} ga4, ${campRows.length} camp, ${shopRows ? shopRows.length : "-"} shop, ${costs.length} costs)`, t);
+  const rates = fx && fx[0] ? fx[0].rates : null;
+  const eurFactor = currency === "EUR" ? 1 : convert(1, currency, "EUR", rates);
+  const adsFx = convert(1, adsCur, currency, rates);
+  if (adsFx == null) return res.status(200).json({ error: "no_fx" });
+  const { calc } = makeCalc(s, currency, rates, costs);
+
+  // Kampanje sa potrošnjom
+  const C = new Map();
+  const camp = (id) => {
+    let c = C.get(id);
+    if (!c) { c = { id, name: null, type: null, status: null, spend: 0, clicks: 0, r: 0, rn: 0, rOk: 0, gp: 0, nOk: 0, nItems: 0, items: new Map(), hasShop: false }; C.set(id, c); }
+    return c;
+  };
+  for (const row of campRows) {
+    const c = camp(String(row.campaign.id));
+    c.name = row.campaign.name; c.type = row.campaign.advertisingChannelType; c.status = row.campaign.status;
+    c.spend += ((parseInt(row.metrics.costMicros) || 0) / 1e6) * adsFx;
+    c.clicks += parseInt(row.metrics.clicks) || 0;
+  }
+  // GA4 prodaja po kampanji × proizvodu
+  for (const row of ga4rep.rows || []) {
+    const cid = row.dimensionValues[0].value;
+    if (!/^\d+$/.test(cid) || cid === "0") continue;
+    const id = String(row.dimensionValues[1].value || "").trim();
+    if (!id || id === "(not set)") continue;
+    const q = parseFloat(row.metricValues[0].value) || 0;
+    const r = parseFloat(row.metricValues[1].value) || 0;
+    if (!(q > 0 || r !== 0)) continue;
+    const c = camp(cid);
+    let it = c.items.get(id.toLowerCase());
+    if (!it) { it = { id, n: unesc(row.dimensionValues[2].value), q: 0, r: 0, ad: null }; c.items.set(id.toLowerCase(), it); }
+    it.q += q; it.r += r;
+  }
+  // Trošak oglasa po proizvodu (Shopping / PMax)
+  if (shopRows) for (const row of shopRows) {
+    const c = camp(String(row.campaign.id));
+    const pid = String(row.segments.productItemId || "").trim();
+    if (!pid) continue;
+    c.hasShop = true;
+    let it = c.items.get(pid.toLowerCase());
+    if (!it) { it = { id: pid, n: null, q: 0, r: 0, ad: 0 }; c.items.set(pid.toLowerCase(), it); }
+    it.ad = (it.ad || 0) + ((parseInt(row.metrics.costMicros) || 0) / 1e6) * adsFx;
+  }
+
+  const out = [];
+  const TT = { spend: 0, r: 0, rOk: 0, gp: 0, gpEst: 0, profit: 0, nUnknown: 0 };
+  for (const c of C.values()) {
+    const items = [];
+    for (const it of c.items.values()) {
+      const k = it.r !== 0 || it.q > 0 ? calc(it.id, it.q, it.r) : { st: "nosale", rn: 0, cogs: 0, gp: 0 };
+      if (k.st !== "nosale") { c.nItems++; c.r += it.r; c.rn += k.rn; if (k.st === "ok") { c.nOk++; c.rOk += it.r; c.gp += k.gp; } }
+      const ad = c.hasShop ? (it.ad || 0) : null;
+      const gpVal = k.st === "nosale" ? 0 : k.gp;
+      items.push({ id: it.id, n: it.n || calc.title(it.id) || null, q: r2(it.q), r: r2(it.r), rn: r2(k.rn), gp: r2(gpVal), st: k.st, ad: r2(ad), pa: ad != null && gpVal != null ? r2(gpVal - ad) : null });
+    }
+    if (!c.name && !c.spend && !c.r) continue;
+    const cov = c.r > 0 ? c.rOk / c.r : null;
+    // Procena za ceo prihod kampanje: profit poznatih proizvoda × (ceo prihod / prihod sa cenom). Samo kad je pokriveno ≥ 50%.
+    const gpEst = c.rOk > 0 && cov >= 0.5 ? c.gp * (c.r / c.rOk) : (c.r === 0 ? 0 : null);
+    const profit = gpEst != null ? gpEst - c.spend : null;
+    TT.spend += c.spend; TT.r += c.r; TT.rOk += c.rOk; TT.gp += c.gp;
+    if (gpEst != null) { TT.gpEst += gpEst; TT.profit += profit; } else TT.nUnknown++;
+    // Proizvodi: najveći prihod + najveći trošak bez prodaje (čist gubitak)
+    const byRev = items.filter((i) => i.st !== "nosale").sort((a, b) => b.r - a.r).slice(0, 250);
+    const noSale = items.filter((i) => i.st === "nosale" && i.ad > 0).sort((a, b) => b.ad - a.ad);
+    const noSaleTop = noSale.slice(0, 50);
+    out.push({
+      id: c.id, name: c.name || `#${c.id}`, type: c.type, status: c.status, spend: r2(c.spend), clicks: c.clicks,
+      r: r2(c.r), rn: r2(c.rn), rOk: r2(c.rOk), gp: r2(c.gp), cov: cov == null ? null : r2(cov * 100),
+      gpEst: r2(gpEst), profit: r2(profit), roas: c.spend > 0 ? r2(c.r / c.spend) : null, beRoas: c.gp > 0 && c.rOk > 0 ? r2(c.rOk / c.gp) : null,
+      hasShop: c.hasShop, nItems: c.nItems, nOk: c.nOk,
+      noSaleCount: noSale.length, noSaleSpend: r2(noSale.reduce((a, i) => a + i.ad, 0)),
+      items: byRev.concat(noSaleTop), itemsTruncated: items.length > byRev.length + noSaleTop.length
+    });
+  }
+  out.sort((a, b) => (b.spend || 0) - (a.spend || 0) || (b.r || 0) - (a.r || 0));
+  const payload = {
+    currency, eurFactor: eurFactor ? Math.round(eurFactor * 1e8) / 1e8 : null, adsCurrency: adsCur, range, periodDays: per.days,
+    shopping: !!shopRows,
+    totals: { spend: r2(TT.spend), r: r2(TT.r), rOk: r2(TT.rOk), gp: r2(TT.gp), gpEst: r2(TT.gpEst), profit: r2(TT.profit), nUnknown: TT.nUnknown,
+      roas: TT.spend > 0 ? r2(TT.r / TT.spend) : null, beRoas: TT.gp > 0 && TT.rOk > 0 ? r2(TT.rOk / TT.gp) : null, cov: TT.r > 0 ? r2((TT.rOk / TT.r) * 100) : null },
+    campaigns: out
+  };
+  const json = JSON.stringify(payload);
+  await cacheSet(key, { clientId, kind: "br-camp", json, ttlSec: CACHE_TTL_SEC });
+  payload._perf = meterDone(meter, { cache: "miss", campaigns: out.length, bytes: json.length });
+  return res.status(200).json(payload);
 }
 
 async function report(req, res, clientId, s) {
@@ -246,6 +441,9 @@ export default async function handler(req, res) {
     // ── Stanje: podešavanje + šta je učitano ──
     if (req.method === "GET" && req.query.action === "report") {
       return await report(req, res, clientId, await getSettings(clientId));
+    }
+    if (req.method === "GET" && req.query.action === "campaigns") {
+      return await campaigns(req, res, clientId, await getSettings(clientId));
     }
     if (req.method === "GET") {
       const s = await getSettings(clientId);
