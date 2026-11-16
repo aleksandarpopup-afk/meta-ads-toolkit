@@ -12,7 +12,7 @@ import { guard, clientInWorkspace, dbHeaders, SUPABASE_URL, UUID_RE } from "./_l
 import { createLimiter, ga4FetchAll, newMeter, meterStep, meterDone } from "./_lib/ga4.js";
 import { cacheKey, cacheGet, cacheSet } from "./_lib/cache.js";
 
-const CALC_VERSION = "br-2"; // br-2: cena u GA4 ispod 20% cene iz fajla = sumnjivo
+const CALC_VERSION = "br-3"; // br-2: cena u GA4 ispod 20% cene iz fajla = sumnjivo; br-3: PDV stopa po proizvodu
 const CACHE_TTL_SEC = 30 * 60;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -125,11 +125,11 @@ async function countBatch(clientId, batch) {
 // Sve važeće vrednosti klijenta (Supabase vraća najviše 1.000 redova po pozivu → delovi istovremeno, po 4)
 async function loadCosts(clientId) {
   const PAGE = 1000;
-  const base = `br_costs?client_id=eq.${clientId}&committed=eq.true&select=sku,value,price,currency,title&order=sku`;
+  const base = `br_costs?client_id=eq.${clientId}&committed=eq.true&select=sku,value,price,currency,title,vat_rate&order=sku`;
   const r = await db(`${base}&limit=${PAGE}&offset=0`, { headers: { Prefer: "count=exact" } });
   const txt = await r.text();
   if (!r.ok) {
-    if (/committed/.test(txt) && /does not exist|column/i.test(txt)) throw new Error("setup_missing");
+    if (/committed|vat_rate/.test(txt) && /does not exist|column/i.test(txt)) throw new Error("setup_missing");
     throw new Error(`Baza ${r.status}: ${txt.slice(0, 200)}`);
   }
   const first = JSON.parse(txt || "[]");
@@ -146,14 +146,16 @@ function makeCalc(s, currency, rates, costs) {
   const costMap = new Map();
   for (const c of costs) costMap.set(String(c.sku).trim().toLowerCase(), c);
   const vat = Number(s.vat_rate) || 0;
-  const pv = s.prices_include_vat === false ? 1 : 1 + vat / 100;
-  const vv = s.value_includes_vat ? 1 + vat / 100 : 1;
+  const pvOf = (rate) => (s.prices_include_vat === false ? 1 : 1 + rate / 100);
+  const vvOf = (rate) => (s.value_includes_vat ? 1 + rate / 100 : 1);
   const isMargin = s.value_type === "margin";
   const fxCache = {};
   const fxTo = (cur) => { const c = cur || s.value_currency || currency; if (!(c in fxCache)) fxCache[c] = convert(1, c, currency, rates); return fxCache[c]; };
   const calc = (id, q, r) => {
-    const rn = r / pv;
     const c = costMap.get(String(id).trim().toLowerCase());
+    const rate = c && c.vat_rate != null ? Number(c.vat_rate) : vat;
+    const pv = pvOf(rate), vv = vvOf(rate);
+    const rn = r / pv;
     if (!c) return { st: "missing", rn, cogs: null, gp: null };
     const f = fxTo(c.currency);
     if (f == null) return { st: "missing", rn, cogs: null, gp: null, noFx: true };
@@ -365,9 +367,12 @@ async function report(req, res, clientId, s) {
   for (const c of costs) costMap.set(String(c.sku).trim().toLowerCase(), c);
 
   const vat = Number(s.vat_rate) || 0;
-  const pv = s.prices_include_vat === false ? 1 : 1 + vat / 100;   // cene na sajtu / u GA4
-  const vv = s.value_includes_vat ? 1 + vat / 100 : 1;             // vrednost iz fajla
+  // PDV: stopa proizvoda iz fajla (ako postoji), inače stopa klijenta
+  const pvOf = (rate) => (s.prices_include_vat === false ? 1 : 1 + rate / 100);   // cene na sajtu / u GA4
+  const vvOf = (rate) => (s.value_includes_vat ? 1 + rate / 100 : 1);            // vrednost iz fajla
+  const pv = pvOf(vat);
   const isMargin = s.value_type === "margin";
+  const vatCount = {};
   const fxCache = {};
   const fxTo = (cur) => {
     const c = cur || s.value_currency || currency;
@@ -379,16 +384,19 @@ async function report(req, res, clientId, s) {
   const items = [];
   for (const it of byId.values()) {
     if (!(it.q > 0 || it.r !== 0)) continue;
-    const rn = it.r / pv;
-    T.nItems++; T.r += it.r; T.rn += rn;
     const c = costMap.get(it.id.toLowerCase());
+    const rate = c && c.vat_rate != null ? Number(c.vat_rate) : vat;
+    const pvI = pvOf(rate), vvI = vvOf(rate);
+    const rn = it.r / pvI;
+    T.nItems++; T.r += it.r; T.rn += rn;
     let st = "missing", cogs = null, gp = null;
     if (c) {
+      if (c.vat_rate != null) vatCount[rate] = (vatCount[rate] || 0) + 1;
       const f = fxTo(c.currency);
       if (f == null) { T.noFx++; }
       else {
-        const v = (Number(c.value) * f) / vv;
-        const p = c.price != null ? (Number(c.price) * f) / pv : null;
+        const v = (Number(c.value) * f) / vvI;
+        const p = c.price != null ? (Number(c.price) * f) / pvI : null;
         let unitCost = null;
         if (isMargin) { if (p != null) unitCost = p - v; }
         else unitCost = v;
@@ -420,7 +428,8 @@ async function report(req, res, clientId, s) {
   const payload = {
     currency, eurFactor: eurFactor ? Math.round(eurFactor * 1e8) / 1e8 : null,
     range, periodDays: from && to ? null : periodDays,
-    basis: { valueType: s.value_type, pricesIncludeVat: s.prices_include_vat !== false, vatRate: vat, valueIncludesVat: !!s.value_includes_vat, valueCurrency: s.value_currency || currency },
+    basis: { valueType: s.value_type, pricesIncludeVat: s.prices_include_vat !== false, vatRate: vat, valueIncludesVat: !!s.value_includes_vat, valueCurrency: s.value_currency || currency,
+      itemVat: Object.keys(vatCount).length ? vatCount : null },   // {stopa: broj prodatih proizvoda} kad fajl ima PDV po proizvodu
     totals, items: items.slice(0, 8000), truncated: items.length > 8000
   };
   const json = JSON.stringify(payload);
@@ -482,7 +491,10 @@ export default async function handler(req, res) {
         seen.add(k);
         const price = num(r.p);
         const cur = typeof r.cur === "string" && CUR_RE.test(r.cur) ? r.cur : null;
-        out.push({ client_id: clientId, batch, sku: k, value, price: price !== null && isFinite(price) && Math.abs(price) < 1e10 ? price : null, title: str(r.t, 300), category: str(r.c, 200), currency: cur });
+        const vr = num(r.vr);
+        const row = { client_id: clientId, batch, sku: k, value, price: price !== null && isFinite(price) && Math.abs(price) < 1e10 ? price : null, title: str(r.t, 300), category: str(r.c, 200), currency: cur };
+        if (vr !== null && isFinite(vr) && vr >= 0 && vr <= 50) row.vat_rate = vr; // samo kad fajl ima kolonu PDV (inače ostaje prazno = stopa klijenta)
+        out.push(row);
       }
       if (out.length) {
         await dbJson(`br_costs?on_conflict=client_id,batch,sku`, {
