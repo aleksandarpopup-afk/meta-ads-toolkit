@@ -5050,6 +5050,113 @@ const BR_ROLE_LBL={sr:{"":"— ne koristi",sku:"Šifra",cost:"Nabavna cena",marg
 const BR_CURS=["EUR","RSD","BAM","MKD","HUF","RON","BGN","USD","GBP","CHF"];
 const brTemplate=()=>{ const csv="\uFEFFŠifra;Naziv;Nabavna cena\r\n100022;Primer proizvoda;5270,00\r\n"; const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"})); a.download="sablon_nabavne_cene.csv"; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),2000); };
 
+// Profit po proizvodu (korak 2). Novac: EUR je glavni prikaz, lokalna valuta mala ispod (kao u ostalim modulima).
+function BrReport({clientId,sr,st}){
+  const [period,setPeriod]=useState("30");
+  const [data,setData]=useState(null);
+  const [loading,setLoading]=useState(false);
+  const [err,setErr]=useState("");
+  const [filter,setFilter]=useState("all");
+  const [search,setSearch]=useState("");
+  const [sortKey,setSortKey]=useState("r");
+  const [sortDir,setSortDir]=useState("desc");
+  const [visible,setVisible]=useState(50);
+  const req=useRef(0);
+  const stamp=st&&(st.uploaded_at+"|"+st.updated_at);
+  useEffect(()=>{ pmAnimReset("br:"); },[clientId]);
+  useEffect(()=>{
+    if(!clientId||!st||!st.row_count) return;
+    const my=++req.current; setLoading(true); setErr(""); setVisible(50);
+    fetch(`/api/beyond-roas?client_id=${clientId}&action=report&days=${period}`).then(async r=>{
+      const d=await r.json().catch(()=>({}));
+      if(my!==req.current) return;
+      if(r.status===503) throw new Error(sr?"Baza nije pripremljena – pokreni br2.sql u Supabase-u.":"Database not set up – run br2.sql.");
+      if(!r.ok) throw new Error(d.error||`HTTP ${r.status}`);
+      if(d.error==="no_ga4") throw new Error(sr?"GA4 nije povezan za ovog klijenta – profit po proizvodu se računa iz GA4 prodaje.":"GA4 isn't connected for this client.");
+      setData(d);
+    }).catch(e=>{ if(my===req.current){ setErr(e.message); setData(null); } }).finally(()=>{ if(my===req.current) setLoading(false); });
+  },[clientId,period,stamp]);
+
+  const loc=sr?"sr-RS":"en-GB";
+  const cur=data?data.currency:"EUR";
+  const ef=data&&data.currency!=="EUR"&&data.eurFactor>0?data.eurFactor:null;
+  const eur=v=>v==null?"–":new Intl.NumberFormat(loc,{style:"currency",currency:ef?"EUR":cur,maximumFractionDigits:0}).format(ef?v*ef:v);
+  const nat=v=>v==null||!ef?null:new Intl.NumberFormat(loc,{style:"currency",currency:cur,maximumFractionDigits:0}).format(v);
+  const pct=v=>v==null?"–":`${(Math.round(v*10)/10).toLocaleString(loc)}%`;
+  const roasF=v=>v==null?"–":(Math.round(v*100)/100).toLocaleString(loc,{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  const T=data&&data.totals;
+  const items=data&&data.items||[];
+  const counts=useMemo(()=>({all:items.length,neg:items.filter(i=>i.st==="ok"&&i.gp<0).length,low:items.filter(i=>i.st==="ok"&&i.rn>0&&i.gp/i.rn<0.1).length,missing:items.filter(i=>i.st==="missing").length,susp:items.filter(i=>i.st==="susp").length}),[data]);
+  const rows=useMemo(()=>{
+    const q=search.trim().toLowerCase();
+    let r=items.filter(i=>filter==="all"||(filter==="neg"?i.st==="ok"&&i.gp<0:filter==="low"?i.st==="ok"&&i.rn>0&&i.gp/i.rn<0.1:i.st===filter));
+    if(q) r=r.filter(i=>String(i.n||"").toLowerCase().includes(q)||String(i.id).toLowerCase().includes(q));
+    const val=i=>sortKey==="m"?(i.st==="ok"&&i.rn>0?i.gp/i.rn:null):sortKey==="be"?(i.st==="ok"&&i.gp>0?i.r/i.gp:null):i[sortKey];
+    const dir=sortDir==="asc"?1:-1;
+    return [...r].sort((a,b)=>{ const va=val(a),vb=val(b); if(va==null&&vb==null) return 0; if(va==null) return 1; if(vb==null) return -1; return (va-vb)*dir; });
+  },[data,filter,search,sortKey,sortDir]);
+
+  if(!st||!st.row_count) return null;
+  const card={background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:14,padding:"16px 18px",marginBottom:14};
+  const chip=(on)=>({padding:"7px 12px",borderRadius:8,border:`1px solid ${on?"#F59E0B":C.brd}`,background:on?"rgba(245,158,11,0.15)":"transparent",color:on?"#FBBF24":"#d1d5db",fontWeight:700,fontSize:12.5,cursor:"pointer"});
+  const tile=(lbl,v,sub,col,k,fmt)=><div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px"}}>
+    <div style={{color:C.mut,fontSize:11.5,fontWeight:700,marginBottom:6}}>{lbl}</div>
+    <div style={{color:col||"#fff",fontSize:22,fontWeight:800,lineHeight:1.15}}>{v==null?"–":<AnimNum value={v} k={"br:"+k} format={fmt}/>}</div>
+    {sub&&<div style={{color:C.mut,fontSize:11.5,marginTop:4}}>{sub}</div>}
+  </div>;
+  const th=(k,lbl,right)=><th onClick={()=>{ if(sortKey===k) setSortDir(d=>d==="asc"?"desc":"asc"); else { setSortKey(k); setSortDir("desc"); } }} style={{textAlign:right?"right":"left",padding:"9px 10px",color:sortKey===k?"#FBBF24":C.mut,fontSize:11.5,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap",borderBottom:`1px solid ${C.brd}`}}>{lbl}{sortKey===k?(sortDir==="asc"?" ↑":" ↓"):""}</th>;
+  const na=<span style={{color:C.dim}}>{sr?"nije uneto":"not set"}</span>;
+  const sus=<span style={{color:C.yel}}>{sr?"sumnjivo":"suspicious"}</span>;
+  const per=[["7",sr?"7 dana":"7 days"],["30",sr?"30 dana":"30 days"],["90",sr?"90 dana":"90 days"]];
+
+  return <div className="pm-in" style={card}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:14}}>
+      <div style={{color:"#FBBF24",fontSize:11,fontWeight:800,letterSpacing:"1px",textTransform:"uppercase"}}>{sr?"Profit po proizvodu":"Profit by product"}</div>
+      <div style={{display:"flex",gap:6}}>{per.map(([v,l])=><button key={v} style={chip(period===v)} onClick={()=>setPeriod(v)}>{l}</button>)}</div>
+    </div>
+    {err&&<div style={{color:C.red,fontSize:13,marginBottom:10}}>{err}</div>}
+    {loading&&!data?<><SkCards n={6} min={150}/><SkTable rows={8} cols={7}/></>:data&&T&&<div style={{opacity:loading?0.5:1,transition:"opacity .2s"}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10,marginBottom:12}}>
+        {tile(sr?"Prihod bez PDV-a":"Revenue excl. VAT",ef?T.rnOk*ef:T.rnOk,nat(T.rnOk),null,"rn",v=>eur(ef?v/ef:v))}
+        {tile(sr?"Nabavna vrednost":"Cost of goods",ef?T.cogs*ef:T.cogs,nat(T.cogs),null,"cogs",v=>eur(ef?v/ef:v))}
+        {tile(sr?"Bruto profit":"Gross profit",ef?T.gp*ef:T.gp,nat(T.gp),T.gp<0?C.red:C.grn,"gp",v=>eur(ef?v/ef:v))}
+        {tile(sr?"Marža":"Margin",T.marginPct,sr?"profit / prihod bez PDV-a":"profit / revenue excl. VAT",null,"m",pct)}
+        {tile(sr?"ROAS na nuli":"Break-even ROAS",T.beRoas,sr?"ispod ovoga oglasi su u gubitku":"below this, ads lose money","#FBBF24","be",roasF)}
+        {tile(sr?"Pokriveno":"Covered",T.coveragePct,sr?`${(T.nOk||0).toLocaleString(loc)} od ${(T.nItems||0).toLocaleString(loc)} proizvoda`:`${T.nOk} of ${T.nItems} products`,T.coveragePct>=90?C.grn:T.coveragePct>=60?C.yel:C.red,"cov",pct)}
+      </div>
+      <div style={{color:C.mut,fontSize:12.5,lineHeight:1.55,marginBottom:14}}>
+        {sr?`Računa se samo za proizvode sa ispravnom ${data.basis.valueType==="margin"?"zaradom":"nabavnom cenom"} (${pct(T.coveragePct)} prihoda). Bez cene: ${eur(T.rMissing)} prihoda${T.rSusp?`, sumnjivo: ${eur(T.rSusp)}`:""}. ROAS na nuli se računa od prihoda sa PDV-om, isto kao ROAS u Google Ads-u i GA4.`
+          :`Calculated only for products with a valid ${data.basis.valueType==="margin"?"profit":"purchase price"} (${pct(T.coveragePct)} of revenue). Without a value: ${eur(T.rMissing)}${T.rSusp?`, suspicious: ${eur(T.rSusp)}`:""}. Break-even ROAS uses revenue incl. VAT, same as ROAS in Google Ads and GA4.`}
+        {T.nNeg>0&&<span style={{color:C.red}}>{sr?` ${T.nNeg.toLocaleString(loc)} prodatih proizvoda je u minusu (ukupno ${eur(T.gpNeg)}).`:` ${T.nNeg} sold products lost money (${eur(T.gpNeg)} in total).`}</span>}
+      </div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",marginBottom:10}}>
+        {[["all",sr?"Svi":"All"],["neg",sr?"U minusu":"Losing money"],["low",sr?"Marža ispod 10%":"Margin under 10%"],["missing",sr?"Bez cene":"No value"],["susp",sr?"Sumnjivo":"Suspicious"]].map(([k,l])=><button key={k} style={chip(filter===k)} onClick={()=>{ setFilter(k); setVisible(50); }}>{l} ({counts[k].toLocaleString(loc)})</button>)}
+        <input value={search} onChange={e=>{ setSearch(e.target.value); setVisible(50); }} placeholder={sr?"Traži proizvod ili šifru…":"Search product or ID…"} style={{marginLeft:"auto",minWidth:200,flex:"0 1 260px",padding:"8px 12px",background:"rgba(255,255,255,0.06)",border:`1px solid ${C.brd}`,borderRadius:9,color:"#fff",fontSize:13,outline:"none"}}/>
+      </div>
+      <div style={{overflowX:"auto",border:`1px solid ${C.brd}`,borderRadius:10}}>
+        <table style={{borderCollapse:"collapse",width:"100%",fontSize:13,minWidth:860}}>
+          <thead><tr>{th("n",sr?"Proizvod":"Product")}{th("q",sr?"Kom.":"Units",1)}{th("rn",sr?"Prihod bez PDV-a":"Revenue excl. VAT",1)}{th("cogs",sr?"Nabavna vrednost":"Cost of goods",1)}{th("gp",sr?"Bruto profit":"Gross profit",1)}{th("m",sr?"Marža":"Margin",1)}{th("be",sr?"ROAS na nuli":"Break-even ROAS",1)}</tr></thead>
+          <tbody>{rows.slice(0,visible).map(i=>{ const ok=i.st==="ok"; const m=ok&&i.rn>0?i.gp/i.rn*100:null; const be=ok&&i.gp>0?i.r/i.gp:null;
+            return <tr key={i.id} style={{borderBottom:`1px solid ${C.brd}`}}>
+              <td style={{padding:"8px 10px",maxWidth:380}}><div style={{color:"#fff",fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={i.n}>{i.n}</div><div style={{color:C.dim,fontSize:11.5}}>{i.id}{i.cat?` · ${i.cat}`:""}</div></td>
+              <td style={{padding:"8px 10px",textAlign:"right",color:"#d1d5db"}}>{(i.q||0).toLocaleString(loc)}</td>
+              <td style={{padding:"8px 10px",textAlign:"right",color:"#fff"}}>{eur(i.rn)}</td>
+              <td style={{padding:"8px 10px",textAlign:"right",color:"#d1d5db"}}>{ok?eur(i.cogs):i.st==="susp"?sus:na}</td>
+              <td style={{padding:"8px 10px",textAlign:"right",fontWeight:700,color:ok?(i.gp<0?C.red:C.grn):C.dim}}>{ok?eur(i.gp):"–"}</td>
+              <td style={{padding:"8px 10px",textAlign:"right",color:m==null?C.dim:m<0?C.red:m<10?C.yel:"#d1d5db"}}>{m==null?"–":pct(m)}</td>
+              <td style={{padding:"8px 10px",textAlign:"right",color:ok&&i.gp<=0?C.red:"#d1d5db"}}>{ok?(be==null?(sr?"uvek gubitak":"always a loss"):roasF(be)):"–"}</td>
+            </tr>; })}
+            {!rows.length&&<tr><td colSpan={7} style={{padding:"18px",textAlign:"center",color:C.mut}}>{sr?"Nema proizvoda za ovaj izbor.":"No products for this filter."}</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      {rows.length>visible&&<div style={{textAlign:"center",marginTop:12}}><button onClick={()=>setVisible(v=>v+100)} style={chip(false)}>{sr?`Prikaži još (${(rows.length-visible).toLocaleString(loc)})`:`Show more (${rows.length-visible})`}</button></div>}
+      {ef&&<div style={{color:C.dim,fontSize:11.5,marginTop:10}}>{sr?`Iznosi u EUR (preračunato iz ${cur} po današnjem kursu).`:`Amounts in EUR (converted from ${cur} at today's rate).`}</div>}
+    </div>}
+  </div>;
+}
+
 function BeyondRoasMod({t,lang}){
   const sr=lang==="sr";
   const L=BR_ROLE_LBL[sr?"sr":"en"];
@@ -5073,6 +5180,7 @@ function BeyondRoasMod({t,lang}){
   const [valCur,setValCur]=useState("");
   const [saving,setSaving]=useState(null);  // {done,total}
   const [savedMsg,setSavedMsg]=useState("");
+  const [replaceAll,setReplaceAll]=useState(false);
   const fileRef=useRef(null);
   const reqId=useRef(0);
 
@@ -5104,7 +5212,7 @@ function BeyondRoasMod({t,lang}){
     if(clientId) loadState(clientId); else setSt(null);
   },[clientId]);
 
-  const resetFile=()=>{ setFile(null); setParsed(null); setMap([]); setMapFrom(""); setParsing(false); if(fileRef.current) fileRef.current.value=""; };
+  const resetFile=()=>{ setReplaceAll(false); setFile(null); setParsed(null); setMap([]); setMapFrom(""); setParsing(false); if(fileRef.current) fileRef.current.value=""; };
 
   // GA4 katalog (poslednjih 30 dana) za proveru šifara – isti poziv kao Product Intelligence (koristi keš)
   const loadGa4=async(id)=>{
@@ -5166,12 +5274,12 @@ function BeyondRoasMod({t,lang}){
       }
       const roles={}; parsed.headers.forEach((h,i)=>{ if(map[i]) roles[h]=map[i]; });
       const r=await fetch("/api/beyond-roas",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
-        action:"upload_commit",client_id:clientId,batch,row_count:saved,source_name:file?file.name:null,column_map:{roles},
+        action:"upload_commit",client_id:clientId,batch,row_count:saved,replace:replaceAll,source_name:file?file.name:null,column_map:{roles},
         settings:{value_type:built.valueType,value_includes_vat:valInc,value_currency:valCur||null,prices_include_vat:vat.inc,vat_rate:Number(vat.rate)||0}})});
       const d=await r.json().catch(()=>({}));
       if(!r.ok) throw new Error(d.error==="incomplete"?(sr?"Nisu stigli svi redovi – pokušaj ponovo. Stari podaci su ostali.":"Not all rows arrived – try again. Old data was kept."):(d.error||`HTTP ${r.status}`));
       setSt(d.settings||st); resetFile();
-      setSavedMsg(sr?`Sačuvano: ${nf(d.row_count)} proizvoda.`:`Saved: ${nf(d.row_count)} products.`);
+      setSavedMsg(sr?`Sačuvano: ${nf(d.row_count)} proizvoda iz fajla${d.total&&d.total!==d.row_count?` · ukupno sa ranijim: ${nf(d.total)}`:""}.`:`Saved: ${nf(d.row_count)} products from the file${d.total&&d.total!==d.row_count?` · total incl. earlier: ${nf(d.total)}`:""}.`);
     }catch(e){
       fetch("/api/beyond-roas",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"upload_abort",client_id:clientId,batch})}).catch(()=>{});
       setErr((sr?"Čuvanje nije uspelo: ":"Saving failed: ")+e.message);
@@ -5289,11 +5397,15 @@ function BeyondRoasMod({t,lang}){
       </div>}
 
       {err&&<div style={{...card,borderColor:C.rBr,background:C.rBg,color:C.red,fontSize:13}}>{err}</div>}
+      {st&&st.row_count>0&&<div style={{marginBottom:14,display:"grid",gap:6}}>
+        <label style={{display:"flex",gap:8,alignItems:"flex-start",color:"#d1d5db",fontSize:12.5,cursor:"pointer"}}><input type="checkbox" checked={replaceAll} onChange={e=>setReplaceAll(e.target.checked)} style={{marginTop:2}}/>
+          <span>{sr?`Obriši sve ranije podatke (${nf(st.row_count)} proizvoda) i zameni ih ovim fajlom`:`Delete all earlier data (${nf(st.row_count)} products) and replace with this file`}</span></label>
+        <div style={{color:C.mut,fontSize:12}}>{replaceAll?(sr?"Ostaće samo proizvodi iz ovog fajla.":"Only products from this file will remain."):(sr?"Proizvodi iz fajla dobijaju nove vrednosti; ostali zadržavaju poslednju poznatu (feed obično ima samo trenutnu ponudu). Stari podaci se menjaju tek kad se sve sačuva.":"Products in the file get new values; others keep their last known value. Old data changes only after everything is saved.")}</div>
+      </div>}
       <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
         <button disabled={!hasSku||!hasVal||!built.rows.length||!!saving} onClick={save} style={btn(true,!hasSku||!hasVal||!built.rows.length||!!saving)}>
           {saving?(sr?`Čuvam… ${nf(saving.done)} / ${nf(saving.total)}`:`Saving… ${nf(saving.done)} / ${nf(saving.total)}`):(sr?"Sačuvaj":"Save")}</button>
         <button disabled={!!saving} onClick={resetFile} style={btn(false,!!saving)}>{sr?"Otkaži":"Cancel"}</button>
-        {st&&st.active_batch&&!saving&&<span style={{color:C.mut,fontSize:12}}>{sr?"Novi fajl zamenjuje prethodni tek kad se sve sačuva.":"The new file replaces the old one only after everything is saved."}</span>}
       </div>
     </div>;
   }
@@ -5303,6 +5415,7 @@ function BeyondRoasMod({t,lang}){
   return <div>{header}{pick}
     {err&&<div style={{...card,borderColor:C.rBr,background:C.rBg,color:C.red,fontSize:13}}>{err}</div>}
     {stLoading?<div style={card}><Sk w="40%" h={12} style={{marginBottom:10}}/><Sk w="70%" h={18}/></div>:st&&<>
+      <BrReport clientId={clientId} sr={sr} st={st}/>
       <div className="pm-in" style={card}>
         {secT(sr?"Nabavne cene i zarada":"Purchase prices and profit")}
         {s.active_batch?<>
@@ -5331,7 +5444,7 @@ function BeyondRoasMod({t,lang}){
         </div>
         <div style={{color:C.dim,fontSize:12,marginTop:8}}>{sr?"Srbija 20% · Hrvatska 25% · Slovenija 22% · BiH 17% · Crna Gora 21% · S. Makedonija 18%":"Serbia 20% · Croatia 25% · Slovenia 22% · BiH 17% · Montenegro 21% · N. Macedonia 18%"}</div>
       </div>
-      <div style={{...card,borderStyle:"dashed",color:C.mut,fontSize:13}}>{sr?"Sledeći korak: profit po proizvodu, po kampanji i proizvod × kampanja.":"Next: profit by product, by campaign and product × campaign."}</div>
+      <div style={{...card,borderStyle:"dashed",color:C.mut,fontSize:13}}>{sr?"Sledeći korak: profit po kampanji i proizvod × kampanja (sa troškom oglasa).":"Next: profit by campaign and product × campaign (with ad cost)."}</div>
     </>}
   </div>;
 }
