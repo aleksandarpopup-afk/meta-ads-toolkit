@@ -5058,7 +5058,7 @@ const brTemplate=()=>{ const csv="\uFEFFŠifra;Naziv;Nabavna cena\r\n100022;Prim
 
 // Profit po Google Ads kampanji (korak 3) + proizvodi u kampanji sa troškom oglasa
 const BR_TYPE={PERFORMANCE_MAX:"PMax",SHOPPING:"Shopping",SEARCH:"Search",DISPLAY:"Display",VIDEO:"Video",DEMAND_GEN:"Demand Gen",DISCOVERY:"Demand Gen",SMART:"Smart",LOCAL:"Local",APP:"App"};
-function BrCampaigns({clientId,sr,period,stamp}){
+function BrCampaigns({clientId,sr,period,stamp,st}){
   const [data,setData]=useState(null);
   const [loading,setLoading]=useState(false);
   const [err,setErr]=useState("");
@@ -5121,7 +5121,7 @@ function BrCampaigns({clientId,sr,period,stamp}){
         :`Not included: ${T.nUnknown} campaigns with ${eur(T.spendUnknown)} spend – under 50% of their revenue has a cost, so profit can't be calculated reliably. Profit after ads (${eur(T.profit)}) covers only the included campaigns, not the whole account.`}
     </div>}
     <div style={{color:C.mut,fontSize:12.5,lineHeight:1.55,marginBottom:12}}>
-      {sr?"Prihod je iz GA4 (sesije koje su došle iz kampanje), potrošnja iz Google Ads-a. Ako deo prihoda kampanje nema nabavnu cenu, bruto profit se procenjuje prosečnom maržom ostalih proizvoda te kampanje (kad je pokriveno bar 50%). Kampanja je isplativa kad je ROAS iznad ROAS-a na nuli.":"Revenue is from GA4 (sessions from the campaign), spend from Google Ads. If part of a campaign's revenue has no cost, gross profit is estimated from the campaign's average margin (when at least 50% is covered). A campaign pays off when ROAS is above break-even ROAS."}
+      {sr?"Prihod je iz GA4 (sesije koje su došle iz kampanje), potrošnja iz Google Ads-a. Ako deo prihoda kampanje nema nabavnu cenu, bruto profit se procenjuje prosečnom maržom ostalih proizvoda te kampanje (kad je pokriveno bar 50%). Kampanja je isplativa kad je ROAS iznad ROAS-a na nuli. Marža kampanje je ponderisana prihodom (Σ bruto profita ÷ Σ prihoda bez PDV-a), a pokrivenost se računa na prihodu bez PDV-a.":"Revenue is from GA4 (sessions from the campaign), spend from Google Ads. If part of a campaign's revenue has no cost, gross profit is estimated from the campaign's average margin (when at least 50% is covered). A campaign pays off when ROAS is above break-even ROAS. Campaign margin is revenue-weighted (Σ gross profit ÷ Σ revenue excl. VAT); coverage uses revenue excl. VAT."}{brCostDateNote(st,sr)}
     </div>
     <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",marginBottom:10}}>
       <span style={{color:C.mut,fontSize:12}}>{sr?"Poređaj:":"Sort:"}</span>
@@ -5181,6 +5181,13 @@ function BrCampaigns({clientId,sr,period,stamp}){
   </div>;
 }
 
+// Nabavne cene / zarada važe za ceo izabrani period (nema istorije cena) – to se jasno kaže
+function brCostDateNote(st,sr){
+  if(!st||!st.uploaded_at) return null;
+  const d=new Date(st.uploaded_at).toLocaleDateString(sr?"sr-Latn-RS":"en-GB");
+  return sr?` ${st.value_type==="margin"?"Zarada":"Nabavne cene"} su iz poslednjeg učitavanja (${d}) i primenjuju se na ceo izabrani period – ako su se cene u međuvremenu menjale, stariji period je procena.`
+    :` ${st.value_type==="margin"?"Profit values":"Purchase prices"} come from the last upload (${d}) and apply to the whole period – if prices changed since, older periods are an estimate.`;
+}
 // Profit po proizvodu (korak 2). Novac: EUR je glavni prikaz, lokalna valuta mala ispod (kao u ostalim modulima).
 function BrReport({clientId,sr,st}){
   const [period,setPeriod]=useState("30");
@@ -5247,7 +5254,7 @@ function BrReport({clientId,sr,st}){
       <div style={{display:"flex",gap:6}}>{[["prod",sr?"Po proizvodu":"By product"],["camp",sr?"Po kampanji":"By campaign"]].map(([k,l])=><button key={k} onClick={()=>setTab(k)} style={{...chip(tab===k),fontSize:13,padding:"8px 14px"}}>{l}</button>)}</div>
       <div style={{display:"flex",gap:6}}>{per.map(([v,l])=><button key={v} style={chip(period===v)} onClick={()=>setPeriod(v)}>{l}</button>)}</div>
     </div>
-    {tab==="camp"?<BrCampaigns clientId={clientId} sr={sr} period={period} stamp={stamp}/>:<>
+    {tab==="camp"?<BrCampaigns clientId={clientId} sr={sr} period={period} stamp={stamp} st={st}/>:<>
     {err&&<div style={{color:C.red,fontSize:13,marginBottom:10}}>{err}</div>}
     {loading&&!data?<><SkCards n={6} min={150}/><SkTable rows={8} cols={7}/></>:data&&T&&<div style={{opacity:loading?0.5:1,transition:"opacity .2s"}}>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10,marginBottom:12}}>
@@ -5261,6 +5268,7 @@ function BrReport({clientId,sr,st}){
       <div style={{color:C.mut,fontSize:12.5,lineHeight:1.55,marginBottom:14}}>
         {sr?`Računa se samo za proizvode sa ispravnom ${data.basis.valueType==="margin"?"zaradom":"nabavnom cenom"} (${pct(T.coveragePct)} prihoda). Bez cene: ${eur(T.rMissing)} prihoda${T.rSusp?`, sumnjivo: ${eur(T.rSusp)}`:""}. Marža = bruto profit ÷ prihod bez PDV-a. ROAS na nuli = prihod sa PDV-om ÷ bruto profit, jer i ROAS u GA4 i Google Ads-u uključuje PDV${data.basis.pricesIncludeVat?(data.basis.itemVat?` (faktor zavisi od stope PDV-a svakog proizvoda: ${Object.keys(data.basis.itemVat).map(r=>`${String(r).replace(".",",")}%`).join(", ")}; ostali ${data.basis.vatRate}%)`:data.basis.vatRate?` (zato je ${(1+data.basis.vatRate/100).toLocaleString(loc)} ÷ marža, a ne 1 ÷ marža)`:""):""}. Kampanja koja ima manji ROAS od ovoga gubi novac.`
           :`Calculated only for products with a valid ${data.basis.valueType==="margin"?"profit":"purchase price"} (${pct(T.coveragePct)} of revenue). Without a value: ${eur(T.rMissing)}${T.rSusp?`, suspicious: ${eur(T.rSusp)}`:""}. Margin = gross profit ÷ revenue excl. VAT. Break-even ROAS = revenue incl. VAT ÷ gross profit, because ROAS in GA4 and Google Ads includes VAT${data.basis.pricesIncludeVat?(data.basis.itemVat?` (the factor depends on each product's VAT rate: ${Object.keys(data.basis.itemVat).map(r=>`${r}%`).join(", ")}; others ${data.basis.vatRate}%)`:data.basis.vatRate?` (so it is ${1+data.basis.vatRate/100} ÷ margin, not 1 ÷ margin)`:""):""}.`}
+        {brCostDateNote(st,sr)}
         {T.nNeg>0&&<span style={{color:C.red}}>{sr?` ${T.nNeg.toLocaleString(loc)} prodatih proizvoda je u minusu (ukupno ${eur(T.gpNeg)}).`:` ${T.nNeg} sold products lost money (${eur(T.gpNeg)} in total).`}</span>}
       </div>
       <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",marginBottom:10}}>
@@ -5529,7 +5537,7 @@ function BeyondRoasMod({t,lang}){
         <div style={{marginTop:12,display:"grid",gap:4}}>
           {pr.noValue.length>0&&<details><summary style={{color:C.yel,fontSize:12.5,cursor:"pointer"}}>{sr?`${nf(pr.noValue.length)} redova bez ${vt==="margin"?"zarade":"nabavne cene"} – preskočeni`:`${nf(pr.noValue.length)} rows without a value – skipped`}</summary>{ex(pr.noValue)}</details>}
           {pr.dup.length>0&&<details><summary style={{color:C.yel,fontSize:12.5,cursor:"pointer"}}>{sr?`${nf(pr.dup.length)} duplikata šifre – zadržan je prvi red`:`${nf(pr.dup.length)} duplicate IDs – first row kept`}</summary>{ex(pr.dup)}</details>}
-          {built.vatCount&&Object.keys(built.vatCount).length>0&&note(C.grn,sr?`PDV po proizvodu iz fajla: ${Object.entries(built.vatCount).sort((a,b)=>b[1]-a[1]).map(([r,n])=>`${nf(n)} × ${String(r).replace(".",",")}%`).join(", ")}. Ostali proizvodi koriste stopu klijenta (${vat.rate}%).`:`VAT per product from the file: ${Object.entries(built.vatCount).map(([r,n])=>`${n} × ${r}%`).join(", ")}. Other products use the client rate (${vat.rate}%).`)}
+          {built.vatCount&&Object.keys(built.vatCount).length>0&&note(C.grn,sr?`PDV po proizvodu iz fajla: ${Object.entries(built.vatCount).sort((a,b)=>b[1]-a[1]).map(([r,n])=>`${nf(n)} × ${String(r).replace(".",",")}%`).join(", ")}. Prazna ćelija = stopa klijenta (${vat.rate}%), i za proizvode koji su ranije imali drugu stopu – novi fajl uvek važi za proizvode u njemu.`:`VAT per product from the file: ${Object.entries(built.vatCount).map(([r,n])=>`${n} × ${r}%`).join(", ")}. Empty cell = client rate (${vat.rate}%), also for products that had another rate before – the new file always wins for its products.`)}
           {pr.badVat>0&&note(C.yel,sr?`${nf(pr.badVat)} redova ima neispravnu PDV stopu – za njih se koristi stopa klijenta.`:`${nf(pr.badVat)} rows have an invalid VAT rate – the client rate is used.`)}
           {pr.noSku>0&&note(C.yel,sr?`${nf(pr.noSku)} redova bez šifre – preskočeni.`:`${nf(pr.noSku)} rows without an ID – skipped.`)}
           {pr.suspicious.length>0&&<details><summary style={{color:C.yel,fontSize:12.5,cursor:"pointer"}}>{sr?`${nf(pr.suspicious.length)} sumnjivih vrednosti (${vt==="margin"?"zarada veća od cene":"nabavna veća od prodajne ili 0"}) – neće se računati u profit`:`${nf(pr.suspicious.length)} suspicious values – won't be counted in profit`}</summary>{ex(pr.suspicious,x=>` · ${nf(x.v,2)} / ${nf(x.p,2)}`)}</details>}
@@ -5575,7 +5583,7 @@ function BeyondRoasMod({t,lang}){
       </div>
       <div className="pm-in" style={card}>
         {secT(sr?"PDV":"VAT")}
-        <div style={{color:C.mut,fontSize:12.5,marginBottom:10}}>{sr?"Da li su cene na sajtu (i prihod u GA4) sa PDV-om? Profit se računa od prihoda bez PDV-a. Ova stopa važi za sve proizvode, osim ako fajl sa cenama ima kolonu „PDV stopa“ – tada svaki proizvod koristi svoju.":"Do site prices (and GA4 revenue) include VAT? Profit is calculated from revenue excluding VAT. This rate applies to all products unless the price file has a \"VAT rate\" column."}</div>
+        <div style={{color:C.mut,fontSize:12.5,marginBottom:10}}>{sr?"Da li su cene na sajtu (i prihod u GA4) sa PDV-om? Profit se računa od prihoda bez PDV-a. Ova stopa važi za sve proizvode, osim ako fajl sa cenama ima kolonu „PDV stopa“ – tada svaki proizvod koristi svoju. Za svakog klijenta proveri da li njegov GA4 beleži prihod sa PDV-om ili bez.":"Do site prices (and GA4 revenue) include VAT? Profit is calculated from revenue excluding VAT. This rate applies to all products unless the price file has a \"VAT rate\" column. Check with each client whether their GA4 revenue includes VAT."}</div>
         <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
           <button style={seg(vat.inc)} onClick={()=>setVat(v=>({...v,inc:true}))}>{sr?"sa PDV-om":"incl. VAT"}</button>
           <button style={seg(!vat.inc)} onClick={()=>setVat(v=>({...v,inc:false}))}>{sr?"bez PDV-a":"excl. VAT"}</button>
