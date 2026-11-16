@@ -4194,7 +4194,7 @@ function InvestigateMod({t,lang}){
     return <div>
       {header}
       {langBanner}
-      <div style={{...card,padding:narrow?"16px":"22px 24px",maxWidth:1000}}>
+      <div style={{...card,padding:narrow?"16px":"22px 24px"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:14}}>
           <div style={{minWidth:0}}>
             <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:4}}>{sr?"Istražujem":"Investigating"}: „{inv.question}“</div>
@@ -4632,7 +4632,7 @@ const MOD_TAGS={
 };
 // Maksimalna sirina sadrzaja po modulu na racunaru: tabele i izvestaji koriste siroki ekran,
 // chat i forme ostaju uze da bi se lako citali
-const MOD_WIDTH={14:1320,12:1320,15:1320,2:1320,10:1320,9:1320,13:1040,16:1100,1:920};
+const MOD_WIDTH={14:1320,12:1320,15:1320,2:1320,10:1320,9:1320,13:1040,16:1320,1:920};
 const MOD_GROUPS=[{k:"an",tk:"grpAn"},{k:"dw",tk:"grpDw"}];
 const gridCols=n=>n<=4?n:3;
 const CARD_CSS=`.mc{transition:transform .18s ease,border-color .18s ease}
