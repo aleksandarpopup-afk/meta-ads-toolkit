@@ -5060,6 +5060,7 @@ function BrCampaigns({clientId,sr,period,stamp}){
   const [pSort,setPSort]=useState("pa");
   const [pFilter,setPFilter]=useState("all");
   const [pVis,setPVis]=useState(30);
+  const [cSort,setCSort]=useState({k:"spend",d:"desc"});
   const req=useRef(0);
   useEffect(()=>{
     const my=++req.current; setLoading(true); setErr("");
@@ -5097,24 +5098,33 @@ function BrCampaigns({clientId,sr,period,stamp}){
   if(loading&&!data) return <><SkCards n={5} min={150}/><SkTable rows={6} cols={8}/></>;
   if(!data) return null;
   const T=data.totals;
-  const cs=data.campaigns||[];
+  const cs0=data.campaigns||[];
+  const cs=[...cs0].sort((a,b)=>{ const va=a[cSort.k],vb=b[cSort.k]; if(va==null&&vb==null) return 0; if(va==null) return 1; if(vb==null) return -1; return cSort.d==="asc"?va-vb:vb-va; });
   const pfColor=v=>v==null?C.dim:v<0?C.red:C.grn;
 
   return <div style={{opacity:loading?0.5:1,transition:"opacity .2s"}}>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10,marginBottom:12}}>
-      {tile(sr?"Potrošnja (Google Ads)":"Spend (Google Ads)",scale(T.spend),nat(T.spend),null,"sp",money())}
-      {tile(sr?"Prihod iz kampanja":"Revenue from campaigns",scale(T.r),sr?"GA4, sa PDV-om":"GA4, incl. VAT",null,"r",money())}
-      {tile(sr?"Bruto profit":"Gross profit",scale(T.gpEst),T.nUnknown>0?(sr?`bez ${T.nUnknown} kampanja sa premalo podataka`:`excl. ${T.nUnknown} campaigns with too little data`):(sr?"posle nabavne cene":"after cost of goods"),null,"gp",money())}
-      {tile(sr?"Profit posle oglasa":"Profit after ads",scale(T.profit),T.nUnknown>0?(sr?`bez ${T.nUnknown} kampanja (${eur(T.spendUnknown)} potrošnje)`:`excl. ${T.nUnknown} campaigns (${eur(T.spendUnknown)} spend)`):nat(T.profit),pfColor(T.profit),"pa",money())}
+      {tile(sr?"Ukupna potrošnja":"Total spend",scale(T.spend),sr?`${cs.length} kampanja u Google Ads-u`:`${cs.length} Google Ads campaigns`,null,"sp",money())}
+      {tile(sr?"Potrošnja u obračunu":"Spend included",scale(T.spend-(T.spendUnknown||0)),sr?`${cs.length-(T.nUnknown||0)} kampanja sa dovoljno podataka`:`${cs.length-(T.nUnknown||0)} campaigns with enough data`,null,"spk",money())}
+      {tile(sr?"Bruto profit":"Gross profit",scale(T.gpEst),sr?"kampanje u obračunu, posle nabavne cene":"included campaigns, after cost of goods",null,"gp",money())}
+      {tile(sr?"Profit posle oglasa":"Profit after ads",scale(T.profit),sr?"kampanje u obračunu":"included campaigns",pfColor(T.profit),"pa",money())}
       {tile("ROAS",T.roas,sr?`na nuli: ${roasF(T.beRoas)}`:`break-even: ${roasF(T.beRoas)}`,T.roas!=null&&T.beRoas!=null?(T.roas>=T.beRoas?C.grn:C.red):null,"roas",roasF)}
     </div>
+    {T.nUnknown>0&&<div style={{background:C.yBg,border:`1px solid ${C.yBr}`,borderRadius:10,padding:"10px 14px",color:C.yel,fontSize:13,lineHeight:1.5,marginBottom:12}}>
+      {sr?`Van obračuna: ${T.nUnknown} kampanja sa ${eur(T.spendUnknown)} potrošnje – za njih manje od 50% prihoda ima nabavnu cenu, pa profit ne može pouzdano da se izračuna. Profit posle oglasa (${eur(T.profit)}) važi samo za kampanje u obračunu, ne za ceo nalog.`
+        :`Not included: ${T.nUnknown} campaigns with ${eur(T.spendUnknown)} spend – under 50% of their revenue has a cost, so profit can't be calculated reliably. Profit after ads (${eur(T.profit)}) covers only the included campaigns, not the whole account.`}
+    </div>}
     <div style={{color:C.mut,fontSize:12.5,lineHeight:1.55,marginBottom:12}}>
       {sr?"Prihod je iz GA4 (sesije koje su došle iz kampanje), potrošnja iz Google Ads-a. Ako deo prihoda kampanje nema nabavnu cenu, bruto profit se procenjuje prosečnom maržom ostalih proizvoda te kampanje (kad je pokriveno bar 50%). Kampanja je isplativa kad je ROAS iznad ROAS-a na nuli.":"Revenue is from GA4 (sessions from the campaign), spend from Google Ads. If part of a campaign's revenue has no cost, gross profit is estimated from the campaign's average margin (when at least 50% is covered). A campaign pays off when ROAS is above break-even ROAS."}
-      {T.nUnknown>0&&<span style={{color:C.yel}}>{sr?` ${T.nUnknown} kampanja ima premalo podataka za računicu (manje od 50% prihoda ima nabavnu cenu) – njih nema u bruto profitu ni u profitu posle oglasa.`:` ${T.nUnknown} campaigns have too little data (under 50% of revenue has a cost) – they're left out of gross profit and profit after ads.`}</span>}
+    </div>
+    <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",marginBottom:10}}>
+      <span style={{color:C.mut,fontSize:12}}>{sr?"Poređaj:":"Sort:"}</span>
+      {[["spend","desc",sr?"najveća potrošnja":"highest spend"],["profit","asc",sr?"najveći gubitak (€)":"biggest loss (€)"],["profit","desc",sr?"najveći profit (€)":"biggest profit (€)"],["r","desc",sr?"najveći prihod":"highest revenue"]].map(([k,d,l])=><button key={k+d} style={chip(cSort.k===k&&cSort.d===d)} onClick={()=>setCSort({k,d})}>{l}</button>)}
+      <span style={{color:C.dim,fontSize:11.5,marginLeft:"auto"}}>{sr?"Klik na naslov kolone takođe menja redosled.":"Click a column header to sort too."}</span>
     </div>
     <div style={{overflowX:"auto",border:`1px solid ${C.brd}`,borderRadius:10}}>
       <table style={{borderCollapse:"collapse",width:"100%",fontSize:13,minWidth:980}}>
-        <thead><tr>{[[sr?"Kampanja":"Campaign"],[sr?"Potrošnja":"Spend",1],[sr?"Prihod":"Revenue",1],["ROAS",1],[sr?"ROAS na nuli":"Break-even",1],[sr?"Bruto profit":"Gross profit",1],[sr?"Profit posle oglasa":"Profit after ads",1],[sr?"Pokriveno":"Covered",1]].map(([l,r],i)=><th key={i} style={{textAlign:r?"right":"left",padding:"9px 10px",color:C.mut,fontSize:11.5,fontWeight:800,whiteSpace:"nowrap",borderBottom:`1px solid ${C.brd}`}}>{l}</th>)}</tr></thead>
+        <thead><tr>{[[sr?"Kampanja":"Campaign",0,null],[sr?"Potrošnja":"Spend",1,"spend"],[sr?"Prihod":"Revenue",1,"r"],["ROAS",1,"roas"],[sr?"ROAS na nuli":"Break-even",1,"beRoas"],[sr?"Bruto profit":"Gross profit",1,"gpEst"],[sr?"Profit posle oglasa":"Profit after ads",1,"profit"],[sr?"Pokriveno":"Covered",1,"cov"]].map(([l,r,k],i)=><th key={i} onClick={k?()=>setCSort(p=>p.k===k?{k,d:p.d==="asc"?"desc":"asc"}:{k,d:k==="profit"?"asc":"desc"}):undefined} style={{textAlign:r?"right":"left",padding:"9px 10px",color:k&&cSort.k===k?"#FBBF24":C.mut,fontSize:11.5,fontWeight:800,whiteSpace:"nowrap",borderBottom:`1px solid ${C.brd}`,cursor:k?"pointer":"default"}}>{l}{k&&cSort.k===k?(cSort.d==="asc"?" ↑":" ↓"):""}</th>)}</tr></thead>
         <tbody>{cs.map(c=>{ const isOpen=open===c.id; const good=c.roas!=null&&c.beRoas!=null?c.roas>=c.beRoas:null;
           return <Fragment key={c.id}>
             <tr onClick={()=>setOpen(isOpen?null:c.id)} style={{borderBottom:`1px solid ${C.brd}`,cursor:"pointer",background:isOpen?"rgba(245,158,11,0.06)":"transparent"}}>
@@ -5239,17 +5249,21 @@ function BrReport({clientId,sr,st}){
         {tile(sr?"Nabavna vrednost":"Cost of goods",ef?T.cogs*ef:T.cogs,nat(T.cogs),null,"cogs",v=>eur(ef?v/ef:v))}
         {tile(sr?"Bruto profit":"Gross profit",ef?T.gp*ef:T.gp,nat(T.gp),T.gp<0?C.red:C.grn,"gp",v=>eur(ef?v/ef:v))}
         {tile(sr?"Marža":"Margin",T.marginPct,sr?"profit / prihod bez PDV-a":"profit / revenue excl. VAT",null,"m",pct)}
-        {tile(sr?"ROAS na nuli":"Break-even ROAS",T.beRoas,sr?"ispod ovoga oglasi su u gubitku":"below this, ads lose money","#FBBF24","be",roasF)}
+        {tile(sr?"ROAS na nuli":"Break-even ROAS",T.beRoas,sr?"prihod sa PDV-om ÷ bruto profit":"revenue incl. VAT ÷ gross profit","#FBBF24","be",roasF)}
         {tile(sr?"Pokriveno":"Covered",T.coveragePct,sr?`${(T.nOk||0).toLocaleString(loc)} od ${(T.nItems||0).toLocaleString(loc)} proizvoda`:`${T.nOk} of ${T.nItems} products`,T.coveragePct>=90?C.grn:T.coveragePct>=60?C.yel:C.red,"cov",pct)}
       </div>
       <div style={{color:C.mut,fontSize:12.5,lineHeight:1.55,marginBottom:14}}>
-        {sr?`Računa se samo za proizvode sa ispravnom ${data.basis.valueType==="margin"?"zaradom":"nabavnom cenom"} (${pct(T.coveragePct)} prihoda). Bez cene: ${eur(T.rMissing)} prihoda${T.rSusp?`, sumnjivo: ${eur(T.rSusp)}`:""}. ROAS na nuli se računa od prihoda sa PDV-om, isto kao ROAS u Google Ads-u i GA4.`
-          :`Calculated only for products with a valid ${data.basis.valueType==="margin"?"profit":"purchase price"} (${pct(T.coveragePct)} of revenue). Without a value: ${eur(T.rMissing)}${T.rSusp?`, suspicious: ${eur(T.rSusp)}`:""}. Break-even ROAS uses revenue incl. VAT, same as ROAS in Google Ads and GA4.`}
+        {sr?`Računa se samo za proizvode sa ispravnom ${data.basis.valueType==="margin"?"zaradom":"nabavnom cenom"} (${pct(T.coveragePct)} prihoda). Bez cene: ${eur(T.rMissing)} prihoda${T.rSusp?`, sumnjivo: ${eur(T.rSusp)}`:""}. Marža = bruto profit ÷ prihod bez PDV-a. ROAS na nuli = prihod sa PDV-om ÷ bruto profit, jer i ROAS u GA4 i Google Ads-u uključuje PDV${data.basis.pricesIncludeVat&&data.basis.vatRate?` (zato je ${(1+data.basis.vatRate/100).toLocaleString(loc)} ÷ marža, a ne 1 ÷ marža)`:""}. Kampanja koja ima manji ROAS od ovoga gubi novac.`
+          :`Calculated only for products with a valid ${data.basis.valueType==="margin"?"profit":"purchase price"} (${pct(T.coveragePct)} of revenue). Without a value: ${eur(T.rMissing)}${T.rSusp?`, suspicious: ${eur(T.rSusp)}`:""}. Margin = gross profit ÷ revenue excl. VAT. Break-even ROAS = revenue incl. VAT ÷ gross profit, because ROAS in GA4 and Google Ads includes VAT${data.basis.pricesIncludeVat&&data.basis.vatRate?` (so it is ${1+data.basis.vatRate/100} ÷ margin, not 1 ÷ margin)`:""}.`}
         {T.nNeg>0&&<span style={{color:C.red}}>{sr?` ${T.nNeg.toLocaleString(loc)} prodatih proizvoda je u minusu (ukupno ${eur(T.gpNeg)}).`:` ${T.nNeg} sold products lost money (${eur(T.gpNeg)} in total).`}</span>}
       </div>
       <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",marginBottom:10}}>
-        {[["all",sr?"Svi":"All"],["neg",sr?"U minusu":"Losing money"],["low",sr?"Marža ispod 10%":"Margin under 10%"],["missing",sr?"Bez cene":"No value"],["susp",sr?"Sumnjivo":"Suspicious"]].map(([k,l])=><button key={k} style={chip(filter===k)} onClick={()=>{ setFilter(k); setVisible(50); }}>{l} ({counts[k].toLocaleString(loc)})</button>)}
-        <input value={search} onChange={e=>{ setSearch(e.target.value); setVisible(50); }} placeholder={sr?"Traži proizvod ili šifru…":"Search product or ID…"} style={{marginLeft:"auto",minWidth:200,flex:"0 1 260px",padding:"8px 12px",background:"rgba(255,255,255,0.06)",border:`1px solid ${C.brd}`,borderRadius:9,color:"#fff",fontSize:13,outline:"none"}}/>
+        {[["all",sr?"Svi":"All"],["neg",sr?"U minusu":"Losing money"],["low",sr?"Marža ispod 10%":"Margin under 10%"],["missing",sr?"Bez cene":"No value"],["susp",sr?"Sumnjivo":"Suspicious"]].map(([k,l])=><button key={k} style={chip(filter===k)} onClick={()=>{ setFilter(k); setVisible(50); if(k==="neg"){ setSortKey("gp"); setSortDir("asc"); } }}>{l} ({counts[k].toLocaleString(loc)})</button>)}
+        <select value={sortKey+"|"+sortDir} onChange={e=>{ const [k,d]=e.target.value.split("|"); setSortKey(k); setSortDir(d); }} style={{marginLeft:"auto",padding:"8px 10px",background:"#13131f",border:`1px solid ${C.brd}`,borderRadius:9,color:"#e5e7eb",fontSize:12.5}} aria-label={sr?"Poređaj":"Sort"}>
+          {[["r|desc",sr?"Poređaj: najveći prihod":"Sort: highest revenue"],["gp|asc",sr?"Poređaj: najveći gubitak (€)":"Sort: biggest loss (€)"],["gp|desc",sr?"Poređaj: najveći profit (€)":"Sort: biggest profit (€)"],["m|asc",sr?"Poređaj: najmanja marža":"Sort: lowest margin"],["q|desc",sr?"Poređaj: najviše komada":"Sort: most units"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}
+          {!["r|desc","gp|asc","gp|desc","m|asc","q|desc"].includes(sortKey+"|"+sortDir)&&<option value={sortKey+"|"+sortDir}>{sr?"Poređano po koloni":"Sorted by column"}</option>}
+        </select>
+        <input value={search} onChange={e=>{ setSearch(e.target.value); setVisible(50); }} placeholder={sr?"Traži proizvod ili šifru…":"Search product or ID…"} style={{minWidth:200,flex:"0 1 260px",padding:"8px 12px",background:"rgba(255,255,255,0.06)",border:`1px solid ${C.brd}`,borderRadius:9,color:"#fff",fontSize:13,outline:"none"}}/>
       </div>
       <div style={{overflowX:"auto",border:`1px solid ${C.brd}`,borderRadius:10}}>
         <table style={{borderCollapse:"collapse",width:"100%",fontSize:13,minWidth:860}}>
