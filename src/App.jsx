@@ -4781,7 +4781,7 @@ function invPdfDoc({inv,R,stats,ai,evidence,findings,failedChecks,sr,pctTxt,peri
 
 // ── BEYOND ROAS: čitanje fajla sa nabavnim cenama / zaradom (sve u pregledaču) ──
 // Podržano: CSV/TXT/TSV (bilo koji separator, UTF-8 ili Windows-1250), Excel (.xlsx/.xls), XML feed (Google/Meta i slični).
-const BR_ROLES=["sku","cost","margin","price","title","category","currency"];
+const BR_ROLES=["sku","cost","margin","price","title","category","currency","vat"];
 const brNorm=s=>String(s==null?"":s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/đ/g,"dj").replace(/^g:/,"").replace(/[^a-z0-9]/g,"");
 // Nazivi kolona po ulozi (posle brNorm). Tačno poklapanje vredi više od delimičnog.
 const BR_SYN={
@@ -4792,6 +4792,7 @@ const BR_SYN={
   title:["title","naziv","name","nazivartikla","nazivproizvoda","productname","artikalnaziv","proizvod","opisartikla"],
   category:["category","kategorija","productcategory","producttype","googleproductcategory","grupa","grupaartikala","podkategorija","customlabel2","googlecustomlabel2","customlabel0"],
   currency:["currency","valuta","curr"],
+  vat:["pdv","pdvstopa","stopapdv","pdvprocenat","pdvposto","vat","vatrate","taxrate","tax","porez","stopaporeza","poreskastopa","pdvstopaposto"],
 };
 function brRoleScore(h,role){
   const n=brNorm(h); if(!n) return 0;
@@ -4965,7 +4966,7 @@ function brGuessMap(headers,body,ga4Ids,saved){
     if(map.includes("sku")&&(map.includes("cost")||map.includes("margin"))) return {map,from:"saved",idScores:null};
     map.fill("");
   }
-  for(const role of ["cost","margin","price","title","category","currency"]){
+  for(const role of ["cost","margin","price","title","category","currency","vat"]){
     let bi=-1,bs=0;
     headers.forEach((h,i)=>{ if(map[i]) return; const s=brRoleScore(h,role); if(s>bs){ bs=s; bi=i; } });
     if(bi>=0&&bs>=5) map[bi]=role;
@@ -4995,13 +4996,16 @@ function brGuessMap(headers,body,ga4Ids,saved){
 // Iz fajla + rasporeda kolona → očišćeni redovi + izveštaj o problemima
 function brBuildRows(headers,body,map){
   const col=role=>map.indexOf(role);
-  const iS=col("sku"),iC=col("cost"),iM=col("margin"),iP=col("price"),iT=col("title"),iK=col("category"),iCur=col("currency");
+  const iS=col("sku"),iC=col("cost"),iM=col("margin"),iP=col("price"),iT=col("title"),iK=col("category"),iCur=col("currency"),iVat=col("vat");
   const valueType=iC>=0?"cost":iM>=0?"margin":null;
   const iV=valueType==="cost"?iC:iM;
   const decV=iV>=0?brDecSep(body.map(r=>r[iV])):null;
   const decP=iP>=0?brDecSep(body.map(r=>r[iP])):null;
   const rows=[]; const seen=new Map();
-  const prob={noValue:[],dup:[],noSku:0,suspicious:[],negative:[]};
+  const prob={noValue:[],dup:[],noSku:0,suspicious:[],negative:[],badVat:0};
+  const vatCount={};
+  // PDV stopa po proizvodu: "20", "20%", "10 %", "0,2" (= 20%). Neispravno → stopa klijenta.
+  const vatOf=r=>{ if(iVat<0) return null; const raw=r[iVat]; if(raw==null||String(raw).trim()==="") return null; let n=brNum(raw,String(raw).includes(",")&&!String(raw).includes(".")?",":"."); if(n==null) return undefined; if(n>0&&n<=1&&!/%/.test(String(raw))) n=n*100; n=Math.round(n*100)/100; return n>=0&&n<=50?n:undefined; };
   let curFound={};
   for(const r of body){
     const sku=iS>=0?String(r[iS]==null?"":r[iS]).trim():"";
@@ -5013,7 +5017,9 @@ function brBuildRows(headers,body,map){
     const p=iP>=0?brNum(r[iP],decP):null;
     const cur=(iCur>=0?brCur(r[iCur]):null)||brCur(r[iV])||(iP>=0?brCur(r[iP]):null);
     if(cur) curFound[cur]=(curFound[cur]||0)+1;
-    const row={s:sku,v,p,t:title||null,c:iK>=0?String(r[iK]||"").trim().slice(0,200)||null:null,cur};
+    const vr=vatOf(r);
+    if(vr===undefined) prob.badVat++; else if(vr!=null) vatCount[vr]=(vatCount[vr]||0)+1;
+    const row={s:sku,v,p,t:title||null,c:iK>=0?String(r[iK]||"").trim().slice(0,200)||null:null,cur,...(vr!=null&&vr!==undefined?{vr}:{})};
     seen.set(sku,true); rows.push(row);
     if(p!=null&&p>0){
       if(valueType==="cost"&&v>p) prob.suspicious.push({sku,title,v,p});
@@ -5025,7 +5031,7 @@ function brBuildRows(headers,body,map){
   const currency=Object.keys(curFound).sort((a,b)=>curFound[b]-curFound[a])[0]||(iV>=0?brCur(headers[iV]):null)||(iP>=0?brCur(headers[iP]):null);
   // nabavna veća od prodajne kod većine redova = verovatno su zamenjene kolone
   const swapped=valueType==="cost"&&iP>=0&&prob.suspicious.length>rows.length*0.5;
-  return {rows,prob,valueType,currency,swapped};
+  return {rows,prob,valueType,currency,swapped,vatCount};
 }
 
 // Poređenje sa GA4: koliko prihoda (poslednjih 30 dana) ima nabavnu cenu / zaradu
@@ -5045,8 +5051,8 @@ function brCoverage(rows,catalog){
 }
 
 // ── BEYOND ROAS (mod 17) – korak 1: nabavne cene / zarada + PDV podešavanje ──
-const BR_ROLE_LBL={sr:{"":"— ne koristi",sku:"Šifra",cost:"Nabavna cena",margin:"Zarada po komadu",price:"Prodajna cena",title:"Naziv",category:"Kategorija",currency:"Valuta"},
-  en:{"":"— ignore",sku:"Product ID",cost:"Purchase price",margin:"Profit per unit",price:"Selling price",title:"Name",category:"Category",currency:"Currency"}};
+const BR_ROLE_LBL={sr:{"":"— ne koristi",sku:"Šifra",cost:"Nabavna cena",margin:"Zarada po komadu",price:"Prodajna cena",title:"Naziv",category:"Kategorija",currency:"Valuta",vat:"PDV stopa (%)"},
+  en:{"":"— ignore",sku:"Product ID",cost:"Purchase price",margin:"Profit per unit",price:"Selling price",title:"Name",category:"Category",currency:"Currency",vat:"VAT rate (%)"}};
 const BR_CURS=["EUR","RSD","BAM","MKD","HUF","RON","BGN","USD","GBP","CHF"];
 const brTemplate=()=>{ const csv="\uFEFFŠifra;Naziv;Nabavna cena\r\n100022;Primer proizvoda;5270,00\r\n"; const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"})); a.download="sablon_nabavne_cene.csv"; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),2000); };
 
@@ -5253,8 +5259,8 @@ function BrReport({clientId,sr,st}){
         {tile(sr?"Pokriveno":"Covered",T.coveragePct,sr?`${(T.nOk||0).toLocaleString(loc)} od ${(T.nItems||0).toLocaleString(loc)} proizvoda`:`${T.nOk} of ${T.nItems} products`,T.coveragePct>=90?C.grn:T.coveragePct>=60?C.yel:C.red,"cov",pct)}
       </div>
       <div style={{color:C.mut,fontSize:12.5,lineHeight:1.55,marginBottom:14}}>
-        {sr?`Računa se samo za proizvode sa ispravnom ${data.basis.valueType==="margin"?"zaradom":"nabavnom cenom"} (${pct(T.coveragePct)} prihoda). Bez cene: ${eur(T.rMissing)} prihoda${T.rSusp?`, sumnjivo: ${eur(T.rSusp)}`:""}. Marža = bruto profit ÷ prihod bez PDV-a. ROAS na nuli = prihod sa PDV-om ÷ bruto profit, jer i ROAS u GA4 i Google Ads-u uključuje PDV${data.basis.pricesIncludeVat&&data.basis.vatRate?` (zato je ${(1+data.basis.vatRate/100).toLocaleString(loc)} ÷ marža, a ne 1 ÷ marža)`:""}. Kampanja koja ima manji ROAS od ovoga gubi novac.`
-          :`Calculated only for products with a valid ${data.basis.valueType==="margin"?"profit":"purchase price"} (${pct(T.coveragePct)} of revenue). Without a value: ${eur(T.rMissing)}${T.rSusp?`, suspicious: ${eur(T.rSusp)}`:""}. Margin = gross profit ÷ revenue excl. VAT. Break-even ROAS = revenue incl. VAT ÷ gross profit, because ROAS in GA4 and Google Ads includes VAT${data.basis.pricesIncludeVat&&data.basis.vatRate?` (so it is ${1+data.basis.vatRate/100} ÷ margin, not 1 ÷ margin)`:""}.`}
+        {sr?`Računa se samo za proizvode sa ispravnom ${data.basis.valueType==="margin"?"zaradom":"nabavnom cenom"} (${pct(T.coveragePct)} prihoda). Bez cene: ${eur(T.rMissing)} prihoda${T.rSusp?`, sumnjivo: ${eur(T.rSusp)}`:""}. Marža = bruto profit ÷ prihod bez PDV-a. ROAS na nuli = prihod sa PDV-om ÷ bruto profit, jer i ROAS u GA4 i Google Ads-u uključuje PDV${data.basis.pricesIncludeVat?(data.basis.itemVat?` (faktor zavisi od stope PDV-a svakog proizvoda: ${Object.keys(data.basis.itemVat).map(r=>`${String(r).replace(".",",")}%`).join(", ")}; ostali ${data.basis.vatRate}%)`:data.basis.vatRate?` (zato je ${(1+data.basis.vatRate/100).toLocaleString(loc)} ÷ marža, a ne 1 ÷ marža)`:""):""}. Kampanja koja ima manji ROAS od ovoga gubi novac.`
+          :`Calculated only for products with a valid ${data.basis.valueType==="margin"?"profit":"purchase price"} (${pct(T.coveragePct)} of revenue). Without a value: ${eur(T.rMissing)}${T.rSusp?`, suspicious: ${eur(T.rSusp)}`:""}. Margin = gross profit ÷ revenue excl. VAT. Break-even ROAS = revenue incl. VAT ÷ gross profit, because ROAS in GA4 and Google Ads includes VAT${data.basis.pricesIncludeVat?(data.basis.itemVat?` (the factor depends on each product's VAT rate: ${Object.keys(data.basis.itemVat).map(r=>`${r}%`).join(", ")}; others ${data.basis.vatRate}%)`:data.basis.vatRate?` (so it is ${1+data.basis.vatRate/100} ÷ margin, not 1 ÷ margin)`:""):""}.`}
         {T.nNeg>0&&<span style={{color:C.red}}>{sr?` ${T.nNeg.toLocaleString(loc)} prodatih proizvoda je u minusu (ukupno ${eur(T.gpNeg)}).`:` ${T.nNeg} sold products lost money (${eur(T.gpNeg)} in total).`}</span>}
       </div>
       <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",marginBottom:10}}>
@@ -5485,7 +5491,7 @@ function BeyondRoasMod({t,lang}){
             <thead><tr>{parsed.headers.map((h,i)=><th key={i} style={{textAlign:"left",padding:"8px 10px",borderBottom:`1px solid ${C.brd}`,background:map[i]?"rgba(245,158,11,0.08)":"transparent",verticalAlign:"top",minWidth:130}}>
               <div style={{color:"#fff",fontWeight:700,marginBottom:6,whiteSpace:"nowrap"}}>{String(h).replace(/^g:/,"")||`#${i+1}`}</div>
               <select value={map[i]||""} onChange={e=>setRole(i,e.target.value)} style={{...sel,padding:"6px 8px",fontSize:12,width:"100%",borderColor:map[i]?"#F59E0B":C.brd}}>
-                {["","sku","cost","margin","price","title","category","currency"].map(r=><option key={r} value={r}>{L[r]}</option>)}
+                {["","sku","cost","margin","price","title","category","currency","vat"].map(r=><option key={r} value={r}>{L[r]}</option>)}
               </select></th>)}</tr></thead>
             <tbody>{prev.map((r,j)=><tr key={j}>{parsed.headers.map((h,i)=><td key={i} style={{padding:"6px 10px",borderBottom:`1px solid ${C.brd}`,color:map[i]?"#fff":C.mut,maxWidth:260,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{String(r[i]==null?"":r[i])}</td>)}</tr>)}</tbody>
           </table>
@@ -5523,6 +5529,8 @@ function BeyondRoasMod({t,lang}){
         <div style={{marginTop:12,display:"grid",gap:4}}>
           {pr.noValue.length>0&&<details><summary style={{color:C.yel,fontSize:12.5,cursor:"pointer"}}>{sr?`${nf(pr.noValue.length)} redova bez ${vt==="margin"?"zarade":"nabavne cene"} – preskočeni`:`${nf(pr.noValue.length)} rows without a value – skipped`}</summary>{ex(pr.noValue)}</details>}
           {pr.dup.length>0&&<details><summary style={{color:C.yel,fontSize:12.5,cursor:"pointer"}}>{sr?`${nf(pr.dup.length)} duplikata šifre – zadržan je prvi red`:`${nf(pr.dup.length)} duplicate IDs – first row kept`}</summary>{ex(pr.dup)}</details>}
+          {built.vatCount&&Object.keys(built.vatCount).length>0&&note(C.grn,sr?`PDV po proizvodu iz fajla: ${Object.entries(built.vatCount).sort((a,b)=>b[1]-a[1]).map(([r,n])=>`${nf(n)} × ${String(r).replace(".",",")}%`).join(", ")}. Ostali proizvodi koriste stopu klijenta (${vat.rate}%).`:`VAT per product from the file: ${Object.entries(built.vatCount).map(([r,n])=>`${n} × ${r}%`).join(", ")}. Other products use the client rate (${vat.rate}%).`)}
+          {pr.badVat>0&&note(C.yel,sr?`${nf(pr.badVat)} redova ima neispravnu PDV stopu – za njih se koristi stopa klijenta.`:`${nf(pr.badVat)} rows have an invalid VAT rate – the client rate is used.`)}
           {pr.noSku>0&&note(C.yel,sr?`${nf(pr.noSku)} redova bez šifre – preskočeni.`:`${nf(pr.noSku)} rows without an ID – skipped.`)}
           {pr.suspicious.length>0&&<details><summary style={{color:C.yel,fontSize:12.5,cursor:"pointer"}}>{sr?`${nf(pr.suspicious.length)} sumnjivih vrednosti (${vt==="margin"?"zarada veća od cene":"nabavna veća od prodajne ili 0"}) – neće se računati u profit`:`${nf(pr.suspicious.length)} suspicious values – won't be counted in profit`}</summary>{ex(pr.suspicious,x=>` · ${nf(x.v,2)} / ${nf(x.p,2)}`)}</details>}
           {pr.negative.length>0&&<details><summary style={{color:C.mut,fontSize:12.5,cursor:"pointer"}}>{sr?`${nf(pr.negative.length)} proizvoda sa zaradom u minusu (prodaju se ispod nabavne cene)`:`${nf(pr.negative.length)} products with negative profit`}</summary>{ex(pr.negative,x=>` · ${nf(x.v)}`)}</details>}
@@ -5567,7 +5575,7 @@ function BeyondRoasMod({t,lang}){
       </div>
       <div className="pm-in" style={card}>
         {secT(sr?"PDV":"VAT")}
-        <div style={{color:C.mut,fontSize:12.5,marginBottom:10}}>{sr?"Da li su cene na sajtu (i prihod u GA4) sa PDV-om? Profit se računa od prihoda bez PDV-a.":"Do site prices (and GA4 revenue) include VAT? Profit is calculated from revenue excluding VAT."}</div>
+        <div style={{color:C.mut,fontSize:12.5,marginBottom:10}}>{sr?"Da li su cene na sajtu (i prihod u GA4) sa PDV-om? Profit se računa od prihoda bez PDV-a. Ova stopa važi za sve proizvode, osim ako fajl sa cenama ima kolonu „PDV stopa“ – tada svaki proizvod koristi svoju.":"Do site prices (and GA4 revenue) include VAT? Profit is calculated from revenue excluding VAT. This rate applies to all products unless the price file has a \"VAT rate\" column."}</div>
         <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
           <button style={seg(vat.inc)} onClick={()=>setVat(v=>({...v,inc:true}))}>{sr?"sa PDV-om":"incl. VAT"}</button>
           <button style={seg(!vat.inc)} onClick={()=>setVat(v=>({...v,inc:false}))}>{sr?"bez PDV-a":"excl. VAT"}</button>
