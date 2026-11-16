@@ -5079,7 +5079,7 @@ function BrCampaigns({clientId,sr,period,stamp}){
   const loc=sr?"sr-RS":"en-GB";
   const cur=data?data.currency:"EUR";
   const ef=data&&data.currency!=="EUR"&&data.eurFactor>0?data.eurFactor:null;
-  const eur=v=>v==null?"–":new Intl.NumberFormat(loc,{style:"currency",currency:ef?"EUR":cur,maximumFractionDigits:0}).format(ef?v*ef:v);
+  const eur=v=>{ if(v==null) return "–"; let x=ef?v*ef:v; if(Math.round(x)===0) x=0; return new Intl.NumberFormat(loc,{style:"currency",currency:ef?"EUR":cur,maximumFractionDigits:0}).format(x); };
   const nat=v=>v==null||!ef?null:new Intl.NumberFormat(loc,{style:"currency",currency:cur,maximumFractionDigits:0}).format(v);
   const roasF=v=>v==null?"–":(Math.round(v*100)/100).toLocaleString(loc,{minimumFractionDigits:2,maximumFractionDigits:2});
   const pct=v=>v==null?"–":`${(Math.round(v*10)/10).toLocaleString(loc)}%`;
@@ -5104,13 +5104,13 @@ function BrCampaigns({clientId,sr,period,stamp}){
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10,marginBottom:12}}>
       {tile(sr?"Potrošnja (Google Ads)":"Spend (Google Ads)",scale(T.spend),nat(T.spend),null,"sp",money())}
       {tile(sr?"Prihod iz kampanja":"Revenue from campaigns",scale(T.r),sr?"GA4, sa PDV-om":"GA4, incl. VAT",null,"r",money())}
-      {tile(sr?"Bruto profit":"Gross profit",scale(T.gpEst),sr?"posle nabavne cene":"after cost of goods",null,"gp",money())}
-      {tile(sr?"Profit posle oglasa":"Profit after ads",scale(T.profit),nat(T.profit),pfColor(T.profit),"pa",money())}
+      {tile(sr?"Bruto profit":"Gross profit",scale(T.gpEst),T.nUnknown>0?(sr?`bez ${T.nUnknown} kampanja sa premalo podataka`:`excl. ${T.nUnknown} campaigns with too little data`):(sr?"posle nabavne cene":"after cost of goods"),null,"gp",money())}
+      {tile(sr?"Profit posle oglasa":"Profit after ads",scale(T.profit),T.nUnknown>0?(sr?`bez ${T.nUnknown} kampanja (${eur(T.spendUnknown)} potrošnje)`:`excl. ${T.nUnknown} campaigns (${eur(T.spendUnknown)} spend)`):nat(T.profit),pfColor(T.profit),"pa",money())}
       {tile("ROAS",T.roas,sr?`na nuli: ${roasF(T.beRoas)}`:`break-even: ${roasF(T.beRoas)}`,T.roas!=null&&T.beRoas!=null?(T.roas>=T.beRoas?C.grn:C.red):null,"roas",roasF)}
     </div>
     <div style={{color:C.mut,fontSize:12.5,lineHeight:1.55,marginBottom:12}}>
       {sr?"Prihod je iz GA4 (sesije koje su došle iz kampanje), potrošnja iz Google Ads-a. Ako deo prihoda kampanje nema nabavnu cenu, bruto profit se procenjuje prosečnom maržom ostalih proizvoda te kampanje (kad je pokriveno bar 50%). Kampanja je isplativa kad je ROAS iznad ROAS-a na nuli.":"Revenue is from GA4 (sessions from the campaign), spend from Google Ads. If part of a campaign's revenue has no cost, gross profit is estimated from the campaign's average margin (when at least 50% is covered). A campaign pays off when ROAS is above break-even ROAS."}
-      {T.nUnknown>0&&<span style={{color:C.yel}}>{sr?` ${T.nUnknown} kampanja ima premalo podataka za računicu.`:` ${T.nUnknown} campaigns have too little data.`}</span>}
+      {T.nUnknown>0&&<span style={{color:C.yel}}>{sr?` ${T.nUnknown} kampanja ima premalo podataka za računicu (manje od 50% prihoda ima nabavnu cenu) – njih nema u bruto profitu ni u profitu posle oglasa.`:` ${T.nUnknown} campaigns have too little data (under 50% of revenue has a cost) – they're left out of gross profit and profit after ads.`}</span>}
     </div>
     <div style={{overflowX:"auto",border:`1px solid ${C.brd}`,borderRadius:10}}>
       <table style={{borderCollapse:"collapse",width:"100%",fontSize:13,minWidth:980}}>
@@ -5196,7 +5196,7 @@ function BrReport({clientId,sr,st}){
   const loc=sr?"sr-RS":"en-GB";
   const cur=data?data.currency:"EUR";
   const ef=data&&data.currency!=="EUR"&&data.eurFactor>0?data.eurFactor:null;
-  const eur=v=>v==null?"–":new Intl.NumberFormat(loc,{style:"currency",currency:ef?"EUR":cur,maximumFractionDigits:0}).format(ef?v*ef:v);
+  const eur=v=>{ if(v==null) return "–"; let x=ef?v*ef:v; if(Math.round(x)===0) x=0; return new Intl.NumberFormat(loc,{style:"currency",currency:ef?"EUR":cur,maximumFractionDigits:0}).format(x); };
   const nat=v=>v==null||!ef?null:new Intl.NumberFormat(loc,{style:"currency",currency:cur,maximumFractionDigits:0}).format(v);
   const pct=v=>v==null?"–":`${(Math.round(v*10)/10).toLocaleString(loc)}%`;
   const roasF=v=>v==null?"–":(Math.round(v*100)/100).toLocaleString(loc,{minimumFractionDigits:2,maximumFractionDigits:2});
