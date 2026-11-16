@@ -5188,6 +5188,8 @@ function brCostDateNote(st,sr){
   return sr?` ${st.value_type==="margin"?"Zarada":"Nabavne cene"} su iz poslednjeg učitavanja (${d}) i primenjuju se na ceo izabrani period – ako su se cene u međuvremenu menjale, stariji period je procena.`
     :` ${st.value_type==="margin"?"Profit values":"Purchase prices"} come from the last upload (${d}) and apply to the whole period – if prices changed since, older periods are an estimate.`;
 }
+// Podrazumevani redosled po filteru: U minusu → najveći gubitak €, ostalo → najveći prihod (najveći iznosi su najvažniji)
+const BR_FILTER_SORT={all:["r","desc"],neg:["gp","asc"],low:["r","desc"],missing:["r","desc"],susp:["r","desc"]};
 // Profit po proizvodu (korak 2). Novac: EUR je glavni prikaz, lokalna valuta mala ispod (kao u ostalim modulima).
 function BrReport({clientId,sr,st}){
   const [period,setPeriod]=useState("30");
@@ -5226,10 +5228,10 @@ function BrReport({clientId,sr,st}){
 
   const T=data&&data.totals;
   const items=data&&data.items||[];
-  const counts=useMemo(()=>({all:items.length,neg:items.filter(i=>i.st==="ok"&&i.gp<0).length,low:items.filter(i=>i.st==="ok"&&i.rn>0&&i.gp/i.rn<0.1).length,missing:items.filter(i=>i.st==="missing").length,susp:items.filter(i=>i.st==="susp").length}),[data]);
+  const counts=useMemo(()=>({all:items.length,neg:items.filter(i=>i.st==="ok"&&i.gp<0).length,low:items.filter(i=>i.st==="ok"&&i.rn>0&&i.gp>=0&&i.gp/i.rn<0.1).length,missing:items.filter(i=>i.st==="missing").length,susp:items.filter(i=>i.st==="susp").length}),[data]);
   const rows=useMemo(()=>{
     const q=search.trim().toLowerCase();
-    let r=items.filter(i=>filter==="all"||(filter==="neg"?i.st==="ok"&&i.gp<0:filter==="low"?i.st==="ok"&&i.rn>0&&i.gp/i.rn<0.1:i.st===filter));
+    let r=items.filter(i=>filter==="all"||(filter==="neg"?i.st==="ok"&&i.gp<0:filter==="low"?i.st==="ok"&&i.rn>0&&i.gp>=0&&i.gp/i.rn<0.1:i.st===filter));
     if(q) r=r.filter(i=>String(i.n||"").toLowerCase().includes(q)||String(i.id).toLowerCase().includes(q));
     const val=i=>sortKey==="m"?(i.st==="ok"&&i.rn>0?i.gp/i.rn:null):sortKey==="be"?(i.st==="ok"&&i.gp>0?i.r/i.gp:null):i[sortKey];
     const dir=sortDir==="asc"?1:-1;
@@ -5272,7 +5274,7 @@ function BrReport({clientId,sr,st}){
         {T.nNeg>0&&<span style={{color:C.red}}>{sr?` ${T.nNeg.toLocaleString(loc)} prodatih proizvoda je u minusu (ukupno ${eur(T.gpNeg)}).`:` ${T.nNeg} sold products lost money (${eur(T.gpNeg)} in total).`}</span>}
       </div>
       <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",marginBottom:10}}>
-        {[["all",sr?"Svi":"All"],["neg",sr?"U minusu":"Losing money"],["low",sr?"Marža ispod 10%":"Margin under 10%"],["missing",sr?"Bez cene":"No value"],["susp",sr?"Sumnjivo":"Suspicious"]].map(([k,l])=><button key={k} style={chip(filter===k)} onClick={()=>{ setFilter(k); setVisible(50); if(k==="neg"){ setSortKey("gp"); setSortDir("asc"); } }}>{l} ({counts[k].toLocaleString(loc)})</button>)}
+        {[["all",sr?"Svi":"All"],["neg",sr?"U minusu":"Losing money"],["low",sr?"Marža 0–10%":"Margin 0–10%"],["missing",sr?"Bez cene":"No value"],["susp",sr?"Sumnjivo":"Suspicious"]].map(([k,l])=><button key={k} style={chip(filter===k)} onClick={()=>{ setFilter(k); setVisible(50); const d=BR_FILTER_SORT[k]; setSortKey(d[0]); setSortDir(d[1]); }}>{l} ({counts[k].toLocaleString(loc)})</button>)}
         <select value={sortKey+"|"+sortDir} onChange={e=>{ const [k,d]=e.target.value.split("|"); setSortKey(k); setSortDir(d); }} style={{marginLeft:"auto",padding:"8px 10px",background:"#13131f",border:`1px solid ${C.brd}`,borderRadius:9,color:"#e5e7eb",fontSize:12.5}} aria-label={sr?"Poređaj":"Sort"}>
           {[["r|desc",sr?"Poređaj: najveći prihod":"Sort: highest revenue"],["gp|asc",sr?"Poređaj: najveći gubitak (€)":"Sort: biggest loss (€)"],["gp|desc",sr?"Poređaj: najveći profit (€)":"Sort: biggest profit (€)"],["m|asc",sr?"Poređaj: najmanja marža":"Sort: lowest margin"],["q|desc",sr?"Poređaj: najviše komada":"Sort: most units"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}
           {!["r|desc","gp|asc","gp|desc","m|asc","q|desc"].includes(sortKey+"|"+sortDir)&&<option value={sortKey+"|"+sortDir}>{sr?"Poređano po koloni":"Sorted by column"}</option>}
