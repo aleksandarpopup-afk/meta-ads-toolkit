@@ -5062,9 +5062,10 @@ function MainApp({account}){
     const invS=m.id===16?INV.state:null;
     const live=m.id===2&&home?.bp?home.bp:invS&&invS.status==="running"?{text:lang==="sr"?`Istraga u toku: ${invS.client.name}…`:`Investigating ${invS.client.name}…`,bad:false}:invS&&invS.status==="done"?{text:lang==="sr"?`Rezultat čeka: ${invS.client.name}`:`Result ready: ${invS.client.name}`,bad:false}:null;
     const extra=m.id===10&&home?.clients!=null?`${home.clients} ${lang==="sr"?(home.clients===1?"klijent":"klijenata"):(home.clients===1?"client":"clients")}`:null;
-    const homeEl=Date.now()-PM_HOME.t0, homeAnim=homeEl<1000;
-    return <button className={homeAnim?"mc pm-card-in":"mc"} onClick={()=>goMod(m.id)} style={{
-      "--c":m.col,...(homeAnim?{animationDelay:`${Math.min(i,8)*45-homeEl}ms`}:null),
+    // Animacija samo prvih ~1,2 s posle otvaranja početne; zakašnjenje je stalno (ne menja se pri ponovnom iscrtavanju)
+    const homeAnim=Date.now()-PM_HOME.t0<1200;
+    return <button key={m.id} className={homeAnim?"mc pm-card-in":"mc"} onClick={()=>goMod(m.id)} style={{
+      "--c":m.col,...(homeAnim?{animationDelay:`${Math.min(i,8)*45}ms`}:null),
       background:`linear-gradient(145deg,${m.col}24,${m.col}0a 55%,#0d0d1a)`,
       border:`1px solid ${m.col}45`,borderTop:`1px solid ${m.col}70`,
       borderRadius:16,padding:large?"20px 20px 18px":"18px 16px 16px",textAlign:"left",
@@ -5118,7 +5119,7 @@ function MainApp({account}){
           return <div key={g.k} style={{padding:"0 12px",marginBottom:22}}>
             <div style={{paddingLeft:4}}><GroupLabel g={g} mb={10}/></div>
             <div style={{display:"grid",gridTemplateColumns:g.k==="an"?"1fr":"1fr 1fr",gap:12}}>
-              {list.map((m,i)=><ModCard key={m.id} m={m} i={i} large={g.k==="an"}/>)}
+              {list.map((m,i)=>ModCard({m,i,large:g.k==="an"}))}
             </div>
           </div>;
         })}
@@ -5210,7 +5211,7 @@ function MainApp({account}){
             return <div key={g.k} style={{marginBottom:34}}>
               <GroupLabel g={g} mb={14}/>
               <div style={{display:"grid",gridTemplateColumns:`repeat(${gridCols(list.length)},minmax(0,1fr))`,gap:18,alignItems:"stretch"}}>
-                {list.map((m,i)=><ModCard key={m.id} m={m} i={i} large={g.k==="an"}/>)}
+                {list.map((m,i)=>ModCard({m,i,large:g.k==="an"}))}
               </div>
             </div>;
           })}
