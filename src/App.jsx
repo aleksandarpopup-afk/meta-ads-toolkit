@@ -4284,6 +4284,9 @@ function InvestigateMod({t,lang}){
     try{
       const pm=await rsLoadPdfMake();
       const doc=invPdfDoc({inv,R,stats,ai,evidence,findings:R.findings||[],failedChecks,sr,pctTxt,periodTxt,toEur:v=>useEur?v*ef:v,curSym:useEur?"€":cur});
+      // Ugrađeni PDF font nema znak "→" (pojavljuje se kao kvadratić) – zamenjuje se znakom "»"
+      const fixStr=x=>typeof x==="string"?x.replace(/\s*→\s*/g," » "):Array.isArray(x)?x.map(fixStr):x&&typeof x==="object"?Object.fromEntries(Object.entries(x).map(([k,v])=>[k,typeof v==="function"?v:fixStr(v)])):x;
+      doc.content=fixStr(doc.content);
       pm.createPdf(doc).download(`${safe(inv.client.name)||"klijent"}_istraga_${inv.period?inv.period.curS+"_"+inv.period.curE:"rezultat"}.pdf`);
     }catch(e){ alert(sr?"PDF nije napravljen. Proveri internet vezu i pokušaj ponovo.":"The PDF could not be created. Check your connection and try again."); }
     setPdfBusy(false);
@@ -4628,8 +4631,9 @@ function invPdfViz({R,sr,toEur,curSym,forClient}){
       {columns:[{width:60,text:`${sr?"prošle god.":"last year"}\n${pc(Y.lastYearChange)}`,fontSize:7,alignment:"center",color:"#374151"},{width:60,text:`${sr?"sada":"now"}\n${pc(Y.nowChange)}`,fontSize:7,alignment:"center",color:"#374151"}],margin:[0,2,0,0]},
       {text:Y.seasonal?(sr?"Slična promena kao prošle godine – očekivano.":"Similar change as last year – expected."):(sr?"Prošle godine nije bilo slične promene.":"No similar change last year."),fontSize:7.5,color:"#374151",margin:[0,3,0,0]}]));
   }
-  if(!forClient&&V.tracking) row.push(panel([cap(sr?"Provera merenja":"Tracking check"),{text:V.tracking.length?V.tracking.slice(0,2).join("\n\n"):(sr?"Nema znakova problema sa merenjem.":"No signs of tracking problems."),fontSize:7.5,color:V.tracking.length?"#92400e":"#065f46"}]));
   if(row.length){ out.push({columns:row,columnGap:10,margin:[0,8,0,0]}); }
+  // Provera merenja u punoj širini (tekst je dug, a adrese stranica se inače ne prelamaju)
+  if(!forClient&&V.tracking) out.push({margin:[0,8,0,0],...panel([cap(sr?"Provera merenja":"Tracking check"),{text:V.tracking.length?V.tracking.slice(0,2).map(t=>t.replace(/\//g,"/\u200B")).join("\n\n"):(sr?"Nema znakova problema sa merenjem.":"No signs of tracking problems."),fontSize:7.5,color:V.tracking.length?"#92400e":"#065f46"}])});
 
   // Kampanje i proizvodi (stručna verzija)
   const th=t=>({text:t,fontSize:7,bold:true,color:"#6b7280"});
