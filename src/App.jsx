@@ -5050,9 +5050,125 @@ const BR_ROLE_LBL={sr:{"":"— ne koristi",sku:"Šifra",cost:"Nabavna cena",marg
 const BR_CURS=["EUR","RSD","BAM","MKD","HUF","RON","BGN","USD","GBP","CHF"];
 const brTemplate=()=>{ const csv="\uFEFFŠifra;Naziv;Nabavna cena\r\n100022;Primer proizvoda;5270,00\r\n"; const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"})); a.download="sablon_nabavne_cene.csv"; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),2000); };
 
+// Profit po Google Ads kampanji (korak 3) + proizvodi u kampanji sa troškom oglasa
+const BR_TYPE={PERFORMANCE_MAX:"PMax",SHOPPING:"Shopping",SEARCH:"Search",DISPLAY:"Display",VIDEO:"Video",DEMAND_GEN:"Demand Gen",DISCOVERY:"Demand Gen",SMART:"Smart",LOCAL:"Local",APP:"App"};
+function BrCampaigns({clientId,sr,period,stamp}){
+  const [data,setData]=useState(null);
+  const [loading,setLoading]=useState(false);
+  const [err,setErr]=useState("");
+  const [open,setOpen]=useState(null);
+  const [pSort,setPSort]=useState("pa");
+  const [pFilter,setPFilter]=useState("all");
+  const [pVis,setPVis]=useState(30);
+  const req=useRef(0);
+  useEffect(()=>{
+    const my=++req.current; setLoading(true); setErr("");
+    fetch(`/api/beyond-roas?client_id=${clientId}&action=campaigns&days=${period}`).then(async r=>{
+      const d=await r.json().catch(()=>({}));
+      if(my!==req.current) return;
+      if(r.status===503) throw new Error(sr?"Baza nije pripremljena.":"Database not set up.");
+      if(!r.ok) throw new Error(d.error||`HTTP ${r.status}`);
+      if(d.error==="no_gads") throw new Error(sr?"Google Ads nije povezan za ovog klijenta – profit po kampanji traži potrošnju iz Google Ads-a.":"Google Ads isn't connected for this client.");
+      if(d.error==="no_ga4") throw new Error(sr?"GA4 nije povezan za ovog klijenta.":"GA4 isn't connected for this client.");
+      if(d.error==="no_fx") throw new Error(sr?"Kurs za preračun valute trenutno nije dostupan.":"Exchange rate not available right now.");
+      setData(d);
+    }).catch(e=>{ if(my===req.current){ setErr(e.message); setData(null); } }).finally(()=>{ if(my===req.current) setLoading(false); });
+  },[clientId,period,stamp]);
+  useEffect(()=>{ setPVis(30); },[open,pFilter]);
+
+  const loc=sr?"sr-RS":"en-GB";
+  const cur=data?data.currency:"EUR";
+  const ef=data&&data.currency!=="EUR"&&data.eurFactor>0?data.eurFactor:null;
+  const eur=v=>v==null?"–":new Intl.NumberFormat(loc,{style:"currency",currency:ef?"EUR":cur,maximumFractionDigits:0}).format(ef?v*ef:v);
+  const nat=v=>v==null||!ef?null:new Intl.NumberFormat(loc,{style:"currency",currency:cur,maximumFractionDigits:0}).format(v);
+  const roasF=v=>v==null?"–":(Math.round(v*100)/100).toLocaleString(loc,{minimumFractionDigits:2,maximumFractionDigits:2});
+  const pct=v=>v==null?"–":`${(Math.round(v*10)/10).toLocaleString(loc)}%`;
+  const card={background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"14px"};
+  const chip=(on)=>({padding:"6px 11px",borderRadius:8,border:`1px solid ${on?"#F59E0B":C.brd}`,background:on?"rgba(245,158,11,0.15)":"transparent",color:on?"#FBBF24":"#d1d5db",fontWeight:700,fontSize:12,cursor:"pointer"});
+  const tile=(lbl,v,sub,col,k,fmt)=><div style={card}>
+    <div style={{color:C.mut,fontSize:11.5,fontWeight:700,marginBottom:6}}>{lbl}</div>
+    <div style={{color:col||"#fff",fontSize:22,fontWeight:800,lineHeight:1.15}}>{v==null?"–":<AnimNum value={v} k={"brc:"+k} format={fmt}/>}</div>
+    {sub&&<div style={{color:C.mut,fontSize:11.5,marginTop:4}}>{sub}</div>}
+  </div>;
+  const money=k=>v=>eur(ef?v/ef:v);
+  const scale=v=>v==null?null:(ef?v*ef:v);
+
+  if(err) return <div style={{color:C.red,fontSize:13}}>{err}</div>;
+  if(loading&&!data) return <><SkCards n={5} min={150}/><SkTable rows={6} cols={8}/></>;
+  if(!data) return null;
+  const T=data.totals;
+  const cs=data.campaigns||[];
+  const pfColor=v=>v==null?C.dim:v<0?C.red:C.grn;
+
+  return <div style={{opacity:loading?0.5:1,transition:"opacity .2s"}}>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10,marginBottom:12}}>
+      {tile(sr?"Potrošnja (Google Ads)":"Spend (Google Ads)",scale(T.spend),nat(T.spend),null,"sp",money())}
+      {tile(sr?"Prihod iz kampanja":"Revenue from campaigns",scale(T.r),sr?"GA4, sa PDV-om":"GA4, incl. VAT",null,"r",money())}
+      {tile(sr?"Bruto profit":"Gross profit",scale(T.gpEst),sr?"posle nabavne cene":"after cost of goods",null,"gp",money())}
+      {tile(sr?"Profit posle oglasa":"Profit after ads",scale(T.profit),nat(T.profit),pfColor(T.profit),"pa",money())}
+      {tile("ROAS",T.roas,sr?`na nuli: ${roasF(T.beRoas)}`:`break-even: ${roasF(T.beRoas)}`,T.roas!=null&&T.beRoas!=null?(T.roas>=T.beRoas?C.grn:C.red):null,"roas",roasF)}
+    </div>
+    <div style={{color:C.mut,fontSize:12.5,lineHeight:1.55,marginBottom:12}}>
+      {sr?"Prihod je iz GA4 (sesije koje su došle iz kampanje), potrošnja iz Google Ads-a. Ako deo prihoda kampanje nema nabavnu cenu, bruto profit se procenjuje prosečnom maržom ostalih proizvoda te kampanje (kad je pokriveno bar 50%). Kampanja je isplativa kad je ROAS iznad ROAS-a na nuli.":"Revenue is from GA4 (sessions from the campaign), spend from Google Ads. If part of a campaign's revenue has no cost, gross profit is estimated from the campaign's average margin (when at least 50% is covered). A campaign pays off when ROAS is above break-even ROAS."}
+      {T.nUnknown>0&&<span style={{color:C.yel}}>{sr?` ${T.nUnknown} kampanja ima premalo podataka za računicu.`:` ${T.nUnknown} campaigns have too little data.`}</span>}
+    </div>
+    <div style={{overflowX:"auto",border:`1px solid ${C.brd}`,borderRadius:10}}>
+      <table style={{borderCollapse:"collapse",width:"100%",fontSize:13,minWidth:980}}>
+        <thead><tr>{[[sr?"Kampanja":"Campaign"],[sr?"Potrošnja":"Spend",1],[sr?"Prihod":"Revenue",1],["ROAS",1],[sr?"ROAS na nuli":"Break-even",1],[sr?"Bruto profit":"Gross profit",1],[sr?"Profit posle oglasa":"Profit after ads",1],[sr?"Pokriveno":"Covered",1]].map(([l,r],i)=><th key={i} style={{textAlign:r?"right":"left",padding:"9px 10px",color:C.mut,fontSize:11.5,fontWeight:800,whiteSpace:"nowrap",borderBottom:`1px solid ${C.brd}`}}>{l}</th>)}</tr></thead>
+        <tbody>{cs.map(c=>{ const isOpen=open===c.id; const good=c.roas!=null&&c.beRoas!=null?c.roas>=c.beRoas:null;
+          return <Fragment key={c.id}>
+            <tr onClick={()=>setOpen(isOpen?null:c.id)} style={{borderBottom:`1px solid ${C.brd}`,cursor:"pointer",background:isOpen?"rgba(245,158,11,0.06)":"transparent"}}>
+              <td style={{padding:"9px 10px",maxWidth:360}}><div style={{color:"#fff",fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={c.name}>{isOpen?"▾ ":"▸ "}{c.name}</div>
+                <div style={{color:C.dim,fontSize:11.5}}>{BR_TYPE[c.type]||c.type||""}{c.status&&c.status!=="ENABLED"?` · ${c.status==="PAUSED"?(sr?"pauzirana":"paused"):c.status.toLowerCase()}`:""}{c.noSaleCount>0?` · ${sr?`${c.noSaleCount} proizvoda sa troškom bez prodaje`:`${c.noSaleCount} products with spend but no sales`}`:""}</div></td>
+              <td style={{padding:"9px 10px",textAlign:"right",color:"#d1d5db"}}>{eur(c.spend)}</td>
+              <td style={{padding:"9px 10px",textAlign:"right",color:"#fff"}}>{eur(c.r)}</td>
+              <td style={{padding:"9px 10px",textAlign:"right",fontWeight:700,color:good==null?"#d1d5db":good?C.grn:C.red}}>{roasF(c.roas)}</td>
+              <td style={{padding:"9px 10px",textAlign:"right",color:"#FBBF24"}}>{roasF(c.beRoas)}</td>
+              <td style={{padding:"9px 10px",textAlign:"right",color:"#d1d5db"}}>{c.gpEst==null?<span style={{color:C.dim}}>{sr?"premalo podataka":"too little data"}</span>:eur(c.gpEst)}</td>
+              <td style={{padding:"9px 10px",textAlign:"right",fontWeight:800,color:pfColor(c.profit)}}>{c.profit==null?"–":eur(c.profit)}</td>
+              <td style={{padding:"9px 10px",textAlign:"right",color:c.cov==null?C.dim:c.cov>=90?"#d1d5db":c.cov>=50?C.yel:C.red}}>{pct(c.cov)}</td>
+            </tr>
+            {isOpen&&<tr><td colSpan={8} style={{padding:"12px 12px 16px",background:"rgba(255,255,255,0.02)",borderBottom:`1px solid ${C.brd}`}}>{(()=>{
+              const list=c.items.filter(i=>pFilter==="all"||(pFilter==="loss"?(i.pa!=null?i.pa<0:i.gp!=null&&i.gp<0):pFilter==="nosale"?i.st==="nosale":i.st==="missing"||i.st==="susp"));
+              const key=i=>pSort==="pa"?(i.pa!=null?i.pa:i.gp):pSort==="ad"?i.ad:pSort==="gp"?i.gp:i.r;
+              const sorted=[...list].sort((a,b)=>{ const va=key(a),vb=key(b); if(va==null&&vb==null) return 0; if(va==null) return 1; if(vb==null) return -1; return pSort==="pa"?va-vb:vb-va; });
+              const nLoss=c.items.filter(i=>i.pa!=null?i.pa<0:i.gp!=null&&i.gp<0).length, nNo=c.items.filter(i=>i.st==="nosale").length, nMiss=c.items.filter(i=>i.st==="missing"||i.st==="susp").length;
+              return <>
+                <div style={{color:C.mut,fontSize:12.5,marginBottom:10}}>{c.hasShop?(sr?"Trošak oglasa po proizvodu je iz Google Ads-a (Shopping / Performance Max).":"Ad cost per product comes from Google Ads (Shopping / Performance Max)."):(sr?"Za ovu vrstu kampanje Google ne daje trošak po proizvodu – prikazan je bruto profit proizvoda koje je kampanja prodala.":"Google doesn't report cost per product for this campaign type – showing gross profit of products it sold.")}
+                  {c.noSaleCount>0&&<span style={{color:C.red}}>{sr?` ${c.noSaleCount} proizvoda je imalo trošak, a nijednu prodaju (ukupno ${eur(c.noSaleSpend)}).`:` ${c.noSaleCount} products had spend but no sales (${eur(c.noSaleSpend)}).`}</span>}</div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+                  {[["all",sr?"Svi":"All",c.items.length],["loss",sr?"U gubitku":"Losing",nLoss],...(c.hasShop?[["nosale",sr?"Trošak bez prodaje":"Spend, no sales",nNo]]:[]),["missing",sr?"Bez cene":"No value",nMiss]].map(([k,l,n])=><button key={k} style={chip(pFilter===k)} onClick={()=>setPFilter(k)}>{l} ({n})</button>)}
+                  <span style={{marginLeft:"auto",color:C.mut,fontSize:12,alignSelf:"center"}}>{sr?"Poređaj:":"Sort:"}</span>
+                  {[["pa",sr?"najveći gubitak":"biggest loss"],["r",sr?"prihod":"revenue"],...(c.hasShop?[["ad",sr?"trošak":"spend"]]:[])].map(([k,l])=><button key={k} style={chip(pSort===k)} onClick={()=>setPSort(k)}>{l}</button>)}
+                </div>
+                <table style={{borderCollapse:"collapse",width:"100%",fontSize:12.5}}>
+                  <thead><tr>{[[sr?"Proizvod":"Product"],[sr?"Kom.":"Units",1],[sr?"Prihod":"Revenue",1],[sr?"Bruto profit":"Gross profit",1],[sr?"Trošak oglasa":"Ad cost",1],[sr?"Profit posle oglasa":"Profit after ads",1]].map(([l,r],i)=><th key={i} style={{textAlign:r?"right":"left",padding:"6px 8px",color:C.mut,fontSize:11,fontWeight:800,borderBottom:`1px solid ${C.brd}`}}>{l}</th>)}</tr></thead>
+                  <tbody>{sorted.slice(0,pVis).map(i=><tr key={i.id} style={{borderBottom:`1px solid ${C.brd}`}}>
+                    <td style={{padding:"6px 8px",maxWidth:340}}><div style={{color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={i.n||i.id}>{i.n||i.id}</div><div style={{color:C.dim,fontSize:11}}>{i.id}</div></td>
+                    <td style={{padding:"6px 8px",textAlign:"right",color:"#d1d5db"}}>{(i.q||0).toLocaleString(loc)}</td>
+                    <td style={{padding:"6px 8px",textAlign:"right",color:"#fff"}}>{eur(i.r)}</td>
+                    <td style={{padding:"6px 8px",textAlign:"right",color:i.st==="ok"||i.st==="nosale"?(i.gp<0?C.red:"#d1d5db"):C.dim}}>{i.st==="ok"||i.st==="nosale"?eur(i.gp):i.st==="susp"?(sr?"sumnjivo":"suspicious"):(sr?"nije uneto":"not set")}</td>
+                    <td style={{padding:"6px 8px",textAlign:"right",color:"#d1d5db"}}>{i.ad==null?<span style={{color:C.dim}}>{sr?"nije dostupno":"n/a"}</span>:eur(i.ad)}</td>
+                    <td style={{padding:"6px 8px",textAlign:"right",fontWeight:700,color:pfColor(i.pa)}}>{i.pa==null?"–":eur(i.pa)}</td>
+                  </tr>)}
+                  {!sorted.length&&<tr><td colSpan={6} style={{padding:12,textAlign:"center",color:C.mut}}>{sr?"Nema proizvoda za ovaj izbor.":"No products."}</td></tr>}</tbody>
+                </table>
+                {sorted.length>pVis&&<div style={{textAlign:"center",marginTop:10}}><button style={chip(false)} onClick={()=>setPVis(v=>v+50)}>{sr?`Prikaži još (${sorted.length-pVis})`:`Show more (${sorted.length-pVis})`}</button></div>}
+                {c.itemsTruncated&&<div style={{color:C.dim,fontSize:11.5,marginTop:8}}>{sr?"Prikazano je 250 proizvoda sa najvećim prihodom i 50 sa najvećim troškom bez prodaje.":"Showing the top 250 products by revenue and top 50 by spend without sales."}</div>}
+              </>; })()}</td></tr>}
+          </Fragment>; })}
+          {!cs.length&&<tr><td colSpan={8} style={{padding:18,textAlign:"center",color:C.mut}}>{sr?"Nema kampanja sa potrošnjom u ovom periodu.":"No campaigns with spend in this period."}</td></tr>}
+        </tbody>
+      </table>
+    </div>
+    {ef&&<div style={{color:C.dim,fontSize:11.5,marginTop:10}}>{sr?`Iznosi u EUR (preračunato iz ${cur} po današnjem kursu).`:`Amounts in EUR (converted from ${cur}).`}</div>}
+  </div>;
+}
+
 // Profit po proizvodu (korak 2). Novac: EUR je glavni prikaz, lokalna valuta mala ispod (kao u ostalim modulima).
 function BrReport({clientId,sr,st}){
   const [period,setPeriod]=useState("30");
+  const [tab,setTab]=useState("prod");
   const [data,setData]=useState(null);
   const [loading,setLoading]=useState(false);
   const [err,setErr]=useState("");
@@ -5112,9 +5228,10 @@ function BrReport({clientId,sr,st}){
 
   return <div className="pm-in" style={card}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:14}}>
-      <div style={{color:"#FBBF24",fontSize:11,fontWeight:800,letterSpacing:"1px",textTransform:"uppercase"}}>{sr?"Profit po proizvodu":"Profit by product"}</div>
+      <div style={{display:"flex",gap:6}}>{[["prod",sr?"Po proizvodu":"By product"],["camp",sr?"Po kampanji":"By campaign"]].map(([k,l])=><button key={k} onClick={()=>setTab(k)} style={{...chip(tab===k),fontSize:13,padding:"8px 14px"}}>{l}</button>)}</div>
       <div style={{display:"flex",gap:6}}>{per.map(([v,l])=><button key={v} style={chip(period===v)} onClick={()=>setPeriod(v)}>{l}</button>)}</div>
     </div>
+    {tab==="camp"?<BrCampaigns clientId={clientId} sr={sr} period={period} stamp={stamp}/>:<>
     {err&&<div style={{color:C.red,fontSize:13,marginBottom:10}}>{err}</div>}
     {loading&&!data?<><SkCards n={6} min={150}/><SkTable rows={8} cols={7}/></>:data&&T&&<div style={{opacity:loading?0.5:1,transition:"opacity .2s"}}>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10,marginBottom:12}}>
@@ -5153,7 +5270,7 @@ function BrReport({clientId,sr,st}){
       </div>
       {rows.length>visible&&<div style={{textAlign:"center",marginTop:12}}><button onClick={()=>setVisible(v=>v+100)} style={chip(false)}>{sr?`Prikaži još (${(rows.length-visible).toLocaleString(loc)})`:`Show more (${rows.length-visible})`}</button></div>}
       {ef&&<div style={{color:C.dim,fontSize:11.5,marginTop:10}}>{sr?`Iznosi u EUR (preračunato iz ${cur} po današnjem kursu).`:`Amounts in EUR (converted from ${cur} at today's rate).`}</div>}
-    </div>}
+    </div>}</>}
   </div>;
 }
 
@@ -5444,7 +5561,7 @@ function BeyondRoasMod({t,lang}){
         </div>
         <div style={{color:C.dim,fontSize:12,marginTop:8}}>{sr?"Srbija 20% · Hrvatska 25% · Slovenija 22% · BiH 17% · Crna Gora 21% · S. Makedonija 18%":"Serbia 20% · Croatia 25% · Slovenia 22% · BiH 17% · Montenegro 21% · N. Macedonia 18%"}</div>
       </div>
-      <div style={{...card,borderStyle:"dashed",color:C.mut,fontSize:13}}>{sr?"Sledeći korak: profit po kampanji i proizvod × kampanja (sa troškom oglasa).":"Next: profit by campaign and product × campaign (with ad cost)."}</div>
+      <div style={{...card,borderStyle:"dashed",color:C.mut,fontSize:13}}>{sr?"Sledeći korak: procena marže po kategoriji (za proizvode bez nabavne cene) i kartica na početnoj.":"Next: estimated margin by category and the home screen card."}</div>
     </>}
   </div>;
 }
