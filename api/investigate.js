@@ -172,6 +172,9 @@ export default async function handler(req, res) {
   send({ type: "start", checks: CHECKS, period: { curS, curE, prevS, prevE, len }, currency, eurFactor });
 
   const findings = [];     // { check, impact (u valuti prihoda, sa znakom), text, facts, label, force }
+  // Podaci za grafikone na ekranu rezultata (sve u valuti prihoda; ekran pretvara u EUR). Ne pravi nove upite.
+  const viz = { dims: {}, drills: [] };
+  const vRow = (name, p, c) => ({ name: String(name).slice(0, 80), p: Math.round(p * 100) / 100, c: Math.round(c * 100) / 100 });
   const facts = {};        // činjenice koje AI sme da koristi preko oznaka {{...}}
   const doneInfo = {};     // za "Kako sam došao do ovoga": broj stavki po proveri
   const warnings = [];
@@ -284,6 +287,7 @@ export default async function handler(req, res) {
     try {
       channelMap = await P.channels;
       const a = dimAnalysis(channelMap, "channels", (o) => o.dims[0] || "(not set)", { drill: "channel" });
+      viz.dims.channels = { rows: a.rows.slice(0, 6).map((r) => vRow(r.name, r.p.totalRevenue, r.c.totalRevenue)), uniform: a.uniform };
       try {
         const src = await P.sources;
         const sr2 = Object.values(src).map((o) => ({ name: o.dims[0], d: o.cur.totalRevenue - o.prev.totalRevenue, p: pct(o.cur.totalRevenue, o.prev.totalRevenue) })).sort((x, y) => Math.abs(y.d) - Math.abs(x.d));
@@ -299,6 +303,7 @@ export default async function handler(req, res) {
     try {
       const dn = { mobile: L("mobilni", "mobile"), desktop: L("računar", "desktop"), tablet: "tablet", smart_tv: "smart TV" };
       const a = dimAnalysis(await P.devices, "devices", (o) => dn[o.dims[0]] || o.dims[0], { drill: "device" });
+      viz.dims.devices = { rows: a.rows.slice(0, 4).map((r) => vRow(r.name, r.p.totalRevenue, r.c.totalRevenue)), uniform: a.uniform };
       markDone("devices", a.summary, a.rows.length);
     }
     catch (e) { markFail("devices", e); }
@@ -307,6 +312,7 @@ export default async function handler(req, res) {
     try {
       const nm = (v) => (v === "new" ? L("novi posetioci", "new visitors") : v === "returning" ? L("povratni posetioci", "returning visitors") : v || "(not set)");
       const a = dimAnalysis(await P.newret, "newret", (o) => nm(o.dims[0]), { top: 2 });
+      viz.dims.newret = { rows: a.rows.filter((r) => r.raw !== "(not set)" && r.raw !== "").slice(0, 3).map((r) => vRow(r.name, r.p.totalRevenue, r.c.totalRevenue)), uniform: a.uniform };
       markDone("newret", a.summary, a.rows.length);
     } catch (e) { markFail("newret", e); }
 
@@ -330,6 +336,7 @@ export default async function handler(req, res) {
           addFinding({ check: "funnel", impact: R0 * (pick.ch / 100), label: `${pick.name} ${F.pct(pick.ch)}`,
             text: `${L("Korak", "Step")} ${pick.name}: ${F.cr(pick.p)} → ${F.cr(pick.c)} (${F.pct(pick.ch)})` });
         }
+        viz.funnel = valid.map((s) => ({ name: s.name, p: s.p, c: s.c, ch: s.ch }));
         markDone("funnel", valid.map((s) => `${s.name} ${F.pct(s.ch)}`).join(" · "), valid.length);
       }
     } catch (e) { markFail("funnel", e); }
@@ -339,6 +346,7 @@ export default async function handler(req, res) {
     try {
       const m = await P.landing;
       const a = dimAnalysis(m, "landing", (o) => o.dims[0] || "(not set)", { drill: "landing" });
+      viz.dims.landing = { rows: a.rows.slice(0, 5).map((r) => vRow(r.name, r.p.totalRevenue, r.c.totalRevenue)), uniform: a.uniform };
       // Sesije koje POČINJU na stranici završetka kupovine/plaćanja = kupac se vratio sa stranice banke/kredita,
       // GA4 je započeo novu sesiju i prodaja se pripisuje pogrešnom izvoru.
       const FINISH = /(finish|thank|hvala|uspesn|success|confirm|potvrd|order-received|narudzbina-primljena|payment|placanje)/i;
@@ -381,9 +389,12 @@ export default async function handler(req, res) {
           if (!best || sse < best.sse) best = { k, sse, mL, mR };
         }
       }
+      viz.daily = { cur: [], prev: [], dates: [], band: null, changeStart: null };
+      for (let i = 0; i < len; i++) { const dc = addDays(curS, i), dp = addDays(prevS, i); viz.daily.dates.push(dc); viz.daily.cur.push(get(dc).r); viz.daily.prev.push(get(dp).r); }
       let changeTxt = "";
       if (best && best.mL > 0 && Math.abs(best.mR - best.mL) / best.mL >= 0.15) {
         const startDay = series[best.k].d;
+        viz.daily.changeStart = startDay;
         const ch = pct(best.mR, best.mL);
         changeTxt = `${L("Promena počinje oko", "Change starts around")} ${F.date(startDay)} (${L("dnevni prihod", "daily revenue")} ${F.pct(ch)} ${L("u odnosu na dane pre toga", "vs. the days before")})`;
         addFinding({ check: "daily", impact: dR * 0.3, force: true, label: `${L("od", "from")} ${F.date(startDay)}`, text: changeTxt, facts: { change_start: F.date(startDay) } });
@@ -398,6 +409,13 @@ export default async function handler(req, res) {
           sums.push(tot);
         }
         const mean = sums.reduce((a, b) => a + b, 0) / sums.length;
+        // Uobičajeni opseg po danu (najmanji–najveći isti dan u prethodnim periodima) za senčenu zonu na grafikonu
+        const bMin = [], bMax = [];
+        for (let i = 0; i < len; i++) {
+          const vals = []; for (let w = 1; w <= lookbackWindows; w++) vals.push(get(addDays(curS, -w * len + i)).r);
+          bMin.push(Math.min(...vals)); bMax.push(Math.max(...vals));
+        }
+        viz.daily.band = { min: bMin, max: bMax, periods: sums.length, sumMin: Math.min(...sums), sumMax: Math.max(...sums) };
         const sd = Math.sqrt(sums.reduce((a, b) => a + (b - mean) ** 2, 0) / sums.length);
         const z = sd > 0 ? (R1 - mean) / sd : 0;
         const minS = Math.min(...sums), maxS = Math.max(...sums);
@@ -429,6 +447,7 @@ export default async function handler(req, res) {
         }
       }
       if (finishFlag) flags.push(finishFlag);
+      viz.tracking = flags.slice(0, 4);
       if (flags.length) {
         flags.forEach((t) => addFinding({ check: "tracking", impact: dR * 0.5, force: true, label: L("moguć problem u merenju", "possible tracking issue"), text: t }));
         markDone("tracking", flags[0] + (flags.length > 1 ? ` (+${flags.length - 1})` : ""), flags.length);
@@ -458,12 +477,15 @@ export default async function handler(req, res) {
       }
       const prods = Object.values(byId).map((x) => ({ ...x, d: x.c.itemRevenue - x.p.itemRevenue }));
       const sorted = [...prods].sort((a, b) => Math.abs(b.d) - Math.abs(a.d));
+      viz.dims.categories = { rows: cats.filter((c) => c.name !== "(not set)").slice(0, 5).map((c) => ({ ...vRow(c.name, c.p.itemRevenue, c.c.itemRevenue), upc: pct(rate(c.c.itemRevenue, c.c.itemsPurchased), rate(c.p.itemRevenue, c.p.itemsPurchased)) })) };
+      viz.products = sorted.slice(0, 6).map((x) => vRow(x.name || x.id, x.p.itemRevenue, x.c.itemRevenue));
       for (const x of sorted.slice(0, 3)) {
         addFinding({ check: "products", impact: x.d, label: `${x.name} ${F.pct(pct(x.c.itemRevenue, x.p.itemRevenue))}`,
           text: `${L("Proizvod", "Product")} ${x.name}: ${L("prihod", "revenue")} ${F.moneyDelta(x.d)} (${F.pct(pct(x.c.itemRevenue, x.p.itemRevenue))}) · ${L("pregledi", "views")} ${F.pct(pct(x.c.itemsViewed, x.p.itemsViewed))} · ${L("kupljeno", "purchased")} ${F.pct(pct(x.c.itemsPurchased, x.p.itemsPurchased))}` });
       }
       // "Nestali" proizvodi: ranije dosta pregleda, sada skoro ništa
       const gone = prods.filter((x) => x.p.itemsViewed >= 50 && x.c.itemsViewed <= x.p.itemsViewed * 0.1);
+      viz.gone = { count: gone.length, prevRevenue: gone.reduce((a, x) => a + x.p.itemRevenue, 0), examples: gone.slice(0, 3).map((x) => x.name) };
       if (gone.length) {
         const lost = gone.reduce((a, x) => a + x.p.itemRevenue - x.c.itemRevenue, 0);
         addFinding({ check: "products", impact: -lost, force: lost > 0, label: L(`${gone.length} „nestalih" proizvoda`, `${gone.length} "vanished" products`),
@@ -508,6 +530,8 @@ export default async function handler(req, res) {
         const G1 = list.reduce((a, c) => a + c.rc, 0), G0 = list.reduce((a, c) => a + c.rp, 0);
         gadsTotals = { spendCur: S1, spendPrev: S0, revCur: G1, revPrev: G0, roasCur: rate(G1, S1), roasPrev: rate(G0, S0), fxMissing };
         const sorted = [...list].sort((a, b) => Math.max(Math.abs(b.rc - b.rp), Math.abs(b.sc - b.sp)) - Math.max(Math.abs(a.rc - a.rp), Math.abs(a.sc - a.sp)));
+        const vc = (c) => ({ id: c.id, name: String(c.name).slice(0, 80), sp: c.sp, sc: c.sc, rp: c.rp, rc: c.rc, focus: String(c.id) === String(focusCampaignId) });
+        viz.campaigns = [...(focusCampaignId && camps[focusCampaignId] ? [camps[focusCampaignId]] : []), ...sorted.filter((c) => String(c.id) !== String(focusCampaignId))].slice(0, 6).map(vc);
         for (const c of sorted.slice(0, 3)) {
           const dRev = c.rc - c.rp, dSp = c.sc - c.sp;
           const status = c.sp === 0 && c.sc > 0 ? L(" (nova u ovom periodu)", " (new this period)") : c.sc === 0 && c.sp > 0 ? L(" (bez potrošnje u ovom periodu – pauzirana?)", " (no spend this period – paused?)") : "";
@@ -559,6 +583,7 @@ export default async function handler(req, res) {
         const lyCh = pct(y.cur.totalRevenue, y.prev.totalRevenue);
         const yoyRev = pct(R1, y.cur.totalRevenue);
         const seasonal = T && T.pct.revenue != null && lyCh != null && Math.sign(lyCh) === Math.sign(T.pct.revenue) && Math.abs(lyCh) >= Math.abs(T.pct.revenue) * 0.5;
+        viz.yoy = { lastYearChange: lyCh, nowChange: T ? T.pct.revenue : null, vsLastYear: pct(R1, y.cur.totalRevenue), seasonal: !!seasonal };
         const txt = L(`Prošle godine je u istim nedeljama promena bila ${F.pct(lyCh)}${seasonal ? " – slično kao sada, verovatno sezona" : ""} · prihod u odnosu na prošlu godinu ${F.pct(yoyRev)}`,
                       `Last year the same weeks changed ${F.pct(lyCh)}${seasonal ? " – similar to now, likely seasonal" : ""} · revenue vs last year ${F.pct(yoyRev)}`);
         addFinding({ check: "yoy", impact: seasonal ? dR * 0.6 : dR * 0.1, force: seasonal, label: seasonal ? L("sezonski obrazac", "seasonal pattern") : L("prošla godina", "last year"), text: txt });
@@ -724,7 +749,7 @@ export default async function handler(req, res) {
         return Promise.race([
           DRILL[d.type](d),
           new Promise((_, rej) => { const tm = setTimeout(() => rej(new Error(L("Google nije odgovorio na vreme", "Google did not respond in time"))), Math.max(0, drillDeadline - Date.now())); if (tm.unref) tm.unref(); })
-        ]).then((r) => markDone(chk.id, r.summary, r.count)).catch((e) => { warnings.push({ check: chk.id, error: String(e && e.message || e).slice(0, 200) }); send({ type: "check", id: chk.id, status: "failed", summary: L("Provera nije uspela", "Check failed") }); });
+        ]).then((r) => { viz.drills.push({ type: d.type, name: d.name, summary: r.summary }); markDone(chk.id, r.summary, r.count); }).catch((e) => { warnings.push({ check: chk.id, error: String(e && e.message || e).slice(0, 200) }); send({ type: "check", id: chk.id, status: "failed", summary: L("Provera nije uspela", "Check failed") }); });
       });
       await Promise.all(jobs);
     }
@@ -781,7 +806,7 @@ export default async function handler(req, res) {
       question, qtype,
       period: { curS, curE, prevS, prevE, len },
       currency, eurFactor, lang,
-      totals: T, decomp, gads: gadsTotals,
+      totals: T, decomp, gads: gadsTotals, viz,
       findings: top.map(({ id, check, impact, share, text, deep }) => ({ id, check, impact, share, text, deep: !!deep })),
       ai, unavailable, checksDone, warnings, failedCount, style, facts,
       focus: focusCampaignId ? facts.focus_campaign || focusCampaignId : null,
