@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Fragment } from "react";
+import { useState, useEffect, useRef, useMemo, Fragment } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 // ── IMAGE TYPE DETECTOR ───────────────────────────────────────────────────────
@@ -128,6 +128,7 @@ const T={
     m12t:"Product Intelligence", m12s:"Svaki proizvod, od pregleda do prodaje",
     m13t:"Ask Your Data", m13s:"Pitaj bilo šta o podacima klijenta, odgovor za par sekundi",
     m16t:"Investigate", m16s:"Nešto se promenilo? Saznaj šta i zašto.",
+    m17t:"Beyond ROAS", m17s:"Koliko stvarno zarađuješ – posle nabavne cene i oglasa.",
     m14t:"Campaign Intelligence", m14s:"Šta svaka kampanja stvarno donosi",
     grpAn:"Analitika", grpDw:"Svakodnevni rad", open:"Otvori",
     m15t:"Report Studio", m15s:"Izveštaj za klijenta u par klikova, sa PDF-om",
@@ -171,6 +172,7 @@ const T={
     m12t:"Product Intelligence", m12s:"Every product, from view to sale",
     m13t:"Ask Your Data", m13s:"Ask anything about your client's data, answers in seconds",
     m16t:"Investigate", m16s:"Something changed? Find out what and why.",
+    m17t:"Beyond ROAS", m17s:"What you really earn – after product cost and ads.",
     m14t:"Campaign Intelligence", m14s:"What every campaign really delivers",
     grpAn:"Analytics", grpDw:"Daily work", open:"Open",
     m15t:"Report Studio", m15s:"Client reports in a few clicks, with PDF",
@@ -4777,6 +4779,563 @@ function invPdfDoc({inv,R,stats,ai,evidence,findings,failedChecks,sr,pctTxt,peri
   };
 }
 
+// ── BEYOND ROAS: čitanje fajla sa nabavnim cenama / zaradom (sve u pregledaču) ──
+// Podržano: CSV/TXT/TSV (bilo koji separator, UTF-8 ili Windows-1250), Excel (.xlsx/.xls), XML feed (Google/Meta i slični).
+const BR_ROLES=["sku","cost","margin","price","title","category","currency"];
+const brNorm=s=>String(s==null?"":s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/đ/g,"dj").replace(/^g:/,"").replace(/[^a-z0-9]/g,"");
+// Nazivi kolona po ulozi (posle brNorm). Tačno poklapanje vredi više od delimičnog.
+const BR_SYN={
+  sku:["id","sifra","sifraartikla","sifraproizvoda","sku","itemid","productid","idproizvoda","idartikla","kod","kodartikla","code","productcode","artikal","artikl","sifraart","offerid","gid","mpn","kataloskibroj","ean","barcode","gtin","referenca","reference"],
+  cost:["nabavnacena","nabavna","nabavnacijena","ulaznacena","ulaznacijena","nc","cost","costofgoodssold","cogs","purchaseprice","nabavnavrednost","nabavnavrijednost","cenakostanja","cijenakostanja","unitcost","costprice","buyprice","nabavnacenabezpdv"],
+  margin:["marza","margin","estimatedmargin","ruc","razlikauceni","razlikaucijeni","zarada","profit","grossmargin","marzapokomadu"],
+  price:["price","cena","cijena","saleprice","prodajnacena","prodajnacijena","mpcena","mpc","mpcijena","vpc","regularprice","cenasapdv"],
+  title:["title","naziv","name","nazivartikla","nazivproizvoda","productname","artikalnaziv","proizvod","opisartikla"],
+  category:["category","kategorija","productcategory","producttype","googleproductcategory","grupa","grupaartikala","podkategorija","customlabel2","googlecustomlabel2","customlabel0"],
+  currency:["currency","valuta","curr"],
+};
+function brRoleScore(h,role){
+  const n=brNorm(h); if(!n) return 0;
+  const list=BR_SYN[role];
+  if(list.includes(n)) return 10-Math.min(list.indexOf(n),9)*0.1;
+  // delimično: "nabavnacenaeur", "sifraartikla2"…
+  for(const s of list){ if(s.length>=4&&(n.startsWith(s)||n.endsWith(s))) return 5; }
+  return 0;
+}
+
+// Tekst iz bajtova: UTF-8, a ako nije ispravan UTF-8 – Windows-1250 (srpski/hrvatski Excel)
+function brDecode(buf){
+  let txt,enc="UTF-8";
+  try{ txt=new TextDecoder("utf-8",{fatal:true}).decode(buf); }
+  catch(e){ try{ txt=new TextDecoder("windows-1250").decode(buf); enc="Windows-1250"; }catch(e2){ txt=new TextDecoder("utf-8").decode(buf); } }
+  return {txt:txt.replace(/^\uFEFF/,""),enc};
+}
+
+// Separator kolona: onaj koji se u prvim redovima pojavljuje isti broj puta (van navodnika)
+function brDetectDelim(txt){
+  const lines=txt.split(/\r?\n/).filter(l=>l.trim()).slice(0,30);
+  let best=",",bestScore=-1;
+  for(const d of [";",",","\t","|"]){
+    const counts=lines.map(l=>{ let c=0,q=false; for(const ch of l){ if(ch==='"') q=!q; else if(ch===d&&!q) c++; } return c; });
+    const nonzero=counts.filter(c=>c>0);
+    if(!nonzero.length) continue;
+    const freq={}; nonzero.forEach(c=>freq[c]=(freq[c]||0)+1);
+    const mode=Math.max(...Object.values(freq));
+    const modeVal=+Object.keys(freq).find(k=>freq[k]===mode);
+    const score=mode*10+modeVal;
+    if(score>bestScore){ bestScore=score; best=d; }
+  }
+  return best;
+}
+function brParseCsv(txt,d){
+  const rows=[]; let row=[],cell="",q=false;
+  for(let i=0;i<txt.length;i++){
+    const ch=txt[i];
+    if(q){ if(ch==='"'){ if(txt[i+1]==='"'){ cell+='"'; i++; } else q=false; } else cell+=ch; }
+    else if(ch==='"') q=true;
+    else if(ch===d){ row.push(cell); cell=""; }
+    else if(ch==="\n"||ch==="\r"){ if(ch==="\r"&&txt[i+1]==="\n") i++; row.push(cell); rows.push(row); row=[]; cell=""; }
+    else cell+=ch;
+  }
+  if(cell!==""||row.length){ row.push(cell); rows.push(row); }
+  return rows.filter(r=>r.some(c=>String(c).trim()!==""));
+}
+
+// XML feed: ponavljajući element (item, entry, product, offer…) – njegova "list" polja postaju kolone
+function brParseXml(txt){
+  const doc=new DOMParser().parseFromString(txt,"application/xml");
+  if(doc.getElementsByTagName("parsererror").length) throw new Error("xml");
+  const counts={};
+  const all=doc.getElementsByTagName("*");
+  for(let i=0;i<all.length;i++){ const el=all[i]; if(el.children.length>=2){ const k=el.tagName; counts[k]=(counts[k]||0)+1; } }
+  const tag=Object.keys(counts).sort((a,b)=>counts[b]-counts[a])[0];
+  if(!tag) throw new Error("xml_empty");
+  const recs=doc.getElementsByTagName(tag);
+  const headers=[]; const hIdx={};
+  const data=[];
+  for(let i=0;i<recs.length;i++){
+    const o={};
+    for(const ch of recs[i].children){
+      if(ch.children.length) continue; // ugnežđeno (npr. g:shipping) se preskače
+      const name=ch.tagName;
+      if(!(name in hIdx)){ hIdx[name]=headers.length; headers.push(name); }
+      if(o[name]===undefined) o[name]=ch.textContent.trim();
+    }
+    data.push(o);
+  }
+  return {rows:[headers,...data.map(o=>headers.map(h=>o[h]===undefined?"":o[h]))],headerRow:0,xmlTag:tag};
+}
+
+// Red sa nazivima kolona: u prvih 15 redova, onaj sa najviše prepoznatih naziva i tekstualnih ćelija
+function brFindHeader(rows){
+  let best=0,bestScore=-1;
+  for(let i=0;i<Math.min(15,rows.length);i++){
+    const r=rows[i]; let syn=0,text=0;
+    for(const c of r){ const s=String(c).trim(); if(!s) continue; if(isNaN(Number(s.replace(",",".")))) text++; if(BR_ROLES.some(role=>brRoleScore(s,role)>=5)) syn++; }
+    const score=syn*10+text+(r.filter(c=>String(c).trim()).length>=2?1:0);
+    if(score>bestScore){ bestScore=score; best=i; }
+  }
+  return best;
+}
+
+// Broj iz teksta: "1.234,56", "1,234.56", "7999 RSD", "€12,50", "-80". dec = "," ili "." za celu kolonu.
+function brNum(v,dec){
+  if(typeof v==="number") return isFinite(v)?v:null;
+  let s=String(v==null?"":v).trim(); if(!s) return null;
+  const neg=/^[-−(]/.test(s.replace(/^[^\d\-−(]*?(?=[-−(]?\d)/,""));
+  s=s.replace(/[^\d.,]/g,"");
+  if(!s||!/\d/.test(s)) return null;
+  if(dec===","){ s=s.replace(/\./g,"").replace(",","."); }
+  else if(dec==="."){ s=s.replace(/,/g,""); }
+  else{
+    const lc=s.lastIndexOf(","),ld=s.lastIndexOf(".");
+    if(lc>ld) s=s.replace(/\./g,"").replace(",","."); else s=s.replace(/,/g,"");
+  }
+  const n=parseFloat(s);
+  return isFinite(n)?(neg?-Math.abs(n):n):null;
+}
+// Decimalni separator kolone na osnovu vrednosti
+function brDecSep(vals){
+  let c=0,d=0;
+  for(const v of vals.slice(0,500)){
+    const s=String(v).replace(/[^\d.,]/g,"");
+    if(/,\d{1,2}$/.test(s)||/\d\.\d{3},\d+$/.test(s)) c++;
+    else if(/\.\d{1,2}$/.test(s)||/\d,\d{3}\.\d+$/.test(s)) d++;
+    else if(/^\d{1,3}(\.\d{3})+$/.test(s)) c++;
+    else if(/^\d{1,3}(,\d{3})+$/.test(s)) d++;
+  }
+  return c>d?",":d>c?".":null;
+}
+const brCur=v=>{ const m=String(v||"").toUpperCase().match(/\b(RSD|EUR|USD|BAM|KM|HRK|MKD|HUF|RON|BGN|CHF|GBP)\b|€|\$|DIN/); if(!m) return null; const x=m[0]; return x==="€"?"EUR":x==="$"?"USD":x==="KM"?"BAM":x==="DIN"?"RSD":x; };
+
+// Pročitaj fajl → {headers, body (redovi), info}
+async function brReadFile(file,sheetName){
+  const name=file.name||"";
+  const ext=(name.split(".").pop()||"").toLowerCase();
+  const buf=await file.arrayBuffer();
+  if(ext==="xlsx"||ext==="xls"||ext==="xlsm"){
+    const XLSX=await brLoadXlsx();
+    const wb=XLSX.read(buf,{type:"array"});
+    const sheets=wb.SheetNames;
+    let sh=sheetName&&sheets.includes(sheetName)?sheetName:null;
+    if(!sh){ let max=-1; for(const s of sheets){ const ref=wb.Sheets[s]["!ref"]; const n=ref?XLSX.utils.decode_range(ref).e.r:0; if(n>max){ max=n; sh=s; } } }
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[sh],{header:1,raw:true,defval:""}).filter(r=>r.some(c=>String(c).trim()!==""));
+    const h=brFindHeader(rows);
+    return {headers:rows[h].map(String),body:rows.slice(h+1),info:{format:"Excel",sheet:sh,sheets,headerRow:h+1}};
+  }
+  const {txt,enc}=brDecode(buf);
+  const head=txt.slice(0,2000).trim();
+  if(ext==="xml"||head.startsWith("<?xml")||/^<(rss|feed|products|catalog|items)\b/i.test(head)){
+    const p=brParseXml(txt);
+    return {headers:p.rows[0],body:p.rows.slice(1),info:{format:"XML",enc,xmlTag:p.xmlTag,headerRow:1}};
+  }
+  const d=brDetectDelim(txt);
+  const rows=brParseCsv(txt,d);
+  const h=brFindHeader(rows);
+  return {headers:rows[h].map(String),body:rows.slice(h+1),info:{format:"CSV",enc,delim:d==="\t"?"tab":d,headerRow:h+1}};
+}
+let brXlsxPromise=null;
+function brLoadXlsx(){
+  if(window.XLSX) return Promise.resolve(window.XLSX);
+  if(brXlsxPromise) return brXlsxPromise;
+  brXlsxPromise=new Promise((res,rej)=>{ const s=document.createElement("script"); s.src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"; s.onload=()=>window.XLSX?res(window.XLSX):rej(new Error("xlsx")); s.onerror=rej; document.head.appendChild(s); })
+    .catch(e=>{ brXlsxPromise=null; throw e; });
+  return brXlsxPromise;
+}
+
+// Kolone koje LIČE na šifru: skoro uvek popunjene, skoro sve različite, kratke
+function brIdCandidates(headers,body){
+  const out=[];
+  const sample=body.slice(0,3000);
+  headers.forEach((h,i)=>{
+    const vals=sample.map(r=>String(r[i]==null?"":r[i]).trim()).filter(Boolean);
+    if(vals.length<sample.length*0.8||!vals.length) return;
+    const uniq=new Set(vals).size/vals.length;
+    const avgLen=vals.reduce((s,v)=>s+v.length,0)/vals.length;
+    if(uniq>=0.9&&avgLen<=40&&!vals.some(v=>/\s{2,}|https?:/.test(v))) out.push(i);
+  });
+  return out;
+}
+
+// Predlog uloga kolona: po nazivu, pa po sadržaju (šifra = najviše poklapanja sa GA4)
+function brGuessMap(headers,body,ga4Ids,saved){
+  const map=headers.map(()=>"");
+  // zapamćen raspored za ovog klijenta (isti nazivi kolona)
+  if(saved&&saved.roles&&Object.keys(saved.roles).length&&Object.keys(saved.roles).every(h=>headers.includes(h))){
+    for(const [h,role] of Object.entries(saved.roles)) map[headers.indexOf(h)]=role;
+    if(map.includes("sku")&&(map.includes("cost")||map.includes("margin"))) return {map,from:"saved",idScores:null};
+    map.fill("");
+  }
+  for(const role of ["cost","margin","price","title","category","currency"]){
+    let bi=-1,bs=0;
+    headers.forEach((h,i)=>{ if(map[i]) return; const s=brRoleScore(h,role); if(s>bs){ bs=s; bi=i; } });
+    if(bi>=0&&bs>=5) map[bi]=role;
+  }
+  // šifra: kandidati po izgledu + po nazivu
+  const cands=new Set(brIdCandidates(headers,body));
+  headers.forEach((h,i)=>{ if(!map[i]&&brRoleScore(h,"sku")>=5) cands.add(i); });
+  let idScores=null;
+  const ids=ga4Ids&&ga4Ids.size?ga4Ids:null;
+  let bi=-1;
+  if(ids){
+    idScores=[];
+    for(const i of cands){
+      if(map[i]) continue;
+      let hit=0,n=0;
+      for(const r of body){ const v=String(r[i]==null?"":r[i]).trim().toLowerCase(); if(!v) continue; n++; if(ids.has(v)) hit++; }
+      idScores.push({i,hit,n});
+    }
+    idScores.sort((a,b)=>b.hit-a.hit||brRoleScore(headers[b.i],"sku")-brRoleScore(headers[a.i],"sku"));
+    if(idScores.length&&idScores[0].hit>0) bi=idScores[0].i;
+  }
+  if(bi<0){ let bs=0; for(const i of cands){ if(map[i]) continue; const s=brRoleScore(headers[i],"sku")+(brIdCandidates(headers,body).includes(i)?1:0); if(s>bs){ bs=s; bi=i; } } }
+  if(bi>=0) map[bi]="sku";
+  return {map,from:"guess",idScores};
+}
+
+// Iz fajla + rasporeda kolona → očišćeni redovi + izveštaj o problemima
+function brBuildRows(headers,body,map){
+  const col=role=>map.indexOf(role);
+  const iS=col("sku"),iC=col("cost"),iM=col("margin"),iP=col("price"),iT=col("title"),iK=col("category"),iCur=col("currency");
+  const valueType=iC>=0?"cost":iM>=0?"margin":null;
+  const iV=valueType==="cost"?iC:iM;
+  const decV=iV>=0?brDecSep(body.map(r=>r[iV])):null;
+  const decP=iP>=0?brDecSep(body.map(r=>r[iP])):null;
+  const rows=[]; const seen=new Map();
+  const prob={noValue:[],dup:[],noSku:0,suspicious:[],negative:[]};
+  let curFound={};
+  for(const r of body){
+    const sku=iS>=0?String(r[iS]==null?"":r[iS]).trim():"";
+    if(!sku){ prob.noSku++; continue; }
+    const v=iV>=0?brNum(r[iV],decV):null;
+    const title=iT>=0?String(r[iT]||"").trim().slice(0,300):"";
+    if(v===null){ prob.noValue.push({sku,title}); continue; }
+    if(seen.has(sku)){ prob.dup.push({sku,title}); continue; }
+    const p=iP>=0?brNum(r[iP],decP):null;
+    const cur=(iCur>=0?brCur(r[iCur]):null)||brCur(r[iV])||(iP>=0?brCur(r[iP]):null);
+    if(cur) curFound[cur]=(curFound[cur]||0)+1;
+    const row={s:sku,v,p,t:title||null,c:iK>=0?String(r[iK]||"").trim().slice(0,200)||null:null,cur};
+    seen.set(sku,true); rows.push(row);
+    if(p!=null&&p>0){
+      if(valueType==="cost"&&v>p) prob.suspicious.push({sku,title,v,p});
+      if(valueType==="margin"&&v>p) prob.suspicious.push({sku,title,v,p});
+    }
+    if(valueType==="cost"&&v<=0) prob.suspicious.push({sku,title,v,p});
+    if(valueType==="margin"&&v<0) prob.negative.push({sku,title,v,p});
+  }
+  const currency=Object.keys(curFound).sort((a,b)=>curFound[b]-curFound[a])[0]||(iV>=0?brCur(headers[iV]):null)||(iP>=0?brCur(headers[iP]):null);
+  // nabavna veća od prodajne kod većine redova = verovatno su zamenjene kolone
+  const swapped=valueType==="cost"&&iP>=0&&prob.suspicious.length>rows.length*0.5;
+  return {rows,prob,valueType,currency,swapped};
+}
+
+// Poređenje sa GA4: koliko prihoda (poslednjih 30 dana) ima nabavnu cenu / zaradu
+function brCoverage(rows,catalog){
+  if(!catalog||!catalog.length) return null;
+  const have=new Set(rows.map(r=>r.s.toLowerCase()));
+  let tot=0,cov=0,nSold=0,nCov=0; const missing=[];
+  for(const it of catalog){
+    const rev=it.revenue||0; if(!(it.purchased>0||rev>0)) continue;
+    nSold++; tot+=rev;
+    if(have.has(String(it.id).trim().toLowerCase())){ cov+=rev; nCov++; } else missing.push(it);
+  }
+  missing.sort((a,b)=>(b.revenue||0)-(a.revenue||0));
+  const ga4Set=new Set(catalog.map(i=>String(i.id).trim().toLowerCase()));
+  const notInGa4=rows.filter(r=>!ga4Set.has(r.s.toLowerCase())).length;
+  return {tot,cov,pct:tot>0?cov/tot*100:0,nSold,nCov,missing:missing.slice(0,30),notInGa4};
+}
+
+// ── BEYOND ROAS (mod 17) – korak 1: nabavne cene / zarada + PDV podešavanje ──
+const BR_ROLE_LBL={sr:{"":"— ne koristi",sku:"Šifra",cost:"Nabavna cena",margin:"Zarada po komadu",price:"Prodajna cena",title:"Naziv",category:"Kategorija",currency:"Valuta"},
+  en:{"":"— ignore",sku:"Product ID",cost:"Purchase price",margin:"Profit per unit",price:"Selling price",title:"Name",category:"Category",currency:"Currency"}};
+const BR_CURS=["EUR","RSD","BAM","MKD","HUF","RON","BGN","USD","GBP","CHF"];
+const brTemplate=()=>{ const csv="\uFEFFŠifra;Naziv;Nabavna cena\r\n100022;Primer proizvoda;5270,00\r\n"; const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"})); a.download="sablon_nabavne_cene.csv"; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),2000); };
+
+function BeyondRoasMod({t,lang}){
+  const sr=lang==="sr";
+  const L=BR_ROLE_LBL[sr?"sr":"en"];
+  const nf=(v,d=0)=>v==null||!isFinite(v)?"–":Number(v).toLocaleString(sr?"sr-RS":"en-GB",{maximumFractionDigits:d,minimumFractionDigits:d});
+  const [clients,setClients]=useState([]);
+  const [clientsLoading,setClientsLoading]=useState(true);
+  const [clientId,setClientId]=useState(()=>{ try{ return localStorage.getItem("br_client")||""; }catch(e){ return ""; } });
+  const [st,setSt]=useState(null);          // podešavanje + šta je učitano
+  const [stLoading,setStLoading]=useState(false);
+  const [err,setErr]=useState("");
+  const [vat,setVat]=useState({inc:true,rate:20});
+  const [vatSaved,setVatSaved]=useState(false);
+  // učitavanje fajla
+  const [file,setFile]=useState(null);
+  const [parsed,setParsed]=useState(null);  // {headers, body, info}
+  const [parsing,setParsing]=useState(false);
+  const [map,setMap]=useState([]);
+  const [mapFrom,setMapFrom]=useState("");
+  const [ga4,setGa4]=useState(null);        // {catalog,currency} | {error}
+  const [valInc,setValInc]=useState(false);
+  const [valCur,setValCur]=useState("");
+  const [saving,setSaving]=useState(null);  // {done,total}
+  const [savedMsg,setSavedMsg]=useState("");
+  const fileRef=useRef(null);
+  const reqId=useRef(0);
+
+  useEffect(()=>{ pmScrollTop(); },[clientId,!!parsed]);
+  useEffect(()=>{
+    const uid=localStorage.getItem("mat_user_id");
+    if(!uid){ setClientsLoading(false); return; }
+    fetch(`/api/clients?user_id=${uid}`).then(r=>r.json()).then(d=>setClients(Array.isArray(d)?d:[])).catch(()=>{}).finally(()=>setClientsLoading(false));
+  },[]);
+
+  const loadState=async(id)=>{
+    const my=++reqId.current;
+    setSt(null); setErr(""); setStLoading(true);
+    try{
+      const r=await fetch(`/api/beyond-roas?client_id=${id}`);
+      const d=await r.json().catch(()=>({}));
+      if(my!==reqId.current) return;
+      if(r.status===503) throw new Error(sr?"Baza još nije pripremljena – pokreni br.sql u Supabase-u.":"Database not set up yet – run br.sql in Supabase.");
+      if(!r.ok) throw new Error(d.error||`HTTP ${r.status}`);
+      setSt(d.settings||{});
+      const s=d.settings||{};
+      setVat({inc:s.prices_include_vat!==false,rate:s.vat_rate!=null?Number(s.vat_rate):20});
+    }catch(e){ if(my===reqId.current) setErr(e.message); }
+    if(my===reqId.current) setStLoading(false);
+  };
+  useEffect(()=>{
+    try{ localStorage.setItem("br_client",clientId||""); }catch(e){}
+    resetFile(); setGa4(null); setSavedMsg("");
+    if(clientId) loadState(clientId); else setSt(null);
+  },[clientId]);
+
+  const resetFile=()=>{ setFile(null); setParsed(null); setMap([]); setMapFrom(""); setParsing(false); if(fileRef.current) fileRef.current.value=""; };
+
+  // GA4 katalog (poslednjih 30 dana) za proveru šifara – isti poziv kao Product Intelligence (koristi keš)
+  const loadGa4=async(id)=>{
+    try{
+      const r=await fetch(`/api/product-intelligence?client_id=${id}&days=30`);
+      const d=await r.json().catch(()=>({}));
+      if(!r.ok) return {error:r.status===404?"no_ga4":(d.error||`HTTP ${r.status}`)};
+      return {catalog:d.catalog||[],currency:d.currency||"EUR"};
+    }catch(e){ return {error:e.message}; }
+  };
+
+  const onFile=async(f,sheet)=>{
+    if(!f) return;
+    if(f.size>60*1024*1024){ setErr(sr?"Fajl je veći od 60 MB.":"File is larger than 60 MB."); return; }
+    setErr(""); setSavedMsg(""); setFile(f); setParsing(true); setParsed(null);
+    try{
+      const g=ga4&&ga4.cid===clientId?ga4:null;
+      const [x,gd]=await Promise.all([brReadFile(f,sheet),g?Promise.resolve(g):loadGa4(clientId).then(v=>({...v,cid:clientId}))]);
+      if(!x.headers||!x.headers.length||!x.body.length) throw new Error("empty");
+      setGa4(gd);
+      const ids=gd&&gd.catalog?new Set(gd.catalog.map(i=>String(i.id).trim().toLowerCase())):null;
+      const gm=brGuessMap(x.headers,x.body,ids,st&&st.column_map);
+      setParsed(x); setMap(gm.map); setMapFrom(gm.from);
+      const B=brBuildRows(x.headers,x.body,gm.map);
+      const sameFile=st&&st.column_map&&gm.from==="saved";
+      setValInc(sameFile?!!st.value_includes_vat:false);
+      setValCur((sameFile&&st.value_currency)||B.currency||(gd&&gd.currency)||"EUR");
+    }catch(e){
+      setErr(e.message==="xlsx"?(sr?"Excel čitač nije mogao da se učita. Proveri internet vezu ili sačuvaj fajl kao CSV.":"Could not load the Excel reader. Check your connection or save the file as CSV.")
+        :(sr?"Fajl nije moguće pročitati. Podržano: CSV, TXT, Excel (.xlsx, .xls) i XML feed.":"The file can't be read. Supported: CSV, TXT, Excel (.xlsx, .xls) and XML feed."));
+      resetFile();
+    }
+    setParsing(false);
+  };
+
+  const built=useMemo(()=>parsed?brBuildRows(parsed.headers,parsed.body,map):null,[parsed,map]);
+  const cov=useMemo(()=>built&&ga4&&ga4.catalog?brCoverage(built.rows,ga4.catalog):null,[built,ga4]);
+  const hasSku=map.includes("sku"), hasVal=map.includes("cost")||map.includes("margin");
+
+  const setRole=(i,role)=>setMap(m=>m.map((r,j)=>{
+    if(j===i) return role;
+    // šifra, nabavna i zarada mogu biti samo po jedna kolona; nabavna i zarada ne idu zajedno
+    if(role&&r===role) return "";
+    if((role==="cost"&&r==="margin")||(role==="margin"&&r==="cost")) return "";
+    return r;
+  }));
+
+  const save=async()=>{
+    if(!built||!built.rows.length||saving) return;
+    setErr(""); const batch=crypto.randomUUID?crypto.randomUUID():([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,c=>(c^crypto.getRandomValues(new Uint8Array(1))[0]&15>>c/4).toString(16));
+    const rows=built.rows; const CH=5000; let saved=0;
+    setSaving({done:0,total:rows.length});
+    try{
+      for(let i=0;i<rows.length;i+=CH){
+        const r=await fetch("/api/beyond-roas",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"upload_chunk",client_id:clientId,batch,rows:rows.slice(i,i+CH)})});
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok) throw new Error(r.status===503?(sr?"Baza još nije pripremljena – pokreni br.sql.":"Database not set up – run br.sql."):(d.error||`HTTP ${r.status}`));
+        saved+=d.saved||0; setSaving({done:Math.min(i+CH,rows.length),total:rows.length});
+      }
+      const roles={}; parsed.headers.forEach((h,i)=>{ if(map[i]) roles[h]=map[i]; });
+      const r=await fetch("/api/beyond-roas",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+        action:"upload_commit",client_id:clientId,batch,row_count:saved,source_name:file?file.name:null,column_map:{roles},
+        settings:{value_type:built.valueType,value_includes_vat:valInc,value_currency:valCur||null,prices_include_vat:vat.inc,vat_rate:Number(vat.rate)||0}})});
+      const d=await r.json().catch(()=>({}));
+      if(!r.ok) throw new Error(d.error==="incomplete"?(sr?"Nisu stigli svi redovi – pokušaj ponovo. Stari podaci su ostali.":"Not all rows arrived – try again. Old data was kept."):(d.error||`HTTP ${r.status}`));
+      setSt(d.settings||st); resetFile();
+      setSavedMsg(sr?`Sačuvano: ${nf(d.row_count)} proizvoda.`:`Saved: ${nf(d.row_count)} products.`);
+    }catch(e){
+      fetch("/api/beyond-roas",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"upload_abort",client_id:clientId,batch})}).catch(()=>{});
+      setErr((sr?"Čuvanje nije uspelo: ":"Saving failed: ")+e.message);
+    }
+    setSaving(null);
+  };
+
+  const saveVat=async()=>{
+    setErr(""); setVatSaved(false);
+    try{
+      const r=await fetch("/api/beyond-roas",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"settings",client_id:clientId,settings:{prices_include_vat:vat.inc,vat_rate:Number(vat.rate)||0}})});
+      const d=await r.json().catch(()=>({}));
+      if(!r.ok) throw new Error(d.error||`HTTP ${r.status}`);
+      setSt(d.settings); setVatSaved(true); setTimeout(()=>setVatSaved(false),2500);
+    }catch(e){ setErr((sr?"Podešavanje nije sačuvano: ":"Settings not saved: ")+e.message); }
+  };
+
+  const card={background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:14,padding:"16px 18px",marginBottom:14};
+  const secT=c=><div style={{color:"#FBBF24",fontSize:11,fontWeight:800,letterSpacing:"1px",textTransform:"uppercase",marginBottom:10}}>{c}</div>;
+  const btn=(primary,disabled)=>({padding:primary?"11px 18px":"8px 14px",borderRadius:10,border:primary?"none":`1px solid ${C.brd}`,background:primary?(disabled?"rgba(245,158,11,0.3)":"linear-gradient(135deg,#F59E0B,#d97706)"):"rgba(255,255,255,0.04)",color:primary?"#1a1205":"#e5e7eb",fontWeight:800,fontSize:13,cursor:disabled?"default":"pointer"});
+  const sel={padding:"9px 10px",background:"#13131f",border:`1px solid ${C.brd}`,borderRadius:9,color:"#e5e7eb",fontSize:13,outline:"none"};
+  const seg=(on)=>({padding:"7px 12px",borderRadius:8,border:`1px solid ${on?"#F59E0B":C.brd}`,background:on?"rgba(245,158,11,0.15)":"transparent",color:on?"#FBBF24":"#d1d5db",fontWeight:700,fontSize:12.5,cursor:"pointer"});
+  const note=(col,txt,key)=><div key={key} style={{color:col,fontSize:12.5,lineHeight:1.5,marginTop:6}}>{txt}</div>;
+  const client=clients.find(c=>String(c.id)===String(clientId));
+
+  const header=<>
+    <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>🪙 Beyond ROAS</h2>
+    <p style={{color:C.mut,fontSize:13,margin:"0 0 20px"}}>{t.m17s}</p>
+  </>;
+
+  // Izbor klijenta
+  const pick=<div style={{...card,display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
+    <div style={{color:C.mut,fontSize:12.5,fontWeight:700}}>{sr?"Klijent":"Client"}</div>
+    {clientsLoading?<Sk w={220} h={36}/>:
+      <select value={clientId} onChange={e=>setClientId(e.target.value)} style={{...sel,minWidth:240}}>
+        <option value="">{sr?"— izaberi klijenta —":"— choose a client —"}</option>
+        {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+      </select>}
+  </div>;
+
+  if(!clientId) return <div>{header}{pick}</div>;
+
+  // ── Ekran za proveru fajla (raspored kolona + problemi) ──
+  if(parsed&&built){
+    const info=parsed.info;
+    const prev=parsed.body.slice(0,5);
+    const vt=built.valueType;
+    const pr=built.prob;
+    const ex=(list,f)=>list.slice(0,8).map((x,i)=><div key={i} style={{color:C.mut,fontSize:12,paddingLeft:12}}>· {x.sku}{x.title?` – ${x.title}`:""}{f?f(x):""}</div>);
+    const covCol=cov?(cov.pct>=90?C.grn:cov.pct>=60?C.yel:C.red):C.mut;
+    return <div>{header}
+      <div style={card}>
+        {secT(sr?"Fajl":"File")}
+        <div style={{color:"#fff",fontWeight:700,fontSize:14}}>{file&&file.name}</div>
+        <div style={{color:C.mut,fontSize:12.5,marginTop:4}}>
+          {[info.format,info.enc,info.delim?`${sr?"separator":"separator"} „${info.delim}"`:null,info.xmlTag?`<${info.xmlTag}> × ${nf(parsed.body.length)}`:null,info.sheet?`${sr?"list":"sheet"} „${info.sheet}"`:null,`${sr?"nazivi kolona u redu":"headers in row"} ${info.headerRow}`,`${nf(parsed.body.length)} ${sr?"redova":"rows"}`].filter(Boolean).join(" · ")}
+        </div>
+        {info.sheets&&info.sheets.length>1&&<div style={{marginTop:10,display:"flex",gap:8,alignItems:"center"}}>
+          <span style={{color:C.mut,fontSize:12.5}}>{sr?"List:":"Sheet:"}</span>
+          <select value={info.sheet} onChange={e=>onFile(file,e.target.value)} style={sel}>{info.sheets.map(s=><option key={s} value={s}>{s}</option>)}</select>
+        </div>}
+        {mapFrom==="saved"&&note(C.grn,sr?"✓ Isti raspored kolona kao prošli put – kolone su već podešene.":"✓ Same columns as last time – already mapped.")}
+      </div>
+
+      <div style={card}>
+        {secT(sr?"Šta je u kojoj koloni":"What each column is")}
+        <div style={{color:C.mut,fontSize:12.5,marginBottom:10}}>{sr?"Predlog je već izabran. Proveri bar Šifru i Nabavnu cenu ili Zaradu.":"Our suggestion is preselected. Check at least the ID and the purchase price or profit."}</div>
+        <div style={{overflowX:"auto",border:`1px solid ${C.brd}`,borderRadius:10}}>
+          <table style={{borderCollapse:"collapse",fontSize:12.5,minWidth:"100%"}}>
+            <thead><tr>{parsed.headers.map((h,i)=><th key={i} style={{textAlign:"left",padding:"8px 10px",borderBottom:`1px solid ${C.brd}`,background:map[i]?"rgba(245,158,11,0.08)":"transparent",verticalAlign:"top",minWidth:130}}>
+              <div style={{color:"#fff",fontWeight:700,marginBottom:6,whiteSpace:"nowrap"}}>{String(h).replace(/^g:/,"")||`#${i+1}`}</div>
+              <select value={map[i]||""} onChange={e=>setRole(i,e.target.value)} style={{...sel,padding:"6px 8px",fontSize:12,width:"100%",borderColor:map[i]?"#F59E0B":C.brd}}>
+                {["","sku","cost","margin","price","title","category","currency"].map(r=><option key={r} value={r}>{L[r]}</option>)}
+              </select></th>)}</tr></thead>
+            <tbody>{prev.map((r,j)=><tr key={j}>{parsed.headers.map((h,i)=><td key={i} style={{padding:"6px 10px",borderBottom:`1px solid ${C.brd}`,color:map[i]?"#fff":C.mut,maxWidth:260,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{String(r[i]==null?"":r[i])}</td>)}</tr>)}</tbody>
+          </table>
+        </div>
+        {!hasSku&&note(C.red,sr?"Izaberi kolonu sa šifrom proizvoda.":"Choose the product ID column.")}
+        {!hasVal&&note(C.red,sr?"U fajlu nije prepoznata nabavna cena ni zarada po komadu. Izaberi tu kolonu – ili, ako je fajl nema (npr. obični Meta feed), učitaj fajl sa nabavnim cenama.":"No purchase price or profit column found. Pick it – or, if the file has none (e.g. a plain Meta feed), upload a file with purchase prices.")}
+        {built.swapped&&note(C.yel,sr?"⚠️ Kod većine proizvoda nabavna cena je veća od prodajne – proveri da kolone nisu zamenjene.":"⚠️ For most products the purchase price is higher than the selling price – check the columns aren't swapped.")}
+      </div>
+
+      {hasVal&&<div style={card}>
+        {secT(sr?"Vrednosti":"Values")}
+        <div style={{display:"flex",gap:22,flexWrap:"wrap",alignItems:"center"}}>
+          <div><div style={{color:C.mut,fontSize:12,marginBottom:6}}>{vt==="margin"?(sr?"Zarada po komadu je":"Profit per unit is"):(sr?"Nabavna cena je":"Purchase price is")}</div>
+            <div style={{display:"flex",gap:6}}><button style={seg(!valInc)} onClick={()=>setValInc(false)}>{sr?"bez PDV-a":"excl. VAT"}</button><button style={seg(valInc)} onClick={()=>setValInc(true)}>{sr?"sa PDV-om":"incl. VAT"}</button></div></div>
+          <div><div style={{color:C.mut,fontSize:12,marginBottom:6}}>{sr?"Valuta":"Currency"}</div>
+            <select value={valCur} onChange={e=>setValCur(e.target.value)} style={sel}>{BR_CURS.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
+          <div><div style={{color:C.mut,fontSize:12,marginBottom:6}}>{sr?"Cene na sajtu (GA4) su":"Site prices (GA4) are"}</div>
+            <div style={{display:"flex",gap:6,alignItems:"center"}}><button style={seg(vat.inc)} onClick={()=>setVat(v=>({...v,inc:true}))}>{sr?"sa PDV-om":"incl. VAT"}</button><button style={seg(!vat.inc)} onClick={()=>setVat(v=>({...v,inc:false}))}>{sr?"bez PDV-a":"excl. VAT"}</button>
+              {vat.inc&&<><input type="number" min="0" max="50" step="0.5" value={vat.rate} onChange={e=>setVat(v=>({...v,rate:e.target.value}))} style={{...sel,width:64}}/><span style={{color:C.mut,fontSize:12.5}}>%</span></>}</div></div>
+        </div>
+        {vt==="margin"&&note(C.mut,sr?"Ako ne znaš da li je zarada u fajlu sa PDV-om ili bez, pitaj klijenta – razlika je oko 20%. Može se promeniti kasnije ponovnim učitavanjem.":"If you don't know whether the profit in the file includes VAT, ask the client – the difference is about 20%.")}
+      </div>}
+
+      {hasSku&&hasVal&&<div style={card}>
+        {secT(sr?"Provera":"Check")}
+        <div style={{color:"#fff",fontSize:14,fontWeight:700}}>{sr?`Spremno za čuvanje: ${nf(built.rows.length)} proizvoda`:`Ready to save: ${nf(built.rows.length)} products`} · {vt==="margin"?(sr?"zarada po komadu":"profit per unit"):(sr?"nabavne cene":"purchase prices")}</div>
+        {cov?<div style={{marginTop:10}}>
+          <div style={{color:covCol,fontSize:14,fontWeight:800}}>{sr?`Povezano sa GA4: ${nf(cov.pct)}% prihoda`:`Matched with GA4: ${nf(cov.pct)}% of revenue`}</div>
+          <div style={{color:C.mut,fontSize:12.5,marginTop:2}}>{sr?`${nf(cov.nCov)} od ${nf(cov.nSold)} prodatih proizvoda u poslednjih 30 dana ima ${vt==="margin"?"zaradu":"nabavnu cenu"}.`:`${nf(cov.nCov)} of ${nf(cov.nSold)} products sold in the last 30 days have a ${vt==="margin"?"profit":"purchase price"}.`}</div>
+          {cov.missing.length>0&&<details style={{marginTop:8}}><summary style={{color:C.yel,fontSize:12.5,cursor:"pointer"}}>{sr?`Prodati proizvodi bez ${vt==="margin"?"zarade":"nabavne cene"} (najveći prihod prvo)`:`Sold products without a value (highest revenue first)`}</summary>
+            {cov.missing.slice(0,15).map((m,i)=><div key={i} style={{color:C.mut,fontSize:12,paddingLeft:12}}>· {m.id} – {m.name} · {fmtMoney(m.revenue,ga4.currency)}</div>)}</details>}
+          {cov.notInGa4>0&&note(C.mut,sr?`${nf(cov.notInGa4)} proizvoda iz fajla nije prodavano u poslednjih 30 dana (ili im se šifra razlikuje od GA4) – to je obično u redu.`:`${nf(cov.notInGa4)} products in the file had no sales in the last 30 days (or their ID differs from GA4) – usually fine.`)}
+          {cov.pct<60&&note(C.yel,sr?"⚠️ Malo poklapanja sa GA4 – proveri da li je izabrana prava kolona za šifru.":"⚠️ Low match with GA4 – check that the right ID column is selected.")}
+        </div>:ga4&&ga4.error?note(C.mut,ga4.error==="no_ga4"?(sr?"GA4 nije povezan za ovog klijenta, pa poklapanje šifara ne može da se proveri.":"GA4 isn't connected for this client, so IDs can't be checked."):(sr?"Provera sa GA4 trenutno nije uspela – fajl se i dalje može sačuvati.":"GA4 check failed right now – you can still save.")):null}
+        <div style={{marginTop:12,display:"grid",gap:4}}>
+          {pr.noValue.length>0&&<details><summary style={{color:C.yel,fontSize:12.5,cursor:"pointer"}}>{sr?`${nf(pr.noValue.length)} redova bez ${vt==="margin"?"zarade":"nabavne cene"} – preskočeni`:`${nf(pr.noValue.length)} rows without a value – skipped`}</summary>{ex(pr.noValue)}</details>}
+          {pr.dup.length>0&&<details><summary style={{color:C.yel,fontSize:12.5,cursor:"pointer"}}>{sr?`${nf(pr.dup.length)} duplikata šifre – zadržan je prvi red`:`${nf(pr.dup.length)} duplicate IDs – first row kept`}</summary>{ex(pr.dup)}</details>}
+          {pr.noSku>0&&note(C.yel,sr?`${nf(pr.noSku)} redova bez šifre – preskočeni.`:`${nf(pr.noSku)} rows without an ID – skipped.`)}
+          {pr.suspicious.length>0&&<details><summary style={{color:C.yel,fontSize:12.5,cursor:"pointer"}}>{sr?`${nf(pr.suspicious.length)} sumnjivih vrednosti (${vt==="margin"?"zarada veća od cene":"nabavna veća od prodajne ili 0"}) – neće se računati u profit`:`${nf(pr.suspicious.length)} suspicious values – won't be counted in profit`}</summary>{ex(pr.suspicious,x=>` · ${nf(x.v,2)} / ${nf(x.p,2)}`)}</details>}
+          {pr.negative.length>0&&<details><summary style={{color:C.mut,fontSize:12.5,cursor:"pointer"}}>{sr?`${nf(pr.negative.length)} proizvoda sa zaradom u minusu (prodaju se ispod nabavne cene)`:`${nf(pr.negative.length)} products with negative profit`}</summary>{ex(pr.negative,x=>` · ${nf(x.v)}`)}</details>}
+        </div>
+      </div>}
+
+      {err&&<div style={{...card,borderColor:C.rBr,background:C.rBg,color:C.red,fontSize:13}}>{err}</div>}
+      <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+        <button disabled={!hasSku||!hasVal||!built.rows.length||!!saving} onClick={save} style={btn(true,!hasSku||!hasVal||!built.rows.length||!!saving)}>
+          {saving?(sr?`Čuvam… ${nf(saving.done)} / ${nf(saving.total)}`:`Saving… ${nf(saving.done)} / ${nf(saving.total)}`):(sr?"Sačuvaj":"Save")}</button>
+        <button disabled={!!saving} onClick={resetFile} style={btn(false,!!saving)}>{sr?"Otkaži":"Cancel"}</button>
+        {st&&st.active_batch&&!saving&&<span style={{color:C.mut,fontSize:12}}>{sr?"Novi fajl zamenjuje prethodni tek kad se sve sačuva.":"The new file replaces the old one only after everything is saved."}</span>}
+      </div>
+    </div>;
+  }
+
+  // ── Klijent izabran: šta je učitano + PDV ──
+  const s=st||{};
+  return <div>{header}{pick}
+    {err&&<div style={{...card,borderColor:C.rBr,background:C.rBg,color:C.red,fontSize:13}}>{err}</div>}
+    {stLoading?<div style={card}><Sk w="40%" h={12} style={{marginBottom:10}}/><Sk w="70%" h={18}/></div>:st&&<>
+      <div className="pm-in" style={card}>
+        {secT(sr?"Nabavne cene i zarada":"Purchase prices and profit")}
+        {s.active_batch?<>
+          <div style={{color:"#fff",fontSize:15,fontWeight:800}}>{nf(s.row_count)} {sr?"proizvoda":"products"} · {s.value_type==="margin"?(sr?"zarada po komadu":"profit per unit"):(sr?"nabavne cene":"purchase prices")}</div>
+          <div style={{color:C.mut,fontSize:12.5,marginTop:4}}>{[s.source_name,s.uploaded_at?new Date(s.uploaded_at).toLocaleString(sr?"sr-Latn-RS":"en-GB",{day:"numeric",month:"numeric",year:"numeric",hour:"2-digit",minute:"2-digit"}):null,s.value_currency,s.value_includes_vat?(sr?"sa PDV-om":"incl. VAT"):(sr?"bez PDV-a":"excl. VAT")].filter(Boolean).join(" · ")}</div>
+        </>:<>
+          <div style={{color:"#fff",fontSize:14,fontWeight:700}}>{sr?"Još nije učitano.":"Nothing uploaded yet."}</div>
+          <div style={{color:C.mut,fontSize:12.5,marginTop:4,lineHeight:1.55}}>{sr?"Učitaj fajl u kome su šifra proizvoda i nabavna cena (ili zarada po komadu). Prihvatamo CSV, TXT, Excel (.xlsx, .xls) i XML feed (Google, Meta…). Kolone prepoznajemo sami, bez obzira na redosled i nazive.":"Upload a file with product ID and purchase price (or profit per unit). We accept CSV, TXT, Excel (.xlsx, .xls) and XML feeds (Google, Meta…). Columns are recognised automatically."}</div>
+        </>}
+        {savedMsg&&note(C.grn,"✓ "+savedMsg)}
+        <div style={{display:"flex",gap:10,marginTop:14,flexWrap:"wrap",alignItems:"center"}}>
+          <input ref={fileRef} type="file" accept=".csv,.txt,.tsv,.xlsx,.xls,.xlsm,.xml" style={{display:"none"}} onChange={e=>onFile(e.target.files&&e.target.files[0])}/>
+          <button disabled={parsing} onClick={()=>fileRef.current&&fileRef.current.click()} style={btn(true,parsing)}>{parsing?<>{sr?"Čitam fajl i proveravam sa GA4 ":"Reading file and checking GA4 "}<PmDots/></>:s.active_batch?(sr?"Učitaj novi fajl":"Upload a new file"):(sr?"Učitaj fajl":"Upload file")}</button>
+          {!s.active_batch&&<button onClick={brTemplate} style={btn(false)}>{sr?"Preuzmi šablon":"Download template"}</button>}
+        </div>
+      </div>
+      <div className="pm-in" style={card}>
+        {secT(sr?"PDV":"VAT")}
+        <div style={{color:C.mut,fontSize:12.5,marginBottom:10}}>{sr?"Da li su cene na sajtu (i prihod u GA4) sa PDV-om? Profit se računa od prihoda bez PDV-a.":"Do site prices (and GA4 revenue) include VAT? Profit is calculated from revenue excluding VAT."}</div>
+        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+          <button style={seg(vat.inc)} onClick={()=>setVat(v=>({...v,inc:true}))}>{sr?"sa PDV-om":"incl. VAT"}</button>
+          <button style={seg(!vat.inc)} onClick={()=>setVat(v=>({...v,inc:false}))}>{sr?"bez PDV-a":"excl. VAT"}</button>
+          {vat.inc&&<><input type="number" min="0" max="50" step="0.5" value={vat.rate} onChange={e=>setVat(v=>({...v,rate:e.target.value}))} style={{...sel,width:70}}/><span style={{color:C.mut,fontSize:12.5}}>%</span></>}
+          <button onClick={saveVat} style={btn(false)}>{sr?"Sačuvaj":"Save"}</button>
+          {vatSaved&&<span style={{color:C.grn,fontSize:12.5}}>✓ {sr?"Sačuvano":"Saved"}</span>}
+        </div>
+        <div style={{color:C.dim,fontSize:12,marginTop:8}}>{sr?"Srbija 20% · Hrvatska 25% · Slovenija 22% · BiH 17% · Crna Gora 21% · S. Makedonija 18%":"Serbia 20% · Croatia 25% · Slovenia 22% · BiH 17% · Montenegro 21% · N. Macedonia 18%"}</div>
+      </div>
+      <div style={{...card,borderStyle:"dashed",color:C.mut,fontSize:13}}>{sr?"Sledeći korak: profit po proizvodu, po kampanji i proizvod × kampanja.":"Next: profit by product, by campaign and product × campaign."}</div>
+    </>}
+  </div>;
+}
+
 const MODS=[
   {id:14,icon:"📢",col:"#84CC16",tk:"m14t",sk:"m14s",grp:"an"},
   {id:12,icon:"🛍️",col:"#F43F5E",tk:"m12t",sk:"m12s",grp:"an"},
@@ -4788,6 +5347,8 @@ const MODS=[
   {id:1,icon:"📊",col:"#6366F1",tk:"m1t",sk:"m1s",grp:"dw"},
   // mod=9 (stari bookmarklet/ekstenzija) vodi na uvoz u Report Studio; ne prikazuje se u meniju
   {id:9,icon:"📑",col:"#F59E0B",tk:"m15t",sk:"m15s",grp:"dw",hidden:true},
+  // Beyond ROAS – u izradi; otvara se samo preko adrese ?mod=17 dok se ne završi
+  {id:17,icon:"🪙",col:"#F59E0B",tk:"m17t",sk:"m17s",grp:"an",hidden:true},
 ];
 const VISIBLE_MODS=MODS.filter(m=>!m.hidden);
 // Male oznake na karticama pocetne strane (sta alat koristi / primer)
@@ -4803,7 +5364,7 @@ const MOD_TAGS={
 };
 // Maksimalna sirina sadrzaja po modulu na racunaru: tabele i izvestaji koriste siroki ekran,
 // chat i forme ostaju uze da bi se lako citali
-const MOD_WIDTH={14:1320,12:1320,15:1320,2:1320,10:1320,9:1320,13:1040,16:1320,1:920};
+const MOD_WIDTH={17:1320,14:1320,12:1320,15:1320,2:1320,10:1320,9:1320,13:1040,16:1320,1:920};
 const MOD_GROUPS=[{k:"an",tk:"grpAn"},{k:"dw",tk:"grpDw"}];
 const gridCols=n=>n<=4?n:3;
 const CARD_CSS=`.mc{will-change:transform;transform:translateZ(0);transition:transform .18s ease,border-color .18s ease}
@@ -5001,7 +5562,7 @@ function MainApp({account}){
   // Save lang preference
   useEffect(()=>{ localStorage.setItem("mat_lang",lang); },[lang]);
 
-  const Comp=mod===1?HealthMod:mod===10?MyClientsMod:mod===12?ProductIntelligenceMod:mod===13?AskDataMod:mod===16?InvestigateMod:mod===14?CampaignsMod:mod===2?BudgetPacingMod:(mod===15||mod===9)?ReportStudioMod:null;
+  const Comp=mod===1?HealthMod:mod===10?MyClientsMod:mod===12?ProductIntelligenceMod:mod===13?AskDataMod:mod===16?InvestigateMod:mod===17?BeyondRoasMod:mod===14?CampaignsMod:mod===2?BudgetPacingMod:(mod===15||mod===9)?ReportStudioMod:null;
   // Nepostojeci ili obrisani modul (npr. stari link ?mod=3) vodi na pocetni ekran
   const showHome=!mod||!Comp;
   // Pojavljivanje kartica na početnoj: meri se od trenutka otvaranja početne, pa ponovno iscrtavanje (npr. kad stignu podaci)
