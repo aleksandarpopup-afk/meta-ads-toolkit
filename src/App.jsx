@@ -44,7 +44,7 @@ if(typeof document!=="undefined"&&!document.getElementById("pm-ui-css")){
   st.textContent=`@keyframes pmShimmer{0%{background-position:-480px 0}100%{background-position:480px 0}}
 .pm-sk{background:linear-gradient(90deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.10) 50%,rgba(255,255,255,0.04) 100%);background-size:960px 100%;animation:pmShimmer 1.4s linear infinite;border-radius:8px}
 @keyframes pmIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-.pm-in{animation:pmIn .45s cubic-bezier(.2,.7,.2,1) both}
+.pm-in{animation:pmIn .45s cubic-bezier(.2,.7,.2,1) backwards}
 .pm-lift{transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
 .pm-lift:hover{transform:translateY(-2px);border-color:rgba(165,180,252,0.35)!important;box-shadow:0 6px 18px rgba(0,0,0,0.25)}
 @media (prefers-reduced-motion: reduce){.pm-sk,.pm-in{animation:none}.pm-lift,.pm-lift:hover{transition:none;transform:none}}`;
@@ -53,6 +53,7 @@ if(typeof document!=="undefined"&&!document.getElementById("pm-ui-css")){
 const PM_REDUCED=typeof window!=="undefined"&&!!window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 // Poslednja prikazana vrednost svakog animiranog broja – da bi se pri promeni perioda brojalo od stare do nove vrednosti
 const PM_LAST=new Map();
+const PM_HOME={on:false,t0:0};
 function pmAnimReset(prefix){ for(const k of [...PM_LAST.keys()]) if(k.startsWith(prefix)) PM_LAST.delete(k); }
 // Broj koji se "odbrojava" do tačne vrednosti (~0,7 s). Krajnji prikaz je uvek tačna vrednost.
 function AnimNum({value,format,k,dur=700}){
@@ -871,6 +872,7 @@ function BpChart({b,sr}){
 
 // ── MODULE 2: BUDGET PACING ──────────────────────────────────────────────────
 function BudgetPacingMod({t,lang}){
+  useEffect(()=>{ pmAnimReset("bp:"); },[]); // pri svakom ulasku u modul brojevi se odbrojavaju od 0
   const sr=lang==="sr";
   const mob=useIsMobile();
   const now=new Date();
@@ -1016,7 +1018,10 @@ function BudgetPacingMod({t,lang}){
     </div>}
     {msg&&<div style={{color:msg.err?C.red:C.grn,fontSize:13,margin:"-6px 0 12px"}}>{msg.t}</div>}
 
-    {loading&&<div style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:12,padding:"16px",color:C.acl,fontSize:13,textAlign:"center"}}>✦ {sr?"Učitavam budžete...":"Loading budgets..."}</div>}
+    {loading&&<div aria-busy="true" aria-label={sr?"Učitavam budžete":"Loading budgets"}>{[0,1,2].map(i=><div key={i} style={{background:C.sur,border:`1px solid ${C.brd}`,borderLeft:"3px solid rgba(255,255,255,0.12)",borderRadius:12,padding:"12px 14px",marginBottom:10}}>
+      <div style={{display:"flex",justifyContent:"space-between",gap:10}}><div style={{flex:1}}><Sk w="35%" h={13} style={{marginBottom:8}}/><Sk w="55%" h={10}/></div><Sk w={70} h={12}/></div>
+      <div style={{display:"grid",gridTemplateColumns:mob?"1fr 1fr":"repeat(5,1fr)",gap:8,marginTop:12}}>{[0,1,2,3,4].map(j=><div key={j}><Sk w="60%" h={8} style={{marginBottom:6}}/><Sk w="80%" h={12}/></div>)}</div>
+    </div>)}</div>}
     {!loading&&loadErr&&<div style={{color:C.red,fontSize:13,marginBottom:12}}>{loadErr}</div>}
     {!loading&&!loadErr&&rows.length===0&&<div style={{textAlign:"center",padding:"32px 12px",background:"rgba(255,255,255,0.02)",border:`1px solid ${C.brd}`,borderRadius:12}}>
       <div style={{fontSize:34,marginBottom:10}}>💰</div>
@@ -1032,7 +1037,7 @@ function BudgetPacingMod({t,lang}){
       const cur=b.currency||"EUR";
       const plat=BP_PLATFORMS.find(p=>p.k===b.platform);
       const open=expanded===b.id;
-      return <div key={b.id} style={{background:C.sur,border:`1px solid ${C.brd}`,borderLeft:`3px solid ${sm.c}`,borderRadius:12,padding:"12px 14px",marginBottom:10}}>
+      return <div key={b.id} className="pm-in" style={{background:C.sur,border:`1px solid ${C.brd}`,borderLeft:`3px solid ${sm.c}`,borderRadius:12,padding:"12px 14px",marginBottom:10}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
           <div style={{minWidth:0}}>
             <div style={{fontWeight:700,fontSize:14}}>{b.clients?.name||"—"}{tab==="all"&&platList.length<=1&&<span style={{color:C.mut,fontWeight:500,fontSize:12}}> · {plat?(plat.k==="other"?(sr?"Ostalo":"Other"):plat.l):b.platform}</span>}</div>
@@ -1042,7 +1047,7 @@ function BudgetPacingMod({t,lang}){
         </div>
         <div style={{display:"grid",gridTemplateColumns:mob?"1fr 1fr":"repeat(5,1fr)",gap:8,marginTop:10}}>
           {[
-            [sr?"Potrošeno":"Spent",calc.spent==null?"–":fmtMoney(calc.spent,cur)],
+            [sr?"Potrošeno":"Spent",calc.spent==null?"–":<AnimNum k={`bp:${b.id}:spent`} value={calc.spent} format={v=>fmtMoney(v,cur)}/>],
             [sr?"Očekivano":"Expected",calc.expected==null?"–":fmtMoney(calc.expected,cur)],
             [sr?"Razlika":"Difference",calc.diffPct==null?"–":`${calc.diff>=0?"+":""}${fmtMoney(calc.diff,cur)} (${calc.diffPct>=0?"+":""}${(calc.diffPct*100).toFixed(1)}%)`],
             [sr?"Tempo":"Pace",bpPct(calc.projPct)],
@@ -2601,9 +2606,9 @@ function MyClientsMod({t,lang,goMod}){
       <button onClick={()=>{setNewClientOpen(false);setNewClientName("");}} style={{background:"none",border:"none",color:C.mut,cursor:"pointer",fontSize:12}}>{sr?"Otkaži":"Cancel"}</button>
     </div>}
 
-    {loading&&<div style={{textAlign:"center",padding:"32px 0"}}>
-      <div style={{color:C.acl,fontSize:14}}>✦ {sr?"Učitavam klijente...":"Loading clients..."}</div>
-    </div>}
+    {loading&&<div aria-busy="true" aria-label={sr?"Učitavam klijente":"Loading clients"}>{[0,1,2].map(i=><div key={i} style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"16px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
+      <div style={{flex:1}}><Sk w="30%" h={14} style={{marginBottom:8}}/><Sk w="45%" h={10}/></div><Sk w={90} h={32} r={10}/>
+    </div>)}</div>}
 
     {!loading&&clients.length===0&&<div style={{textAlign:"center",padding:"32px 0"}}>
       <div style={{fontSize:40,marginBottom:12}}>👥</div>
@@ -2612,7 +2617,7 @@ function MyClientsMod({t,lang,goMod}){
     </div>}
 
     {!loading&&clients.length>0&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
-      {clients.map(c=><div key={c.id} style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"16px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      {clients.map((c,ci)=><div key={c.id} className="pm-in" style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"16px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center",animationDelay:`${Math.min(ci,10)*40}ms`}}>
         <div onClick={()=>loadAnalyses(c)} style={{cursor:"pointer",flex:1}}
           onMouseEnter={e=>e.currentTarget.parentElement.style.borderColor="rgba(99,102,241,0.4)"}
           onMouseLeave={e=>e.currentTarget.parentElement.style.borderColor=C.brd}>
@@ -4989,6 +4994,9 @@ function MainApp({account}){
   const Comp=mod===1?HealthMod:mod===10?MyClientsMod:mod===12?ProductIntelligenceMod:mod===13?AskDataMod:mod===16?InvestigateMod:mod===14?CampaignsMod:mod===2?BudgetPacingMod:(mod===15||mod===9)?ReportStudioMod:null;
   // Nepostojeci ili obrisani modul (npr. stari link ?mod=3) vodi na pocetni ekran
   const showHome=!mod||!Comp;
+  // Pojavljivanje kartica na početnoj: meri se od trenutka otvaranja početne, pa ponovno iscrtavanje (npr. kad stignu podaci)
+  // ne pokreće animaciju iz početka nego je samo nastavlja
+  if(showHome&&!PM_HOME.on){ PM_HOME.on=true; PM_HOME.t0=Date.now(); } else if(!showHome) PM_HOME.on=false;
 
   // Pocetna strana: pravi podaci (budzeti tekuceg meseca i broj klijenata)
   const [home,setHome]=useState(null);
@@ -5044,8 +5052,9 @@ function MainApp({account}){
     const invS=m.id===16?INV.state:null;
     const live=m.id===2&&home?.bp?home.bp:invS&&invS.status==="running"?{text:lang==="sr"?`Istraga u toku: ${invS.client.name}…`:`Investigating ${invS.client.name}…`,bad:false}:invS&&invS.status==="done"?{text:lang==="sr"?`Rezultat čeka: ${invS.client.name}`:`Result ready: ${invS.client.name}`,bad:false}:null;
     const extra=m.id===10&&home?.clients!=null?`${home.clients} ${lang==="sr"?(home.clients===1?"klijent":"klijenata"):(home.clients===1?"client":"clients")}`:null;
-    return <button className="mc" onClick={()=>goMod(m.id)} style={{
-      "--c":m.col,
+    const homeEl=Date.now()-PM_HOME.t0, homeAnim=homeEl<1000;
+    return <button className={homeAnim?"mc pm-in":"mc"} onClick={()=>goMod(m.id)} style={{
+      "--c":m.col,...(homeAnim?{animationDelay:`${Math.min(i,8)*45-homeEl}ms`}:null),
       background:`linear-gradient(145deg,${m.col}24,${m.col}0a 55%,#0d0d1a)`,
       border:`1px solid ${m.col}45`,borderTop:`1px solid ${m.col}70`,
       borderRadius:16,padding:large?"20px 20px 18px":"18px 16px 16px",textAlign:"left",
