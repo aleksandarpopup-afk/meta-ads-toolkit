@@ -70,6 +70,10 @@ function AnimNum({value,format,k,dur=700}){
   },[target,k]);
   return <>{format?format(v):v}</>;
 }
+// Vrati prikaz na vrh (prozor + glavna kolona sa sadržajem) – posle promene modula, izbora klijenta i sl.
+function pmScrollTop(){
+  try{ window.scrollTo(0,0); document.querySelectorAll("[data-pm-scroll]").forEach(el=>{ el.scrollTop=0; }); }catch(e){}
+}
 // Skeleton (siv obris koji svetluca dok se podaci učitavaju)
 const Sk=({w="100%",h=14,r=8,style})=><div className="pm-sk" style={{width:w,height:h,borderRadius:r,...style}}/>;
 function SkCards({n=3,min=140}){ return <div style={{display:"grid",gridTemplateColumns:`repeat(auto-fit,minmax(${min}px,1fr))`,gap:10,marginBottom:20}}>
@@ -2632,6 +2636,7 @@ function ProductIntelligenceMod({t,lang,goMod}){
   const [clients,setClients]=useState([]);
   const [clientsLoading,setClientsLoading]=useState(true);
   const [selectedClient,setSelectedClient]=useState(null);
+  useEffect(()=>{ pmScrollTop(); },[selectedClient]); // izbor klijenta / povratak na listu – na vrh
   const [period,setPeriod]=useState("7"); // podrazumevano 7 dana (brze ucitavanje, najcesce se gleda)
   const [customFrom,setCustomFrom]=useState("");
   const [customTo,setCustomTo]=useState("");
@@ -3008,6 +3013,7 @@ function AskDataMod({t,lang}){
   const [clients,setClients]=useState([]);
   const [clientsLoading,setClientsLoading]=useState(true);
   const [selectedClient,setSelectedClient]=useState(null);
+  useEffect(()=>{ pmScrollTop(); },[selectedClient]); // izbor klijenta / povratak na listu – na vrh
   const [messages,setMessages]=useState([]);
   const [input,setInput]=useState("");
   const [sending,setSending]=useState(false);
@@ -3439,6 +3445,7 @@ function CampaignsMod({t,lang,goMod}){
   const [clients,setClients]=useState([]);
   const [clientsLoading,setClientsLoading]=useState(true);
   const [selectedClient,setSelectedClient]=useState(null);
+  useEffect(()=>{ pmScrollTop(); },[selectedClient]); // izbor klijenta / povratak na listu – na vrh
   const [period,setPeriod]=useState("7"); // podrazumevano 7 dana (brze ucitavanje, najcesce se gleda)
   const [customFrom,setCustomFrom]=useState("");
   const [customTo,setCustomTo]=useState("");
@@ -3454,6 +3461,7 @@ function CampaignsMod({t,lang,goMod}){
 
   // Drill-down (samo unutar "Po kampanji")
   const [drillCampaign,setDrillCampaign]=useState(null);
+  useEffect(()=>{ pmScrollTop(); },[drillCampaign]); // otvaranje kampanje / povratak – na vrh
   const [campaignProducts,setCampaignProducts]=useState(null);
   const [campaignProductsLoading,setCampaignProductsLoading]=useState(false);
   const [adGroups,setAdGroups]=useState(null);
@@ -4056,6 +4064,7 @@ async function invStart({client,days,from,to,qtype,question,lang,campaignId,styl
   const sr=lang==="sr";
   invSet(null);
   INV.last={clientId:String(client.id),days,from,to,qtype,question,style};
+  pmScrollTop();
   invSet({status:"running",client,qtype,question,lang,days,from,to,style,campaignId:campaignId||null,startedAt:Date.now(),checks:[],period:null,result:null,error:""});
   const qs=new URLSearchParams({client_id:String(client.id),qtype,lang,style});
   if(from&&to){ qs.set("from",from); qs.set("to",to); } else qs.set("days",String(days));
@@ -4087,7 +4096,7 @@ async function invStart({client,days,from,to,qtype,question,lang,campaignId,styl
           invSet({checks:cs});
         }
         else if(e.type==="check") invSet({checks:(INV.state.checks||[]).map(c=>c.id===e.id?{...c,status:e.status,summary:e.summary}:c)});
-        else if(e.type==="result"){ gotResult=true; pmAnimReset("inv:"); invSet({status:"done",result:e,finishedAt:Date.now()}); }
+        else if(e.type==="result"){ gotResult=true; pmAnimReset("inv:"); invSet({status:"done",result:e,finishedAt:Date.now()}); if(INV.listeners.size) pmScrollTop(); }
         else if(e.type==="error") invSet({status:"error",error:e.error});
       }
     }
@@ -4097,7 +4106,7 @@ async function invStart({client,days,from,to,qtype,question,lang,campaignId,styl
     if(INV.ctrl===ctrl) invSet({status:"error",error:sr?"Nema veze sa serverom. Proveri internet i pokušaj ponovo.":"No connection to the server. Check your internet and try again."});
   }
 }
-function invCancel(){ if(INV.ctrl) try{INV.ctrl.abort();}catch(e){} INV.ctrl=null; invSet(null); }
+function invCancel(){ if(INV.ctrl) try{INV.ctrl.abort();}catch(e){} INV.ctrl=null; invSet(null); pmScrollTop(); }
 
 // **podebljano** iz AI teksta -> <b>
 const InvRich=({text})=><>{String(text||"").split(/\*\*(.+?)\*\*/g).map((p,i)=>i%2?<b key={i} style={{color:"#fff"}}>{p}</b>:<Fragment key={i}>{p}</Fragment>)}</>;
@@ -4955,9 +4964,13 @@ function MainApp({account}){
   // Sync mod to URL
   const goMod=(id)=>{
     setMod(id);
+    pmScrollTop();
     if(id) window.history.pushState({},"",`?mod=${id}`);
     else window.history.pushState({},"",window.location.pathname);
   };
+
+  // Svaki prelaz na drugi modul (i dugme Nazad u pregledaču) počinje od vrha stranice
+  useEffect(()=>{ pmScrollTop(); },[mod]);
 
   // Handle browser back/forward
   useEffect(()=>{
@@ -5166,7 +5179,7 @@ function MainApp({account}){
       </div>
 
       {/* MAIN */}
-      <div style={{flex:1,overflowY:"auto",minWidth:0}}>
+      <div data-pm-scroll="1" style={{flex:1,overflowY:"auto",minWidth:0}}>
         {showHome&&<div style={{padding:"36px 48px 60px",maxWidth:1320}}>
           <div style={{marginBottom:32}}>
             <div style={{color:"rgba(255,255,255,0.45)",fontSize:14,fontWeight:600}}>{dateStr}</div>
