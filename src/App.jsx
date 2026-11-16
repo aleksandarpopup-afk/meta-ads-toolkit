@@ -4172,7 +4172,7 @@ function InvestigateMod({t,lang}){
   const pctTxt=v=>{ if(v==null) return sr?"novo":"new"; const a=Math.abs(v); const s=a<10&&a>0?(Math.round(a*10)/10).toLocaleString(sr?"sr-RS":"en-GB"):Math.round(a).toLocaleString(sr?"sr-RS":"en-GB"); return (v>0?"+":v<0?"−":"")+s+"%"; };
   const header=<>
     <style>{INV_CSS}</style>
-    <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>🔎 Investigate</h2>
+    <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px",display:"flex",alignItems:"center",gap:9}}><InvIcon size={24}/>Investigate</h2>
     <p style={{color:C.mut,fontSize:13,margin:"0 0 20px"}}>{t.m16s}</p>
   </>;
 
@@ -5280,7 +5280,7 @@ function BeyondRoasMod({t,lang}){
   const nf=(v,d=0)=>v==null||!isFinite(v)?"–":Number(v).toLocaleString(sr?"sr-RS":"en-GB",{maximumFractionDigits:d,minimumFractionDigits:d});
   const [clients,setClients]=useState([]);
   const [clientsLoading,setClientsLoading]=useState(true);
-  const [clientId,setClientId]=useState(()=>{ try{ return localStorage.getItem("br_client")||""; }catch(e){ return ""; } });
+  const [clientId,setClientId]=useState(""); // modul uvek počinje izborom klijenta (kao Product Intelligence)
   const [st,setSt]=useState(null);          // podešavanje + šta je učitano
   const [stLoading,setStLoading]=useState(false);
   const [err,setErr]=useState("");
@@ -5324,7 +5324,6 @@ function BeyondRoasMod({t,lang}){
     if(my===reqId.current) setStLoading(false);
   };
   useEffect(()=>{
-    try{ localStorage.setItem("br_client",clientId||""); }catch(e){}
     resetFile(); setGa4(null); setSavedMsg("");
     if(clientId) loadState(clientId); else setSt(null);
   },[clientId]);
@@ -5427,17 +5426,20 @@ function BeyondRoasMod({t,lang}){
     <p style={{color:C.mut,fontSize:13,margin:"0 0 20px"}}>{t.m17s}</p>
   </>;
 
-  // Izbor klijenta
-  const pick=<div style={{...card,display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
-    <div style={{color:C.mut,fontSize:12.5,fontWeight:700}}>{sr?"Klijent":"Client"}</div>
-    {clientsLoading?<Sk w={220} h={36}/>:
-      <select value={clientId} onChange={e=>setClientId(e.target.value)} style={{...sel,minWidth:240}}>
-        <option value="">{sr?"— izaberi klijenta —":"— choose a client —"}</option>
-        {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-      </select>}
+  // Izabran klijent: povratak na listu
+  const pick=<div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"wrap",marginBottom:14}}>
+    <button onClick={()=>setClientId("")} style={btn(false)}>← {sr?"Svi klijenti":"All clients"}</button>
+    <div style={{color:"#fff",fontSize:16,fontWeight:800}}>👤 {client?client.name:""}</div>
   </div>;
 
-  if(!clientId) return <div>{header}{pick}</div>;
+  // Bez izabranog klijenta: lista klijenata (kao u Product Intelligence)
+  if(!clientId) return <div>{header}
+    {clientsLoading?<div style={{display:"grid",gap:8}}>{[0,1,2].map(i=><Sk key={i} h={46} r={10}/>)}</div>
+      :clients.length===0?<div style={{...card,color:C.mut,fontSize:13,textAlign:"center"}}>{sr?"Nema klijenata još. Dodaj ih u modulu Clients.":"No clients yet. Add them in Clients."}</div>
+      :<div className="pm-in" style={{display:"flex",flexDirection:"column",gap:8}}>
+        {clients.map(c=><button key={c.id} className="pm-lift" onClick={()=>setClientId(String(c.id))} style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,borderRadius:10,padding:"12px 16px",textAlign:"left",cursor:"pointer",color:"#fff",fontSize:14,fontWeight:600}}>👤 {c.name}</button>)}
+      </div>}
+  </div>;
 
   // ── Ekran za proveru fajla (raspored kolona + problemi) ──
   if(parsed&&built){
@@ -5566,13 +5568,22 @@ function BeyondRoasMod({t,lang}){
   </div>;
 }
 
+// Ikona modula Investigate: lupa sa linijom grafika (umesto emoji 🔎)
+function InvIcon({size=24}){
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{display:"block"}}>
+    <circle cx="10.5" cy="10.5" r="6.8" fill="rgba(165,180,252,0.18)" stroke="#C7D2FE" strokeWidth="1.7"/>
+    <path d="M15.6 15.6 20.6 20.6" stroke="#C7D2FE" strokeWidth="2.6" strokeLinecap="round"/>
+    <path d="M7 12.3l2.2-2.4 1.9 1.6 3-3.5" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+    <circle cx="14.1" cy="8" r="1.15" fill="#fff"/>
+  </svg>;
+}
 const MODS=[
   {id:14,icon:"📢",col:"#84CC16",tk:"m14t",sk:"m14s",grp:"an"},
   {id:12,icon:"🛍️",col:"#F43F5E",tk:"m12t",sk:"m12s",grp:"an"},
   {id:17,icon:"🪙",col:"#F59E0B",tk:"m17t",sk:"m17s",grp:"an"},
   {id:13,icon:"💬",col:"#22D3EE",tk:"m13t",sk:"m13s",grp:"an"},
   // Investigate je na početnoj široka traka ispod Analitike (ne kartica); u bočnom meniju je u Analitici
-  {id:16,icon:"🔎",col:"#818CF8",tk:"m16t",sk:"m16s",grp:"an",banner:true},
+  {id:16,icon:<InvIcon size={19}/>,col:"#818CF8",tk:"m16t",sk:"m16s",grp:"an",banner:true},
   {id:2,icon:"💰",col:"#10B981",tk:"m2t",sk:"m2s",grp:"dw"},
   {id:15,icon:"📑",col:"#F59E0B",tk:"m15t",sk:"m15s",grp:"dw"},
   {id:10,icon:"👥",col:"#A855F7",tk:"m10t",sk:"m10s",grp:"dw"},
@@ -5605,6 +5616,8 @@ const CARD_CSS=`.mc{will-change:transform;transform:translateZ(0);transition:tra
 .mc .mc-ic{transition:transform .2s ease}
 .mc:hover .mc-ic{transform:scale(1.12) rotate(-6deg)}
 .mc:focus-visible{outline:2px solid var(--c);outline-offset:2px}
+.inv-go{transition:background-color .18s ease,border-color .18s ease}
+.inv-go:hover{background:rgba(129,140,248,0.3)!important;border-color:#A5B4FC!important}
 .st{transition:border-color .18s ease,transform .18s ease}
 button.st:hover{transform:translateY(-2px);border-color:rgba(248,113,113,0.6)!important}
 @media (hover:none){.mc:hover{transform:none}.mc:hover .mc-ic{transform:none}.mc:hover .mc-arr{transform:none}}`;
@@ -5887,11 +5900,10 @@ function MainApp({account}){
     const homeAnim=Date.now()-PM_HOME.t0<1200;
     return <div className={homeAnim?"pm-card-in":undefined} style={{...(homeAnim?{animationDelay:"180ms"}:null),background:`linear-gradient(120deg,${m.col}2a,${m.col}0d 50%,#0d0d1a)`,border:`1px solid ${m.col}45`,borderTop:`1px solid ${m.col}70`,boxShadow:`0 4px 24px ${m.col}18`,borderRadius:18,padding:narrow?"18px":"22px 26px",display:"flex",flexDirection:narrow?"column":"row",alignItems:narrow?"stretch":"center",gap:narrow?14:22}}>
       <div style={{display:"flex",alignItems:"center",gap:18,flex:1,minWidth:0}}>
-        <div style={{width:narrow?48:58,height:narrow?48:58,borderRadius:14,background:`linear-gradient(135deg,${m.col}45,${m.col}20)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:narrow?24:28,flexShrink:0}}>{m.icon}</div>
+        <div style={{width:narrow?48:58,height:narrow?48:58,borderRadius:14,background:`linear-gradient(135deg,${m.col}45,${m.col}20)`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><InvIcon size={narrow?26:30}/></div>
         <div style={{minWidth:0}}>
           <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
             <span style={{fontSize:narrow?17:19,fontWeight:800,color:"#fff"}}>{t.m16t}</span>
-            <span style={{fontSize:10.5,fontWeight:800,letterSpacing:"1px",color:m.col,border:`1px solid ${m.col}55`,borderRadius:6,padding:"2px 7px"}}>{sr?"ISTRAGA":"INVESTIGATION"}</span>
           </div>
           <div style={{color:"rgba(255,255,255,0.55)",fontSize:13.5,lineHeight:1.5,marginTop:4}}>{t.m16s}</div>
           {st&&<div style={{display:"flex",alignItems:"center",gap:7,color:st.c,fontSize:12.5,fontWeight:600,marginTop:6}}><span style={{width:6,height:6,borderRadius:3,background:st.c}}/>{st.t}</div>}
@@ -5900,7 +5912,7 @@ function MainApp({account}){
       <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
         {INV_QTYPES.slice(0,3).map(q=><button key={q.k} onClick={()=>go(q.k)} className="pm-lift" style={{padding:"8px 14px",borderRadius:20,border:`1px solid ${m.col}45`,background:"rgba(255,255,255,0.04)",color:"rgba(255,255,255,0.8)",fontSize:12.5,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>{sr?q.sr:q.en}</button>)}
       </div>
-      <button onClick={()=>go()} style={{padding:"13px 22px",borderRadius:12,border:"none",background:"linear-gradient(135deg,#818CF8,#6366F1)",color:"#fff",fontSize:14,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>{st&&invS.status!=="error"?(sr?"Otvori istragu →":"Open investigation →"):(sr?"Pokreni istragu →":"Start investigation →")}</button>
+      <button onClick={()=>go()} className="inv-go" style={{padding:"12px 20px",borderRadius:12,border:`1px solid ${m.col}80`,background:`${m.col}1f`,color:"#E0E7FF",fontSize:14,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>{st&&invS.status!=="error"?(sr?"Otvori istragu →":"Open investigation →"):(sr?"Pokreni istragu →":"Start investigation →")}</button>
     </div>;
   };
 
@@ -5937,7 +5949,7 @@ function MainApp({account}){
             <div style={{paddingLeft:4}}><GroupLabel g={g} mb={10}/></div>
             <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr)",gap:10}}>
               {list.filter(m=>!m.banner).map((m,i)=>ModCard({m,i:g.k==="an"?i:i+4,large:false}))}
-              {g.k==="an"&&<InvBanner narrow/>}
+              {g.k==="an"&&InvBanner({narrow:true})}
             </div>
           </div>;
         })}
@@ -6031,7 +6043,7 @@ function MainApp({account}){
               <div style={{display:"grid",gridTemplateColumns:`repeat(${gridCols(list.filter(m=>!m.banner).length)},minmax(0,1fr))`,gap:16,alignItems:"stretch"}}>
                 {list.filter(m=>!m.banner).map((m,i)=>ModCard({m,i:g.k==="an"?i:i+4,large:g.k==="an"}))}
               </div>
-              {g.k==="an"&&<div style={{marginTop:16}}><InvBanner/></div>}
+              {g.k==="an"&&<div style={{marginTop:16}}>{InvBanner({})}</div>}
             </div>;
           })}
         </div>}
