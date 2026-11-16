@@ -47,6 +47,9 @@ if(typeof document!=="undefined"&&!document.getElementById("pm-ui-css")){
 .pm-in{animation:pmIn .45s cubic-bezier(.2,.7,.2,1) backwards}
 .pm-lift{transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
 .pm-lift:hover{transform:translateY(-2px);border-color:rgba(165,180,252,0.35)!important;box-shadow:0 6px 18px rgba(0,0,0,0.25)}
+@keyframes pmDot{0%,80%,100%{opacity:.25;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}
+.pm-dots{display:inline-flex;gap:4px;vertical-align:middle}.pm-dots i{width:6px;height:6px;border-radius:50%;background:#A5B4FC;display:block;animation:pmDot 1.1s ease-in-out infinite}.pm-dots i:nth-child(2){animation-delay:.15s}.pm-dots i:nth-child(3){animation-delay:.3s}
+@media (prefers-reduced-motion: reduce){.pm-dots i{animation:none;opacity:.7}}
 @media (prefers-reduced-motion: reduce){.pm-sk,.pm-in{animation:none}.pm-lift,.pm-lift:hover{transition:none;transform:none}}`;
   document.head.appendChild(st);
 }
@@ -75,6 +78,8 @@ function AnimNum({value,format,k,dur=700}){
 function pmScrollTop(){
   try{ window.scrollTo(0,0); document.querySelectorAll("[data-pm-scroll]").forEach(el=>{ el.scrollTop=0; }); }catch(e){}
 }
+// Tri tačkice dok AI piše
+const PmDots=()=><span className="pm-dots" aria-hidden="true"><i/><i/><i/></span>;
 // Skeleton (siv obris koji svetluca dok se podaci učitavaju)
 const Sk=({w="100%",h=14,r=8,style})=><div className="pm-sk" style={{width:w,height:h,borderRadius:r,...style}}/>;
 function SkCards({n=3,min=140}){ return <div style={{display:"grid",gridTemplateColumns:`repeat(auto-fit,minmax(${min}px,1fr))`,gap:10,marginBottom:20}}>
@@ -659,9 +664,9 @@ Be specific, direct and professional. Use real Meta Ads benchmark values.`;
         {aiLoading&&<span style={{color:C.mut,fontSize:12,marginLeft:"auto"}}>{sr?"Analizira...":"Analyzing..."}</span>}
       </div>
       {aiLoading&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
-        {[1,2,3,4].map(i=><div key={i} style={{height:12,background:"rgba(255,255,255,0.06)",borderRadius:6,width:i===4?"60%":"100%"}}/>)}
+        {[1,2,3,4].map(i=><div key={i} className="pm-sk" style={{height:12,borderRadius:6,width:i===4?"60%":"100%"}}/>)}
       </div>}
-      {aiAnalysis&&!aiLoading&&<MD2 text={aiAnalysis}/>}
+      {aiAnalysis&&!aiLoading&&<div className="pm-in"><MD2 text={aiAnalysis}/></div>}
     </div>
 
     {mode==="manual"&&<>
@@ -1709,7 +1714,7 @@ function RsImports({sr,lang,mob,clientId,clientName}){
       </div>}
     </div>
 
-    {report&&<div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:14,padding:"16px"}}>
+    {report&&<div className="pm-in" style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:14,padding:"16px"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:6}}>
         <div style={{fontWeight:800,fontSize:15}}>{clientName} – {sr?"izveštaj":"report"}</div>
         {reportMeta&&<button onClick={downloadPdf} disabled={pdfBusy} style={{...bpBtn(false),opacity:pdfBusy?0.6:1}}>📄 {pdfBusy?(sr?"Pravim PDF...":"Creating PDF..."):(sr?"Preuzmi PDF":"Download PDF")}</button>}
@@ -2144,7 +2149,7 @@ function ReportStudioMod({t,lang,initialTab}){
       {err&&<div style={{color:C.red,fontSize:13,marginTop:10}}>{err}</div>}
     </div>
 
-    {rep&&cur&&<div>
+    {rep&&cur&&<div className="pm-in">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap",marginBottom:12}}>
         <div>
           <div style={{fontWeight:800,fontSize:17}}>{rep.client.name||clientName} – Google Ads</div>
@@ -2154,7 +2159,7 @@ function ReportStudioMod({t,lang,initialTab}){
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:mob?"1fr 1fr":"repeat(4,1fr)",gap:10,marginBottom:14}}>
-        {kpis.map(x=><div key={x.k} style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"12px"}}>
+        {kpis.map((x,xi)=><div key={x.k} className="pm-in pm-lift" style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"12px",animationDelay:`${80+xi*50}ms`}}>
           <div style={{color:C.dim,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.6px"}}>{x.l}</div>
           <div style={{fontSize:18,fontWeight:800,marginTop:4}}>{x.v}</div>
           {x.d!=null&&<div style={{fontSize:11,fontWeight:700,color:dColor(x.d,x.good),marginTop:2}}>{dText(x.d)}</div>}
@@ -2178,7 +2183,8 @@ function ReportStudioMod({t,lang,initialTab}){
           <button onClick={writeAi} disabled={aiLoading} style={{...bpBtn(false),opacity:aiLoading?0.6:1}}>{aiLoading?(sr?"Pišem...":"Writing..."):ai?(sr?"Napiši ponovo":"Rewrite"):(sr?"Napiši zaključak":"Write conclusion")}</button>
         </div>
         {!ai&&!aiLoading&&<div style={{color:C.mut,fontSize:12,marginTop:6}}>{sr?"Opciono: kratak rezime, šta ide dobro i konkretne preporuke. Ulazi i u PDF.":"Optional: a short summary, what's working and concrete recommendations. Included in the PDF."}</div>}
-        {ai&&<div style={{marginTop:10}}><MD2 text={ai}/></div>}
+        {aiLoading&&<div aria-busy="true" style={{display:"flex",flexDirection:"column",gap:8,marginTop:12}}>{[1,2,3].map(i=><Sk key={i} h={11} w={i===3?"55%":"100%"}/>)}</div>}
+        {ai&&!aiLoading&&<div className="pm-in" style={{marginTop:10}}><MD2 text={ai}/></div>}
       </div>
 
       <div style={{background:C.sur,border:`1px solid ${C.brd}`,borderRadius:12,padding:"12px",overflowX:"auto"}}>
@@ -3132,8 +3138,8 @@ function AskDataMod({t,lang}){
       {messages.length===0&&<div style={{color:C.mut,fontSize:13,textAlign:"center",padding:"40px 10px"}}>
         {sr?'Postavi pitanje o svojim GA4 podacima, npr. "Koji je najprodavaniji proizvod poslednjih 30 dana?"':'Ask a question about your GA4 data, e.g. "What\'s the top-selling product in the last 30 days?"'}
       </div>}
-      {messages.map((m,i)=><div key={i} style={{alignSelf:m.role==="user"?"flex-end":"flex-start",maxWidth:"80%",background:m.role==="user"?"rgba(99,102,241,0.2)":"rgba(255,255,255,0.05)",border:`1px solid ${m.role==="user"?"rgba(99,102,241,0.4)":C.brd}`,borderRadius:12,padding:"10px 14px",color:C.txt,fontSize:13,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{m.text}</div>)}
-      {sending&&<div style={{alignSelf:"flex-start",color:C.mut,fontSize:13}}>{sr?"Razmišljam...":"Thinking..."}</div>}
+      {messages.map((m,i)=><div key={i} className="pm-in" style={{alignSelf:m.role==="user"?"flex-end":"flex-start",maxWidth:"80%",background:m.role==="user"?"rgba(99,102,241,0.2)":"rgba(255,255,255,0.05)",border:`1px solid ${m.role==="user"?"rgba(99,102,241,0.4)":C.brd}`,borderRadius:12,padding:"10px 14px",color:C.txt,fontSize:13,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{m.text}</div>)}
+      {sending&&<div className="pm-in" style={{alignSelf:"flex-start",color:C.mut,fontSize:13,display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:12,background:"rgba(255,255,255,0.05)",border:`1px solid ${C.brd}`}}><PmDots/>{sr?"Razmišljam...":"Thinking..."}</div>}
     </div>
 
     <div style={{display:"flex",gap:8}}>
