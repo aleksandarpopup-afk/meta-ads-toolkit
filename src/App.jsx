@@ -2627,6 +2627,7 @@ function MyClientsMod({t,lang,goMod}){
 }
 
 function ProductIntelligenceMod({t,lang,goMod}){
+  useEffect(()=>{ pmAnimReset("pi:"); },[]); // pri svakom ulasku u modul brojevi se odbrojavaju od 0
   const sr=lang==="sr";
   const [clients,setClients]=useState([]);
   const [clientsLoading,setClientsLoading]=useState(true);
@@ -2878,9 +2879,11 @@ ${summary}`;
       <button onClick={applyCustom} disabled={!customFrom||!customTo} style={{padding:"12px 18px",borderRadius:10,border:"none",background:!customFrom||!customTo?"rgba(99,102,241,0.3)":"linear-gradient(135deg,#6366F1,#4f46e5)",color:"#fff",fontSize:13,fontWeight:700,cursor:!customFrom||!customTo?"default":"pointer"}}>{sr?"Primeni":"Apply"}</button>
     </div>}
 
-    {loading&&<div style={{textAlign:"center",padding:"40px 0"}}>
-      <div style={{fontSize:36,marginBottom:16}}>🛍️</div>
-      <div style={{color:C.acl,fontWeight:700,fontSize:15}}>{sr?"Učitavam GA4 podatke...":"Loading GA4 data..."}</div>
+    {loading&&<div aria-busy="true" aria-label={sr?"Učitavam GA4 podatke":"Loading GA4 data"}>
+      <div style={{background:"rgba(99,102,241,0.06)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:12,padding:"14px 16px",marginBottom:16}}><Sk w={90} h={10} style={{marginBottom:10}}/><Sk w="70%" h={12}/></div>
+      <Sk w={220} h={12} style={{marginBottom:14}}/>
+      <div style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap"}}>{[86,96,74,110,90,84].map((w,i)=><Sk key={i} w={w} h={30} r={20}/>)}</div>
+      <SkTable rows={8} cols={8}/>
     </div>}
 
     {err==="no_ga4"&&!loading&&<div style={{background:"rgba(0,212,255,0.08)",border:"1px solid rgba(0,212,255,0.2)",borderRadius:12,padding:"16px",color:C.txt,fontSize:13,marginBottom:16}}>
@@ -2889,7 +2892,7 @@ ${summary}`;
     {err&&err!=="no_ga4"&&!loading&&<div style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:12,padding:"16px",color:C.red,fontSize:13,marginBottom:16}}>⚠️ {err}</div>}
 
     {data&&!loading&&<>
-      <div style={{background:"rgba(99,102,241,0.06)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:12,padding:"14px 16px",marginBottom:16}}>
+      <div className="pm-in" style={{background:"rgba(99,102,241,0.06)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:12,padding:"14px 16px",marginBottom:16}}>
         <div style={{color:C.acl,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"1px",marginBottom:8}}>{sr?"AI Uvid":"AI Insight"}</div>
         {aiLoading
           ?<div style={{color:C.mut,fontSize:13}}>{sr?"Analiziram...":"Analyzing..."}</div>
@@ -2909,8 +2912,8 @@ ${summary}`;
         }
       </div>
 
-      <div style={{color:C.mut,fontSize:12,marginBottom:14}}>
-        {fmtMoney(Object.values(data.sourceTotals.paid).reduce((a,b)=>a+b,0)+Object.values(data.sourceTotals.organic).reduce((a,b)=>a+b,0),data.currency)} {sr?"ukupan prihod za period":"total revenue for period"}
+      <div className="pm-in" style={{color:C.mut,fontSize:12,marginBottom:14,animationDelay:"60ms"}}>
+        <AnimNum k={`pi:${selectedClient.id}:rev`} value={Object.values(data.sourceTotals.paid).reduce((a,b)=>a+b,0)+Object.values(data.sourceTotals.organic).reduce((a,b)=>a+b,0)} format={v=>fmtMoney(v,data.currency)}/> {sr?"ukupan prihod za period":"total revenue for period"}
       </div>
 
       <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
@@ -2957,7 +2960,7 @@ ${summary}`;
 
       {rows.length===0&&filter!=="categories"&&(filter!=="sources"||(paidOrganic&&sourcePlatform))&&<div style={{color:C.mut,fontSize:13,textAlign:"center",padding:"20px 0"}}>{sr?"Nema proizvoda u ovoj kategoriji za izabrani period.":"No products in this category for the selected period."}</div>}
 
-      {visibleRows.length>0&&<div style={{overflowX:"auto"}}>
+      {visibleRows.length>0&&<div key={`${filter}|${paidOrganic||""}|${sourcePlatform||""}`} className="pm-in" style={{overflowX:"auto",animationDelay:"120ms"}}>
         <table style={{width:"100%",fontSize:12,borderCollapse:"collapse"}}>
           <thead>
             <tr style={{color:C.mut,textAlign:"left"}}>
@@ -2973,7 +2976,7 @@ ${summary}`;
             </tr>
           </thead>
           <tbody>
-            {visibleRows.map((r,i)=><tr key={i} style={{borderTop:`1px solid ${C.brd}`}}>
+            {visibleRows.map((r,i)=><tr key={i} className={i<12?"pm-in":undefined} style={{borderTop:`1px solid ${C.brd}`,...(i<12?{animationDelay:`${140+i*25}ms`}:null)}}>
               <td style={{padding:"8px 4px",color:C.txt}}>{r.name}{r.id!==undefined&&<span style={{color:C.mut}}> ({r.id})</span>}</td>
               <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{r.viewed.toLocaleString()}</td>
               <td style={{padding:"8px 4px",textAlign:"right",color:C.mut}}>{r.addedToCart.toLocaleString()}</td>
@@ -4084,7 +4087,7 @@ async function invStart({client,days,from,to,qtype,question,lang,campaignId,styl
           invSet({checks:cs});
         }
         else if(e.type==="check") invSet({checks:(INV.state.checks||[]).map(c=>c.id===e.id?{...c,status:e.status,summary:e.summary}:c)});
-        else if(e.type==="result"){ gotResult=true; invSet({status:"done",result:e,finishedAt:Date.now()}); }
+        else if(e.type==="result"){ gotResult=true; pmAnimReset("inv:"); invSet({status:"done",result:e,finishedAt:Date.now()}); }
         else if(e.type==="error") invSet({status:"error",error:e.error});
       }
     }
@@ -4256,7 +4259,7 @@ function InvestigateMod({t,lang}){
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
           {(checks.length?checks:[]).map(c=>{
             const active=c.id===activeId;
-            return <div key={c.id} style={{position:"relative",overflow:"hidden",display:"flex",alignItems:narrow?"flex-start":"center",gap:12,padding:"12px 14px",borderRadius:10,border:`1px solid ${active?"rgba(99,102,241,0.55)":C.brd}`,background:active?"rgba(99,102,241,0.08)":"rgba(255,255,255,0.02)",flexWrap:narrow?"wrap":"nowrap"}}>
+            return <div key={c.id} className="pm-in" style={{position:"relative",overflow:"hidden",display:"flex",alignItems:narrow?"flex-start":"center",gap:12,padding:"12px 14px",borderRadius:10,border:`1px solid ${active?"rgba(99,102,241,0.55)":C.brd}`,background:active?"rgba(99,102,241,0.08)":"rgba(255,255,255,0.02)",flexWrap:narrow?"wrap":"nowrap"}}>
               {icon(c.status,active)}
               <div style={{width:narrow?"auto":260,flexShrink:0,fontWeight:700,fontSize:13,color:c.status==="pending"&&!active?C.dim:"#fff"}}>{c.label}</div>
               <div style={{flex:1,minWidth:narrow?"100%":0,fontSize:12.5,color:c.status==="failed"?C.red:active?C.acl:C.mut,lineHeight:1.5,paddingLeft:narrow?34:0}}>{c.summary||(active?(sr?"Proveravam...":"Checking..."):"")}</div>
@@ -4280,12 +4283,12 @@ function InvestigateMod({t,lang}){
   const fmNative=v=>useEur?fmtMoney(v,cur):null;
   const dur=R.durationMs?Math.round(R.durationMs/1000):null;
   const stats=T?[
-    {l:sr?"Prihod":"Revenue",v:fm(T.cur.revenue),sub:fmNative(T.cur.revenue),p:T.pct.revenue,was:fm(T.prev.revenue)},
-    {l:sr?"Porudžbine":"Orders",v:Math.round(T.cur.orders).toLocaleString(sr?"sr-RS":"en-GB"),p:T.pct.orders,was:Math.round(T.prev.orders).toLocaleString(sr?"sr-RS":"en-GB")},
-    {l:sr?"Posete":"Sessions",v:Math.round(T.cur.sessions).toLocaleString(sr?"sr-RS":"en-GB"),p:T.pct.sessions,was:Math.round(T.prev.sessions).toLocaleString(sr?"sr-RS":"en-GB")},
+    {l:sr?"Prihod":"Revenue",v:fm(T.cur.revenue),n:T.cur.revenue,fmt:fm,sub:fmNative(T.cur.revenue),p:T.pct.revenue,was:fm(T.prev.revenue)},
+    {l:sr?"Porudžbine":"Orders",v:Math.round(T.cur.orders).toLocaleString(sr?"sr-RS":"en-GB"),n:T.cur.orders,fmt:x=>Math.round(x).toLocaleString(sr?"sr-RS":"en-GB"),p:T.pct.orders,was:Math.round(T.prev.orders).toLocaleString(sr?"sr-RS":"en-GB")},
+    {l:sr?"Posete":"Sessions",v:Math.round(T.cur.sessions).toLocaleString(sr?"sr-RS":"en-GB"),n:T.cur.sessions,fmt:x=>Math.round(x).toLocaleString(sr?"sr-RS":"en-GB"),p:T.pct.sessions,was:Math.round(T.prev.sessions).toLocaleString(sr?"sr-RS":"en-GB")},
     {l:sr?"Konverzija":"Conversion",v:(T.cur.cr*100).toLocaleString(sr?"sr-RS":"en-GB",{minimumFractionDigits:2,maximumFractionDigits:2})+"%",p:T.pct.cr,was:(T.prev.cr*100).toLocaleString(sr?"sr-RS":"en-GB",{minimumFractionDigits:2,maximumFractionDigits:2})+"%"},
     ...(R.gads?[
-      {l:sr?"Potrošnja (Google Ads)":"Spend (Google Ads)",v:fm(R.gads.spendCur),was:fm(R.gads.spendPrev),p:R.gads.spendPrev>0?(R.gads.spendCur-R.gads.spendPrev)/R.gads.spendPrev*100:null,inv:true},
+      {l:sr?"Potrošnja (Google Ads)":"Spend (Google Ads)",v:fm(R.gads.spendCur),n:R.gads.spendCur,fmt:fm,was:fm(R.gads.spendPrev),p:R.gads.spendPrev>0?(R.gads.spendCur-R.gads.spendPrev)/R.gads.spendPrev*100:null,inv:true},
       {l:"ROAS (Google Ads)",v:R.gads.roasCur.toLocaleString(sr?"sr-RS":"en-GB",{minimumFractionDigits:2,maximumFractionDigits:2}),was:R.gads.roasPrev.toLocaleString(sr?"sr-RS":"en-GB",{minimumFractionDigits:2,maximumFractionDigits:2}),p:R.gads.roasPrev>0?(R.gads.roasCur-R.gads.roasPrev)/R.gads.roasPrev*100:null},
     ]:[])
   ]:[];
@@ -4437,7 +4440,7 @@ function InvVisuals({R,ai,sr,narrow,stats,conf,toEur,curSym}){
       <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:8}}>
         {stats.map(s=><div key={s.l} style={{padding:"10px 12px",borderRadius:10,background:"rgba(255,255,255,0.03)",border:`1px solid ${C.brd}`,minWidth:0}}>
           <div style={{color:C.mut,fontSize:10,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase"}}>{s.l}</div>
-          <div style={{display:"flex",flexWrap:"wrap",alignItems:"baseline",columnGap:6,marginTop:3}}><span style={{fontSize:narrow?15:16.5,fontWeight:800,color:"#fff"}}>{s.v}</span><span style={{fontSize:12,fontWeight:700,color:s.inv?(s.p>0?C.yel:s.p<0?C.grn:C.mut):col(s.p)}}>{pc(s.p)}</span></div>
+          <div style={{display:"flex",flexWrap:"wrap",alignItems:"baseline",columnGap:6,marginTop:3}}><span style={{fontSize:narrow?15:16.5,fontWeight:800,color:"#fff"}}>{s.n!=null&&s.fmt?<AnimNum k={`inv:${s.l}`} value={s.n} format={s.fmt}/>:s.v}</span><span style={{fontSize:12,fontWeight:700,color:s.inv?(s.p>0?C.yel:s.p<0?C.grn:C.mut):col(s.p)}}>{pc(s.p)}</span></div>
           {(s.was||s.sub)&&<div style={{color:C.dim,fontSize:11,marginTop:2}}>{s.was?`${sr?"bilo":"was"} ${s.was}`:""}{s.was&&s.sub?" · ":""}{s.sub||""}</div>}
         </div>)}
       </div>
@@ -4581,11 +4584,11 @@ function InvVisuals({R,ai,sr,narrow,stats,conf,toEur,curSym}){
 
   const gap={display:"grid",gap:14,marginBottom:14};
   return <>
-    <div style={{marginBottom:14}}>{hero}</div>
-    {(waterfall||daily)&&<div style={{...gap,gridTemplateColumns:narrow||!(waterfall&&daily)?"1fr":"1fr 1.35fr"}}>{waterfall}{daily}</div>}
-    {where&&<div style={{marginBottom:14}}>{where}</div>}
-    {row5.length>0&&<div style={{...gap,gridTemplateColumns:narrow?"1fr":row5.length===3?"1.2fr 1fr 0.8fr":row5.length===2?"1fr 1fr":"1fr"}}>{funnel}{tracking}{season}</div>}
-    {(camps||prods)&&<div style={{...gap,gridTemplateColumns:narrow||!(camps&&prods)?"1fr":"1.2fr 1fr"}}>{camps}{prods}</div>}
+    <div className="pm-in" style={{marginBottom:14}}>{hero}</div>
+    {(waterfall||daily)&&<div className="pm-in" style={{...gap,animationDelay:"90ms",gridTemplateColumns:narrow||!(waterfall&&daily)?"1fr":"1fr 1.35fr"}}>{waterfall}{daily}</div>}
+    {where&&<div className="pm-in" style={{marginBottom:14,animationDelay:"180ms"}}>{where}</div>}
+    {row5.length>0&&<div className="pm-in" style={{...gap,animationDelay:"260ms",gridTemplateColumns:narrow?"1fr":row5.length===3?"1.2fr 1fr 0.8fr":row5.length===2?"1fr 1fr":"1fr"}}>{funnel}{tracking}{season}</div>}
+    {(camps||prods)&&<div className="pm-in" style={{...gap,animationDelay:"330ms",gridTemplateColumns:narrow||!(camps&&prods)?"1fr":"1.2fr 1fr"}}>{camps}{prods}</div>}
   </>;
 }
 
