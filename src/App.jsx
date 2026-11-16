@@ -45,6 +45,8 @@ if(typeof document!=="undefined"&&!document.getElementById("pm-ui-css")){
 .pm-sk{background:linear-gradient(90deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.10) 50%,rgba(255,255,255,0.04) 100%);background-size:960px 100%;animation:pmShimmer 1.4s linear infinite;border-radius:8px}
 @keyframes pmIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .pm-in{animation:pmIn .45s cubic-bezier(.2,.7,.2,1) backwards}
+@keyframes pmCardIn{from{opacity:0;transform:translateY(10px);box-shadow:0 0 0 rgba(0,0,0,0)}}
+.pm-card-in{animation:pmCardIn .55s cubic-bezier(.2,.7,.2,1) backwards}
 select{color-scheme:dark}
 select option{background:#13131f;color:#e5e7eb}
 .pm-lift{transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
@@ -52,7 +54,7 @@ select option{background:#13131f;color:#e5e7eb}
 @keyframes pmDot{0%,80%,100%{opacity:.25;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}
 .pm-dots{display:inline-flex;gap:4px;vertical-align:middle}.pm-dots i{width:6px;height:6px;border-radius:50%;background:#A5B4FC;display:block;animation:pmDot 1.1s ease-in-out infinite}.pm-dots i:nth-child(2){animation-delay:.15s}.pm-dots i:nth-child(3){animation-delay:.3s}
 @media (prefers-reduced-motion: reduce){.pm-dots i{animation:none;opacity:.7}}
-@media (prefers-reduced-motion: reduce){.pm-sk,.pm-in{animation:none}.pm-lift,.pm-lift:hover{transition:none;transform:none}}`;
+@media (prefers-reduced-motion: reduce){.pm-sk,.pm-in,.pm-card-in{animation:none}.pm-lift,.pm-lift:hover{transition:none;transform:none}}`;
   document.head.appendChild(st);
 }
 const PM_REDUCED=typeof window!=="undefined"&&!!window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -5061,7 +5063,7 @@ function MainApp({account}){
     const live=m.id===2&&home?.bp?home.bp:invS&&invS.status==="running"?{text:lang==="sr"?`Istraga u toku: ${invS.client.name}…`:`Investigating ${invS.client.name}…`,bad:false}:invS&&invS.status==="done"?{text:lang==="sr"?`Rezultat čeka: ${invS.client.name}`:`Result ready: ${invS.client.name}`,bad:false}:null;
     const extra=m.id===10&&home?.clients!=null?`${home.clients} ${lang==="sr"?(home.clients===1?"klijent":"klijenata"):(home.clients===1?"client":"clients")}`:null;
     const homeEl=Date.now()-PM_HOME.t0, homeAnim=homeEl<1000;
-    return <button className={homeAnim?"mc pm-in":"mc"} onClick={()=>goMod(m.id)} style={{
+    return <button className={homeAnim?"mc pm-card-in":"mc"} onClick={()=>goMod(m.id)} style={{
       "--c":m.col,...(homeAnim?{animationDelay:`${Math.min(i,8)*45-homeEl}ms`}:null),
       background:`linear-gradient(145deg,${m.col}24,${m.col}0a 55%,#0d0d1a)`,
       border:`1px solid ${m.col}45`,borderTop:`1px solid ${m.col}70`,
