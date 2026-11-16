@@ -12,7 +12,7 @@ import { guard, clientInWorkspace, dbHeaders, SUPABASE_URL, UUID_RE } from "./_l
 import { createLimiter, ga4FetchAll, newMeter, meterStep, meterDone } from "./_lib/ga4.js";
 import { cacheKey, cacheGet, cacheSet } from "./_lib/cache.js";
 
-const CALC_VERSION = "br-3"; // br-2: cena u GA4 ispod 20% cene iz fajla = sumnjivo; br-3: PDV stopa po proizvodu
+const CALC_VERSION = "br-4"; // br-2: cena u GA4 < 20% cene iz fajla = sumnjivo; br-3: PDV po proizvodu; br-4: pokrivenost i procena kampanje na prihodu BEZ PDV-a
 const CACHE_TTL_SEC = 30 * 60;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -236,7 +236,7 @@ async function campaigns(req, res, clientId, s) {
   const C = new Map();
   const camp = (id) => {
     let c = C.get(id);
-    if (!c) { c = { id, name: null, type: null, status: null, spend: 0, clicks: 0, r: 0, rn: 0, rOk: 0, gp: 0, nOk: 0, nItems: 0, items: new Map(), hasShop: false }; C.set(id, c); }
+    if (!c) { c = { id, name: null, type: null, status: null, spend: 0, clicks: 0, r: 0, rn: 0, rOk: 0, rnOk: 0, gp: 0, nOk: 0, nItems: 0, items: new Map(), hasShop: false }; C.set(id, c); }
     return c;
   };
   for (const row of campRows) {
@@ -271,22 +271,25 @@ async function campaigns(req, res, clientId, s) {
   }
 
   const out = [];
-  const TT = { spend: 0, r: 0, rOk: 0, gp: 0, gpEst: 0, profit: 0, nUnknown: 0, spendUnknown: 0 };
+  const TT = { spend: 0, r: 0, rOk: 0, rn: 0, rnOk: 0, gp: 0, gpEst: 0, profit: 0, nUnknown: 0, spendUnknown: 0 };
   for (const c of C.values()) {
     const items = [];
     for (const it of c.items.values()) {
       const k = it.r !== 0 || it.q > 0 ? calc(it.id, it.q, it.r) : { st: "nosale", rn: 0, cogs: 0, gp: 0 };
-      if (k.st !== "nosale") { c.nItems++; c.r += it.r; c.rn += k.rn; if (k.st === "ok") { c.nOk++; c.rOk += it.r; c.gp += k.gp; } }
+      if (k.st !== "nosale") { c.nItems++; c.r += it.r; c.rn += k.rn; if (k.st === "ok") { c.nOk++; c.rOk += it.r; c.rnOk += k.rn; c.gp += k.gp; } }
       const ad = c.hasShop ? (it.ad || 0) : null;
       const gpVal = k.st === "nosale" ? 0 : k.gp;
       items.push({ id: it.id, n: it.n || calc.title(it.id) || null, q: r2(it.q), r: r2(it.r), rn: r2(k.rn), gp: r2(gpVal), st: k.st, ad: r2(ad), pa: ad != null && gpVal != null ? r2(gpVal - ad) : null });
     }
     if (!c.name && !c.spend && !c.r) continue;
-    const cov = c.r > 0 ? c.rOk / c.r : null;
+    // Pokrivenost = prihod bez PDV-a sa ispravnom cenom ÷ ceo prihod bez PDV-a (bez cene i sumnjivi NISU pokriveni)
+    const cov = c.rn > 0 ? c.rnOk / c.rn : null;
     // Procena za ceo prihod kampanje: profit poznatih proizvoda × (ceo prihod / prihod sa cenom). Samo kad je pokriveno ≥ 50%.
-    const gpEst = c.rOk > 0 && cov >= 0.5 ? c.gp * (c.r / c.rOk) : (c.r === 0 ? 0 : null);
+    // Ponderisana marža kampanje = Σ bruto profita ÷ Σ prihoda bez PDV-a poznatih proizvoda (veći proizvod = veći uticaj),
+    // primenjena na ceo prihod kampanje bez PDV-a. Svaki proizvod već ima svoju stopu PDV-a.
+    const gpEst = c.rnOk > 0 && cov >= 0.5 ? (c.gp / c.rnOk) * c.rn : (c.r === 0 ? 0 : null);
     const profit = gpEst != null ? gpEst - c.spend : null;
-    TT.spend += c.spend; TT.r += c.r; TT.rOk += c.rOk; TT.gp += c.gp;
+    TT.spend += c.spend; TT.r += c.r; TT.rOk += c.rOk; TT.rn += c.rn; TT.rnOk += c.rnOk; TT.gp += c.gp;
     if (gpEst != null) { TT.gpEst += gpEst; TT.profit += profit; } else { TT.nUnknown++; TT.spendUnknown += c.spend; }
     // Proizvodi: najveći prihod + najveći trošak bez prodaje (čist gubitak)
     const byRev = items.filter((i) => i.st !== "nosale").sort((a, b) => b.r - a.r).slice(0, 250);
@@ -306,7 +309,7 @@ async function campaigns(req, res, clientId, s) {
     currency, eurFactor: eurFactor ? Math.round(eurFactor * 1e8) / 1e8 : null, adsCurrency: adsCur, range, periodDays: per.days,
     shopping: !!shopRows,
     totals: { spend: r2(TT.spend), r: r2(TT.r), rOk: r2(TT.rOk), gp: r2(TT.gp), gpEst: r2(TT.gpEst), profit: r2(TT.profit), nUnknown: TT.nUnknown, spendUnknown: r2(TT.spendUnknown),
-      roas: TT.spend > 0 ? r2(TT.r / TT.spend) : null, beRoas: TT.gp > 0 && TT.rOk > 0 ? r2(TT.rOk / TT.gp) : null, cov: TT.r > 0 ? r2((TT.rOk / TT.r) * 100) : null },
+      roas: TT.spend > 0 ? r2(TT.r / TT.spend) : null, beRoas: TT.gp > 0 && TT.rOk > 0 ? r2(TT.rOk / TT.gp) : null, cov: TT.rn > 0 ? r2((TT.rnOk / TT.rn) * 100) : null },
     campaigns: out
   };
   const json = JSON.stringify(payload);
@@ -423,7 +426,7 @@ async function report(req, res, clientId, s) {
     ...Object.fromEntries(Object.entries(T).map(([k, v]) => [k, r2(v)])),
     marginPct: T.rnOk > 0 ? r2((T.gp / T.rnOk) * 100) : null,
     beRoas: T.gp > 0 ? r2(T.rOk / T.gp) : null,          // ROAS (prihod sa PDV-om kao u GA4 / potrošnja) pri kome je profit posle oglasa = 0
-    coveragePct: T.r > 0 ? r2((T.rOk / T.r) * 100) : null
+    coveragePct: T.rn > 0 ? r2((T.rnOk / T.rn) * 100) : null   // na prihodu bez PDV-a
   };
   const payload = {
     currency, eurFactor: eurFactor ? Math.round(eurFactor * 1e8) / 1e8 : null,
