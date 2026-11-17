@@ -5616,7 +5616,7 @@ function BeyondRoasMod({t,lang}){
           <button onClick={saveVat} style={btn(false)}>{sr?"Sačuvaj":"Save"}</button>
           {vatSaved&&<span style={{color:C.grn,fontSize:12.5}}>✓ {sr?"Sačuvano":"Saved"}</span>}
         </div>
-        <div style={{color:C.dim,fontSize:12,marginTop:8}}>{sr?"Srbija 20% · Hrvatska 25% · Slovenija 22% · BiH 17% · Crna Gora 21% · S. Makedonija 18%":"Serbia 20% · Croatia 25% · Slovenia 22% · BiH 17% · Montenegro 21% · N. Macedonia 18%"}</div>
+        <div style={{color:C.dim,fontSize:12,marginTop:8}}>{sr?"Unesi opštu stopu PDV-a zemlje u kojoj klijent prodaje. Za proizvode sa drugačijom stopom dodaj kolonu „PDV stopa“ u fajl sa cenama.":"Enter the standard VAT rate of the country where the client sells. For products with a different rate, add a \"VAT rate\" column to the price file."}</div>
       </div>
     </>}
   </div>;
