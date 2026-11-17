@@ -5618,7 +5618,6 @@ function BeyondRoasMod({t,lang}){
         </div>
         <div style={{color:C.dim,fontSize:12,marginTop:8}}>{sr?"Srbija 20% · Hrvatska 25% · Slovenija 22% · BiH 17% · Crna Gora 21% · S. Makedonija 18%":"Serbia 20% · Croatia 25% · Slovenia 22% · BiH 17% · Montenegro 21% · N. Macedonia 18%"}</div>
       </div>
-      <div style={{...card,borderStyle:"dashed",color:C.mut,fontSize:13}}>{sr?"Sledeći korak: procena marže po kategoriji (za proizvode bez nabavne cene) i kartica na početnoj.":"Next: estimated margin by category and the home screen card."}</div>
     </>}
   </div>;
 }
