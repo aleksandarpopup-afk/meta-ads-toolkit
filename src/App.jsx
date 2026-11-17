@@ -5579,8 +5579,18 @@ function BeyondRoasMod({t,lang}){
   return <div>{header}{pick}
     {err&&<div style={{...card,borderColor:C.rBr,background:C.rBg,color:C.red,fontSize:13}}>{err}</div>}
     {stLoading?<div style={card}><Sk w="40%" h={12} style={{marginBottom:10}}/><Sk w="70%" h={18}/></div>:st&&<>
+      {s.active_batch&&<div className="pm-in" style={{...card,padding:"12px 16px",display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
+        {/* Gore, odmah vidljivo: šta je učitano + novi fajl (ranije samo na dnu, ispod tabele) */}
+        <div style={{flex:"1 1 320px",minWidth:0}}>
+          <div style={{color:"#fff",fontSize:13.5,fontWeight:700}}>{nf(s.row_count)} {sr?"proizvoda":"products"} · {s.value_type==="margin"?(sr?"zarada po komadu":"profit per unit"):(sr?"nabavne cene":"purchase prices")}</div>
+          <div style={{color:C.mut,fontSize:12,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{[s.source_name,s.uploaded_at?(sr?"učitano ":"uploaded ")+new Date(s.uploaded_at).toLocaleString(sr?"sr-Latn-RS":"en-GB",{day:"numeric",month:"numeric",year:"numeric",hour:"2-digit",minute:"2-digit"}):null,`PDV ${s.prices_include_vat===false?(sr?"nije u cenama":"not in prices"):`${s.vat_rate!=null?s.vat_rate:20}%`}`].filter(Boolean).join(" · ")}</div>
+          {savedMsg&&<div style={{color:C.grn,fontSize:12,marginTop:3}}>✓ {savedMsg}</div>}
+        </div>
+        <button disabled={parsing} onClick={()=>fileRef.current&&fileRef.current.click()} style={{...btn(true,parsing),padding:"9px 16px"}}>{parsing?<>{sr?"Čitam fajl ":"Reading file "}<PmDots/></>:(sr?"Učitaj novi fajl":"Upload a new file")}</button>
+        <button onClick={()=>{ const el=document.getElementById("br-settings"); if(el) el.scrollIntoView({behavior:"smooth",block:"start"}); }} style={btn(false)}>{sr?"PDV i podešavanja ↓":"VAT and settings ↓"}</button>
+      </div>}
       <BrReport clientId={clientId} sr={sr} st={st}/>
-      <div className="pm-in" style={card}>
+      <div id="br-settings" className="pm-in" style={card}>
         {secT(sr?"Nabavne cene i zarada":"Purchase prices and profit")}
         {s.active_batch?<>
           <div style={{color:"#fff",fontSize:15,fontWeight:800}}>{nf(s.row_count)} {sr?"proizvoda":"products"} · {s.value_type==="margin"?(sr?"zarada po komadu":"profit per unit"):(sr?"nabavne cene":"purchase prices")}</div>
@@ -6021,7 +6031,7 @@ function MainApp({account}){
       </div>
       <div style={{display:"flex",alignItems:"center",gap:20}}>
         {!showHome&&<div style={{display:"flex",alignItems:"center",gap:12}}>
-          <button onClick={()=>goMod(null)} style={{background:"rgba(255,255,255,0.08)",border:`1px solid ${C.brd}`,borderRadius:10,color:"rgba(255,255,255,0.7)",fontSize:13,fontWeight:600,padding:"7px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>← {t.back}</button>
+          <button onClick={()=>goMod(null)} style={{background:"rgba(255,255,255,0.08)",border:`1px solid ${C.brd}`,borderRadius:10,color:"rgba(255,255,255,0.7)",fontSize:13,fontWeight:600,padding:"7px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>{t.back}</button>
           <div style={{color:"rgba(255,255,255,0.4)",fontSize:13}}>
             <span style={{cursor:"pointer",color:"#A5B4FC"}} onClick={()=>goMod(null)}>{lang==="sr"?"Početna":"Home"}</span>
             <span style={{margin:"0 8px",color:"rgba(255,255,255,0.2)"}}>›</span>
