@@ -4503,6 +4503,12 @@ function InvVisuals({R,ai,sr,narrow,stats,conf,toEur,curSym}){
 
   // ── 3. Kretanje po danima
   let daily=null;
+  const bandSpan=(p,n)=>sr
+    ?(n===7?`u prethodnih ${p} ${p<5?"nedelje":"nedelja"}`:n===1?`u prethodnih ${p} dana`:`u prethodnih ${p} perioda od po ${n} dana`)
+    :(n===7?`over the previous ${p} weeks`:n===1?`over the previous ${p} days`:`over the previous ${p} periods of ${n} days`);
+  const bandSentence=(tot,inBand,band,n)=>sr
+    ?`Ukupan prihod (${k(tot)}) je ${inBand?"u granicama uobičajenog":"van uobičajenog"}: ${bandSpan(band.periods,n)} kretao se od ${k(band.sumMin)} do ${k(band.sumMax)}.`
+    :`Total revenue (${k(tot)}) is ${inBand?"within the usual range":"outside the usual range"}: ${bandSpan(band.periods,n)} it ranged from ${k(band.sumMin)} to ${k(band.sumMax)}.`;
   const D=V.daily;
   if(D&&D.cur&&D.cur.length>=2){
     const n=D.cur.length; const vals=[...D.cur,...D.prev,...(D.band?D.band.max:[])]; const mx=Math.max(1,...vals);
@@ -4525,8 +4531,8 @@ function InvVisuals({R,ai,sr,narrow,stats,conf,toEur,curSym}){
         {D.dates.map((d,i)=>i%every===0||i===n-1?<text key={i} x={xs(i)} y={top+H+15} textAnchor={i===0?"start":i===n-1?"end":"middle"} fontSize="10" fill={C.dim}>{wd(d)}</text>:null)}
       </svg>
       <div style={{color:C.mut,fontSize:11.5,lineHeight:1.5}}>
-        {D.changeStart&&ci<0?<>{sr?"Promena počinje":"The change starts"} {D.changeStart.slice(8,10).replace(/^0/,"")}.{D.changeStart.slice(5,7).replace(/^0/,"")}. ({sr?"u prethodnom periodu":"in the previous period"}). </>:null}
-        {D.band?<>{sr?"Ukupno je":"In total it is"} <b style={{color:"#fff"}}>{inBand?(sr?"u granicama uobičajenog":"within the usual range"):(sr?"izvan uobičajenog":"outside the usual range")}</b> {sr?"za ovog klijenta":"for this client"} ({sr?"poslednjih":"last"} {D.band.periods} {sr?"perioda":"periods"}: {k(D.band.sumMin)}–{k(D.band.sumMax)}).</>:null}
+        {D.changeStart&&ci<0?<>{sr?"Promena je počela":"The change started on"} {D.changeStart.slice(8,10).replace(/^0/,"")}.{D.changeStart.slice(5,7).replace(/^0/,"")}.{sr?", još pre perioda koji istražuješ. ":", before the period you're investigating. "}</>:null}
+        {D.band?bandSentence(tot,inBand,D.band,n):null}
       </div>
     </div>;
   }
@@ -4638,6 +4644,11 @@ function invPdfViz({R,sr,toEur,curSym,forClient}){
   const pc=v=>{ if(v==null||!isFinite(v)) return sr?"novo":"new"; const a=Math.abs(v); return (v>0?"+":v<0?"−":"")+(a<10&&a>0?(Math.round(a*10)/10).toLocaleString(loc):Math.round(a).toLocaleString(loc))+"%"; };
   const GRN="#059669", RED="#dc2626", IND="#6366f1", GRY="#9ca3af", YEL="#d97706";
   const colr=v=>v>0?GRN:v<0?RED:"#6b7280";
+  const bandSentenceP=(tot,inBand,band,n)=>{ const p=band.periods;
+    const span=sr?(n===7?`u prethodnih ${p} ${p<5?"nedelje":"nedelja"}`:n===1?`u prethodnih ${p} dana`:`u prethodnih ${p} perioda od po ${n} dana`)
+      :(n===7?`over the previous ${p} weeks`:n===1?`over the previous ${p} days`:`over the previous ${p} periods of ${n} days`);
+    return sr?`Ukupan prihod (${k(tot)}) je ${inBand?"u granicama uobičajenog":"van uobičajenog"}: ${span} kretao se od ${k(band.sumMin)} do ${k(band.sumMax)}.`
+      :`Total revenue (${k(tot)}) is ${inBand?"within the usual range":"outside the usual range"}: ${span} it ranged from ${k(band.sumMin)} to ${k(band.sumMax)}.`; };
   const panel=(stack)=>({table:{widths:["*"],body:[[{stack,margin:[8,6,8,6]}]]},layout:{hLineWidth:()=>0.6,vLineWidth:()=>0.6,hLineColor:()=>"#e5e7eb",vLineColor:()=>"#e5e7eb"}});
   const cap=(t)=>({text:t,fontSize:8.5,bold:true,color:"#4338ca",margin:[0,0,0,5]});
 
@@ -4673,7 +4684,7 @@ function invPdfViz({R,sr,toEur,curSym,forClient}){
     dy=panel([cap(sr?"Kretanje po danima":"Day by day"),{canvas:shapes},
       {columns:[{text:d(D.dates[0]),fontSize:7,color:"#6b7280"},{text:d(D.dates[n-1]),fontSize:7,color:"#6b7280",alignment:"right"}],margin:[0,2,0,2]},
       {text:[{text:sr?"ovaj period":"this period",color:IND,bold:true},"  ·  ",{text:sr?"prethodni (isprekidano)":"previous (dashed)",color:"#6b7280"},...(D.band?["  ·  ",{text:sr?"svetlo polje = uobičajeno":"light area = usual range",color:"#818cf8"}]:[]),...(D.changeStart?["  ·  ",{text:`${sr?"promena od":"change from"} ${d(D.changeStart)}`,color:YEL,bold:true}]:[])],fontSize:7,color:"#6b7280"},
-      ...(D.band?[{text:`${sr?"Ukupno":"Total"}: ${inBand?(sr?"u granicama uobičajenog":"within usual range"):(sr?"izvan uobičajenog":"outside usual range")} (${k(D.band.sumMin)}–${k(D.band.sumMax)})`,fontSize:7.5,color:"#374151",margin:[0,3,0,0]}]:[])]);
+      ...(D.band?[{text:bandSentenceP(tot,inBand,D.band,n),fontSize:7.5,color:"#374151",margin:[0,3,0,0]}]:[])]);
   }
   if(wf||dy){ out.push(h2(sr?"Pregled u grafikonima":"Visual overview")); out.push({columns:[wf||{text:""},dy||{text:""}],columnGap:10}); }
 
